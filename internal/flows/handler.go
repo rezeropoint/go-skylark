@@ -150,33 +150,6 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 		AuthHeader: authHeader,
 	}
 
-	// 初始化字段映射（如果有数据需要处理）
-	var fieldMappings map[string]core.FieldMapping
-	if len(options.Data) > 0 {
-		var err error
-		fieldMappings, err = f.getFlowFieldMappings(ctx, skylarkFlowAddress, flowID)
-		if err != nil {
-			return err
-		}
-	}
-
-	// 构建更新任务状态请求体
-	updateRequest, err := f.buildUpdateJourneyStatusRequest(
-		ctx,
-		skylarkFlowAddress,
-		flowID,
-		operation,
-		options.NextVertexID,
-		options.Comment,
-		options.CarbonCopyUserIDs,
-		options.DurationThresholds,
-		options.Data,
-		fieldMappings,
-	)
-	if err != nil {
-		return err
-	}
-
 	// 构建API请求URL
 	apiURL := core.BuildJourneyAssignmentAPIURL(skylarkFlowAddress, journeyID, assignmentID)
 
@@ -186,7 +159,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	lockExpiry := 30 // 默认30秒过期时间
 
 	// 获取分布式锁，支持重试
-	if err = f.cache.AcquireLockWithRetry(ctx, lockKey, lockValue, lockExpiry); err != nil {
+	if err := f.cache.AcquireLockWithRetry(ctx, lockKey, lockValue, lockExpiry); err != nil {
 		return err
 	}
 
@@ -198,21 +171,73 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 		}
 	}()
 
-	// 发送更新任务状态请求
-	updateResult, err := httpc.Do(ctx, http.MethodPost, apiURL, updateRequest)
-	if err != nil {
-		return fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
-	}
-	defer updateResult.Body.Close()
-
-	// 读取响应体
-	updateBody, err := io.ReadAll(updateResult.Body)
-	if err != nil {
-		return fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
+	// 第一次请求：修改数据（route操作）
+	// 初始化字段映射（如果有数据需要处理）
+	var fieldMappings map[string]core.FieldMapping
+	if len(options.Data) > 0 {
+		var err error
+		fieldMappings, err = f.getFlowFieldMappings(ctx, skylarkFlowAddress, flowID)
+		if err != nil {
+			return err
+		}
 	}
 
-	if updateResult.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: 状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, updateResult.StatusCode, updateBody)
+	// 构建第一次请求：修改数据
+	routeRequest, err := f.buildRouteRequestForUpdate(
+		ctx,
+		skylarkFlowAddress,
+		options.Data,
+		fieldMappings,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 发送第一次请求
+	routeResult, err := httpc.Do(ctx, http.MethodPost, apiURL, routeRequest)
+	if err != nil {
+		return fmt.Errorf("%w: 第一次请求失败: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer routeResult.Body.Close()
+
+	// 读取第一次请求的响应体
+	routeBody, err := io.ReadAll(routeResult.Body)
+	if err != nil {
+		return fmt.Errorf("%w: 读取第一次请求响应失败: %v", core.ErrResponseBodyReadFailed, err)
+	}
+
+	if routeResult.StatusCode != http.StatusOK {
+		return fmt.Errorf("%w: 第一次请求失败，状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, routeResult.StatusCode, routeBody)
+	}
+
+	// 第二次请求：执行操作（approve/refuse/transfer/cancel）
+	operationRequest, err := f.buildOperationRequest(
+		skylarkFlowAddress,
+		operation,
+		options.NextVertexID,
+		options.Comment,
+		options.CarbonCopyUserIDs,
+		options.DurationThresholds,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 发送第二次请求
+	operationResult, err := httpc.Do(ctx, http.MethodPost, apiURL, operationRequest)
+	if err != nil {
+		return fmt.Errorf("%w: 第二次请求失败: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer operationResult.Body.Close()
+
+	// 读取第二次请求的响应体
+	operationBody, err := io.ReadAll(operationResult.Body)
+	if err != nil {
+		return fmt.Errorf("%w: 读取第二次请求响应失败: %v", core.ErrResponseBodyReadFailed, err)
+	}
+
+	if operationResult.StatusCode != http.StatusOK {
+		return fmt.Errorf("%w: 第二次请求失败，状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, operationResult.StatusCode, operationBody)
 	}
 
 	return nil

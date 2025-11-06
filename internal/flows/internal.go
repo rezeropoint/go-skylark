@@ -227,17 +227,11 @@ func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.Ba
 	}, nil
 }
 
-// buildUpdateJourneyStatusRequest 构建更新流程任务状态请求
+// buildRouteRequestForUpdate 构建第一次请求：修改数据（route操作）
 // 根据原始数据和字段映射构建请求体
-func (f *skylarkFlowRegistry) buildUpdateJourneyStatusRequest(
+func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 	ctx context.Context,
 	skylarkFlowAddress core.BasicSkylarkAddress,
-	flowID int64,
-	operation string,
-	nextVertexID int,
-	comment string,
-	carbonCopyUserIDs []int,
-	durationThresholds []DurationThreshold,
 	originalData map[string]core.TypedValue,
 	fieldMappings map[string]core.FieldMapping,
 ) (UpdateJourneyStatusRequest, error) {
@@ -330,7 +324,28 @@ func (f *skylarkFlowRegistry) buildUpdateJourneyStatusRequest(
 		}
 	}
 
-	// 如果没有数据，entries_attributes 为空数组
+	// 创建符合第一次请求的数据结构
+	return UpdateJourneyStatusRequest{
+		Assignment: UpdateAssignment{
+			Operation: core.OperationRoute,
+			ResponseAttributes: map[string]any{
+				"entries_attributes": entries,
+			},
+		},
+		Method: "patch",
+		Token:  skylarkFlowAddress.AuthHeader,
+	}, nil
+}
+
+// buildOperationRequest 构建第二次请求：执行操作（approve/refuse/transfer/cancel）
+func (f *skylarkFlowRegistry) buildOperationRequest(
+	skylarkFlowAddress core.BasicSkylarkAddress,
+	operation string,
+	nextVertexID int,
+	comment string,
+	carbonCopyUserIDs []int,
+	durationThresholds []DurationThreshold,
+) (UpdateJourneyStatusRequest, error) {
 	userID, err := strconv.Atoi(skylarkFlowAddress.UserID)
 	if err != nil {
 		return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: %v", core.ErrUserIDConversionFailed, err)
@@ -346,19 +361,16 @@ func (f *skylarkFlowRegistry) buildUpdateJourneyStatusRequest(
 		durationThresholds = []DurationThreshold{}
 	}
 
-	// 创建符合 Request 结构体的数据
+	// 创建符合第二次请求的数据结构
 	return UpdateJourneyStatusRequest{
 		Assignment: UpdateAssignment{
-			ResponseAttributes: map[string]any{
-				"entries_attributes": entries,
-			},
-			Comment:            comment,
 			Operation:          operation,
 			NextVertexID:       nextVertexID,
+			Comment:            comment,
 			CarbonCopyUserIDs:  carbonCopyUserIDs,
 			DurationThresholds: durationThresholds,
 		},
-		UserID: userID,
+		Method: "patch",
 		Token:  skylarkFlowAddress.AuthHeader,
 	}, nil
 }
