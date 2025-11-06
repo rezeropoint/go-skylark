@@ -279,7 +279,6 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 	nextVertexID int,
 	comment string,
 	carbonCopyUserIDs []int,
-	durationThresholds []DurationThreshold,
 ) (UpdateJourneyStatusRequest, error) {
 	userID, err := strconv.Atoi(skylarkFlowAddress.UserID)
 	if err != nil {
@@ -291,19 +290,13 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 		carbonCopyUserIDs = []int{}
 	}
 
-	// 如果 durationThresholds 为 nil，初始化为空数组
-	if durationThresholds == nil {
-		durationThresholds = []DurationThreshold{}
-	}
-
 	// 创建符合第二次请求的数据结构
 	return UpdateJourneyStatusRequest{
 		Assignment: UpdateAssignment{
-			Operation:          operation,
-			NextVertexID:       nextVertexID,
-			Comment:            comment,
-			CarbonCopyUserIDs:  carbonCopyUserIDs,
-			DurationThresholds: durationThresholds,
+			Operation:         operation,
+			NextVertexID:      nextVertexID,
+			Comment:           comment,
+			CarbonCopyUserIDs: carbonCopyUserIDs,
 		},
 		Method: "patch",
 		Token:  skylarkFlowAddress.AuthHeader,

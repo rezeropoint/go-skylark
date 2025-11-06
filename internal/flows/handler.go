@@ -217,7 +217,6 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 		options.NextVertexID,
 		options.Comment,
 		options.CarbonCopyUserIDs,
-		options.DurationThresholds,
 	)
 	if err != nil {
 		return err

@@ -8,11 +8,10 @@ import (
 
 // UpdateJourneyStatusOptions 更新流程任务状态的可选参数
 type UpdateJourneyStatusOptions struct {
-	Comment            string              // 处理意见
-	NextVertexID       int                 // 下一个节点ID
-	CarbonCopyUserIDs  []int               // 抄送者ID列表
-	DurationThresholds []DurationThreshold // 持续时间阈值
-	Data               map[string]core.TypedValue // 字段数据
+	Comment           string                     // 处理意见
+	NextVertexID      int                        // 下一个节点ID
+	CarbonCopyUserIDs []int                      // 抄送者ID列表
+	Data              map[string]core.TypedValue // 字段数据
 }
 
 // SkylarkRegistry 定义流程注册表接口

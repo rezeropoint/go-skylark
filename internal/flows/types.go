@@ -55,16 +55,9 @@ type UpdateJourneyStatusRequest struct {
 
 // UpdateAssignment 表示任务更新分配信息
 type UpdateAssignment struct {
-	ResponseAttributes map[string]any      `json:"response_attributes,omitempty"` // 响应属性（包含 entries_attributes，仅第一次请求）
-	Comment            string              `json:"comment,omitempty"`             // 处理意见（仅第二次请求）
-	Operation          string              `json:"operation"`                     // 操作类型: route(第一次) 或 approve/refuse/transfer/cancel(第二次)
-	NextVertexID       int                 `json:"next_vertex_id,omitempty"`      // 下一个节点ID（仅第二次请求）
-	CarbonCopyUserIDs  []int               `json:"carbon_copy_user_ids,omitempty"` // 抄送者ID列表（仅第二次请求）
-	DurationThresholds []DurationThreshold `json:"duration_thresholds,omitempty"` // 持续时间阈值（仅第二次请求）
-}
-
-// DurationThreshold 表示持续时间阈值
-type DurationThreshold struct {
-	GID   string `json:"gid"`   // 全局标识符
-	Value string `json:"value"` // 处理时限
+	ResponseAttributes map[string]any `json:"response_attributes,omitempty"` // 响应属性（包含 entries_attributes，仅第一次请求）
+	Comment            string         `json:"comment,omitempty"`             // 处理意见（仅第二次请求）
+	Operation          string         `json:"operation"`                     // 操作类型: route(第一次) 或 approve/refuse/transfer/cancel(第二次)
+	NextVertexID       int            `json:"next_vertex_id,omitempty"`      // 下一个节点ID（仅第二次请求）
+	CarbonCopyUserIDs  []int          `json:"carbon_copy_user_ids,omitempty"` // 抄送者ID列表（仅第二次请求）
 }
