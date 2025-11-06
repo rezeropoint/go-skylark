@@ -14,6 +14,106 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpc"
 )
 
+// buildEntriesFromData 将原始数据转换为 entries 数组
+// 这是一个公共函数，用于处理字段映射、图片上传、选项字段等逻辑
+func (f *skylarkFlowRegistry) buildEntriesFromData(
+	ctx context.Context,
+	skylarkFlowAddress core.BasicSkylarkAddress,
+	originalData map[string]core.TypedValue,
+	fieldMappings map[string]core.FieldMapping,
+) ([]map[string]any, error) {
+	entries := make([]map[string]any, 0, len(originalData))
+
+	// 处理字段数据
+	for key, TypedValue := range originalData {
+		// 先判断 key 是否存在于 fieldMappings 中
+		if fieldMapping, ok := fieldMappings[key]; ok {
+			fieldId := fieldMapping.ID
+
+			switch {
+			case TypedValue.Type == string(core.FieldImage):
+				// 提取图片URL
+				imageURL, ok := TypedValue.Value.(string)
+				if !ok {
+					return nil, fmt.Errorf("%w: 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
+				}
+
+				// 创建图片字段的 entry
+				id, name, err := images.CreateImageEntryFromURL(ctx, skylarkFlowAddress, imageURL)
+				if err != nil {
+					return nil, err
+				}
+				// 创建 entry 并添加到 entries
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id": fieldId,
+						"value":    name,
+						"value_id": id,
+					})
+			case TypedValue.Type == string(core.FieldImageBase64):
+				// 提取 base64 数据
+				base64Data, ok := TypedValue.Value.(string)
+				if !ok {
+					return nil, fmt.Errorf("%w: Base64 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
+				}
+
+				// 上传 base64 图片
+				id, name, err := images.CreateImageEntryFromBase64(ctx, skylarkFlowAddress, base64Data)
+				if err != nil {
+					return nil, err
+				}
+				// 创建 entry 并添加到 entries
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id": fieldId,
+						"value":    name,
+						"value_id": id,
+					})
+			case TypedValue.Type == string(core.FieldString) && core.IsOptionField(fieldMapping.Type):
+				// 处理选项字段(仅限字符串类型)
+				valueStr, ok := TypedValue.Value.(string)
+				if !ok {
+					return nil, fmt.Errorf("%w: 选项字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
+				}
+
+				// 查找匹配的选项
+				optionId := 0
+				for _, option := range fieldMapping.Options {
+					if option.Value == valueStr {
+						optionId = option.ID
+						break
+					}
+				}
+
+				if optionId == 0 {
+					return nil, fmt.Errorf("%w: 选项字段 %s 的值 %s 不存在", core.ErrOptionNotFound, key, valueStr)
+				}
+
+				// 找到匹配的选项，添加option_id
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id":  fieldId,
+						"value":     valueStr,
+						"option_id": optionId,
+					})
+			default:
+				// 不需要特殊处理，直接添加。因为any类型可以包含所有类型
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id": fieldId,
+						"value":    TypedValue.Value,
+					})
+			}
+		}
+	}
+
+	return entries, nil
+}
+
 // getFlowFieldMappings 获取流程字段映射
 // 先尝试从缓存获取，缓存未命中则从API获取
 func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkFlowAddress core.BasicSkylarkAddress, flowID int64) (map[string]core.FieldMapping, error) {
@@ -72,92 +172,10 @@ func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkF
 // buildFlowRouteRequest 构建流程路由请求
 // 根据原始数据和字段映射构建请求体
 func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylarkFlowAddress core.BasicSkylarkAddress, flowID int64, originalData map[string]core.TypedValue, fieldMappings map[string]core.FieldMapping) (FlowRouteRequest, error) {
-	entries := make([]map[string]any, 0, len(originalData))
-
-	for key, TypedValue := range originalData {
-		// 先判断 key 是否存在于 fieldMappings 中
-		if fieldMapping, ok := fieldMappings[key]; ok {
-			fieldId := fieldMapping.ID
-
-			switch {
-			case TypedValue.Type == string(core.FieldImage):
-				// 提取图片URL
-				imageURL, ok := TypedValue.Value.(string)
-				if !ok {
-					return FlowRouteRequest{}, fmt.Errorf("%w: 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
-				}
-
-				// 创建图片字段的 entry
-				id, name, err := images.CreateImageEntryFromURL(ctx, skylarkFlowAddress, imageURL)
-				if err != nil {
-					return FlowRouteRequest{}, err
-				}
-				// 创建 entry 并添加到 entries
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id": fieldId,
-						"value":    name,
-						"value_id": id,
-					})
-			case TypedValue.Type == string(core.FieldImageBase64):
-				// 提取 base64 数据
-				base64Data, ok := TypedValue.Value.(string)
-				if !ok {
-					return FlowRouteRequest{}, fmt.Errorf("%w: Base64 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
-				}
-
-				// 上传 base64 图片
-				id, name, err := images.CreateImageEntryFromBase64(ctx, skylarkFlowAddress, base64Data)
-				if err != nil {
-					return FlowRouteRequest{}, err
-				}
-				// 创建 entry 并添加到 entries
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id": fieldId,
-						"value":    name,
-						"value_id": id,
-					})
-			case TypedValue.Type == string(core.FieldString) && core.IsOptionField(fieldMapping.Type):
-				// 处理选项字段(仅限字符串类型)
-				valueStr, ok := TypedValue.Value.(string)
-				if !ok {
-					return FlowRouteRequest{}, fmt.Errorf("%w: 选项字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
-				}
-
-				// 查找匹配的选项
-				optionId := 0
-				for _, option := range fieldMapping.Options {
-					if option.Value == valueStr {
-						optionId = option.ID
-						break
-					}
-				}
-
-				if optionId == 0 {
-					return FlowRouteRequest{}, fmt.Errorf("%w: 选项字段 %s 的值 %s 不存在", core.ErrOptionNotFound, key, valueStr)
-				}
-
-				// 找到匹配的选项，添加option_id
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id":  fieldId,
-						"value":     valueStr,
-						"option_id": optionId,
-					})
-			default:
-				// 不需要特殊处理，直接添加。因为any类型可以包含所有类型
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id": fieldId,
-						"value":    TypedValue.Value,
-					})
-			}
-		}
+	// 使用公共函数处理字段数据
+	entries, err := f.buildEntriesFromData(ctx, skylarkFlowAddress, originalData, fieldMappings)
+	if err != nil {
+		return FlowRouteRequest{}, err
 	}
 	if len(entries) == 0 {
 		// 字段映射为空，可能是缓存没有更新，清除字段映射缓存
@@ -235,93 +253,10 @@ func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 	originalData map[string]core.TypedValue,
 	fieldMappings map[string]core.FieldMapping,
 ) (UpdateJourneyStatusRequest, error) {
-	entries := make([]map[string]any, 0, len(originalData))
-
-	// 处理字段数据，逻辑与 buildFlowRouteRequest 类似
-	for key, TypedValue := range originalData {
-		// 先判断 key 是否存在于 fieldMappings 中
-		if fieldMapping, ok := fieldMappings[key]; ok {
-			fieldId := fieldMapping.ID
-
-			switch {
-			case TypedValue.Type == string(core.FieldImage):
-				// 提取图片URL
-				imageURL, ok := TypedValue.Value.(string)
-				if !ok {
-					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
-				}
-
-				// 创建图片字段的 entry
-				id, name, err := images.CreateImageEntryFromURL(ctx, skylarkFlowAddress, imageURL)
-				if err != nil {
-					return UpdateJourneyStatusRequest{}, err
-				}
-				// 创建 entry 并添加到 entries
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id": fieldId,
-						"value":    name,
-						"value_id": id,
-					})
-			case TypedValue.Type == string(core.FieldImageBase64):
-				// 提取 base64 数据
-				base64Data, ok := TypedValue.Value.(string)
-				if !ok {
-					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: Base64 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
-				}
-
-				// 上传 base64 图片
-				id, name, err := images.CreateImageEntryFromBase64(ctx, skylarkFlowAddress, base64Data)
-				if err != nil {
-					return UpdateJourneyStatusRequest{}, err
-				}
-				// 创建 entry 并添加到 entries
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id": fieldId,
-						"value":    name,
-						"value_id": id,
-					})
-			case TypedValue.Type == string(core.FieldString) && core.IsOptionField(fieldMapping.Type):
-				// 处理选项字段(仅限字符串类型)
-				valueStr, ok := TypedValue.Value.(string)
-				if !ok {
-					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: 选项字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
-				}
-
-				// 查找匹配的选项
-				optionId := 0
-				for _, option := range fieldMapping.Options {
-					if option.Value == valueStr {
-						optionId = option.ID
-						break
-					}
-				}
-
-				if optionId == 0 {
-					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: 选项字段 %s 的值 %s 不存在", core.ErrOptionNotFound, key, valueStr)
-				}
-
-				// 找到匹配的选项，添加option_id
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id":  fieldId,
-						"value":     valueStr,
-						"option_id": optionId,
-					})
-			default:
-				// 不需要特殊处理，直接添加。因为any类型可以包含所有类型
-				entries = append(
-					entries,
-					map[string]any{
-						"field_id": fieldId,
-						"value":    TypedValue.Value,
-					})
-			}
-		}
+	// 使用公共函数处理字段数据
+	entries, err := f.buildEntriesFromData(ctx, skylarkFlowAddress, originalData, fieldMappings)
+	if err != nil {
+		return UpdateJourneyStatusRequest{}, err
 	}
 
 	// 创建符合第一次请求的数据结构
