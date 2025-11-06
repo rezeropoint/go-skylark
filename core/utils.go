@@ -43,3 +43,17 @@ func BuildFormAPIURL(address BasicSkylarkAddress, formID int64, additionalPath .
 	params = append(params, additionalPath...)
 	return BuildAPIURL(address.App, APIFormsPath, params...)
 }
+
+// BuildJourneyAssignmentAPIURL 构建流程记录任务API URL
+// 参数:
+//   - address: 流程地址信息
+//   - journeyID: 流程记录ID
+//   - assignmentID: 任务ID
+func BuildJourneyAssignmentAPIURL(address BasicSkylarkAddress, journeyID int64, assignmentID int64) string {
+	params := []string{
+		strconv.FormatInt(journeyID, 10),
+		"assignments",
+		strconv.FormatInt(assignmentID, 10),
+	}
+	return BuildAPIURL(address.App, APIJourneysPath, params...)
+}

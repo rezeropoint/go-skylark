@@ -49,3 +49,7 @@ func (e *skylarkEngine) CreateFlow(ctx context.Context, app string, flowID int64
 func (e *skylarkEngine) CreateFormRow(ctx context.Context, app string, formID int64, userID int64, authHeader string, data map[string]core.TypedValue) error {
 	return e.forms.CreateFormRow(ctx, app, formID, userID, authHeader, data)
 }
+
+func (e *skylarkEngine) UpdateFlowJourneyStatus(ctx context.Context, app string, flowID int64, journeyID int64, assignmentID int64, userID int64, authHeader string, operation string, options flows.UpdateJourneyStatusOptions) error {
+	return e.flows.UpdateJourneyStatus(ctx, app, flowID, journeyID, assignmentID, userID, authHeader, operation, options)
+}

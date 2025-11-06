@@ -29,14 +29,19 @@ const (
 )
 
 const (
-	APIFlowsPath = "/api/v4/yaw/flows/" // 流程API路径
-	APIFormsPath = "/api/v4/forms/"     // 表单API路径
+	APIFlowsPath    = "/api/v4/yaw/flows/"    // 流程API路径
+	APIFormsPath    = "/api/v4/forms/"        // 表单API路径
+	APIJourneysPath = "/api/v4/yaw/journeys/" // 流程记录API路径
 )
 
 // 操作类型常量
 const (
-	OperationRoute   = "route"   // 路由操作
-	OperationPropose = "propose" // 提议操作
+	OperationRoute    = "route"    // 路由操作
+	OperationPropose  = "propose"  // 提议操作
+	OperationApprove  = "approve"  // 通过操作
+	OperationRefuse   = "refuse"   // 回退操作
+	OperationTransfer = "transfer" // 转交操作
+	OperationCancel   = "cancel"   // 撤销操作
 )
 
 // 事件类型常量

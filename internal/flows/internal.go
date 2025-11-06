@@ -226,3 +226,139 @@ func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.Ba
 		Token: skylarkFlowAddress.AuthHeader,
 	}, nil
 }
+
+// buildUpdateJourneyStatusRequest 构建更新流程任务状态请求
+// 根据原始数据和字段映射构建请求体
+func (f *skylarkFlowRegistry) buildUpdateJourneyStatusRequest(
+	ctx context.Context,
+	skylarkFlowAddress core.BasicSkylarkAddress,
+	flowID int64,
+	operation string,
+	nextVertexID int,
+	comment string,
+	carbonCopyUserIDs []int,
+	durationThresholds []DurationThreshold,
+	originalData map[string]core.TypedValue,
+	fieldMappings map[string]core.FieldMapping,
+) (UpdateJourneyStatusRequest, error) {
+	entries := make([]map[string]any, 0, len(originalData))
+
+	// 处理字段数据，逻辑与 buildFlowRouteRequest 类似
+	for key, TypedValue := range originalData {
+		// 先判断 key 是否存在于 fieldMappings 中
+		if fieldMapping, ok := fieldMappings[key]; ok {
+			fieldId := fieldMapping.ID
+
+			switch {
+			case TypedValue.Type == string(core.FieldImage):
+				// 提取图片URL
+				imageURL, ok := TypedValue.Value.(string)
+				if !ok {
+					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
+				}
+
+				// 创建图片字段的 entry
+				id, name, err := images.CreateImageEntryFromURL(ctx, skylarkFlowAddress, imageURL)
+				if err != nil {
+					return UpdateJourneyStatusRequest{}, err
+				}
+				// 创建 entry 并添加到 entries
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id": fieldId,
+						"value":    name,
+						"value_id": id,
+					})
+			case TypedValue.Type == string(core.FieldImageBase64):
+				// 提取 base64 数据
+				base64Data, ok := TypedValue.Value.(string)
+				if !ok {
+					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: Base64 图片字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
+				}
+
+				// 上传 base64 图片
+				id, name, err := images.CreateImageEntryFromBase64(ctx, skylarkFlowAddress, base64Data)
+				if err != nil {
+					return UpdateJourneyStatusRequest{}, err
+				}
+				// 创建 entry 并添加到 entries
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id": fieldId,
+						"value":    name,
+						"value_id": id,
+					})
+			case TypedValue.Type == string(core.FieldString) && core.IsOptionField(fieldMapping.Type):
+				// 处理选项字段(仅限字符串类型)
+				valueStr, ok := TypedValue.Value.(string)
+				if !ok {
+					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: 选项字段 %s 的值应为字符串类型", core.ErrInvalidFieldValue, key)
+				}
+
+				// 查找匹配的选项
+				optionId := 0
+				for _, option := range fieldMapping.Options {
+					if option.Value == valueStr {
+						optionId = option.ID
+						break
+					}
+				}
+
+				if optionId == 0 {
+					return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: 选项字段 %s 的值 %s 不存在", core.ErrOptionNotFound, key, valueStr)
+				}
+
+				// 找到匹配的选项，添加option_id
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id":  fieldId,
+						"value":     valueStr,
+						"option_id": optionId,
+					})
+			default:
+				// 不需要特殊处理，直接添加。因为any类型可以包含所有类型
+				entries = append(
+					entries,
+					map[string]any{
+						"field_id": fieldId,
+						"value":    TypedValue.Value,
+					})
+			}
+		}
+	}
+
+	// 如果没有数据，entries_attributes 为空数组
+	userID, err := strconv.Atoi(skylarkFlowAddress.UserID)
+	if err != nil {
+		return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: %v", core.ErrUserIDConversionFailed, err)
+	}
+
+	// 如果 carbonCopyUserIDs 为 nil，初始化为空数组
+	if carbonCopyUserIDs == nil {
+		carbonCopyUserIDs = []int{}
+	}
+
+	// 如果 durationThresholds 为 nil，初始化为空数组
+	if durationThresholds == nil {
+		durationThresholds = []DurationThreshold{}
+	}
+
+	// 创建符合 Request 结构体的数据
+	return UpdateJourneyStatusRequest{
+		Assignment: UpdateAssignment{
+			ResponseAttributes: map[string]any{
+				"entries_attributes": entries,
+			},
+			Comment:            comment,
+			Operation:          operation,
+			NextVertexID:       nextVertexID,
+			CarbonCopyUserIDs:  carbonCopyUserIDs,
+			DurationThresholds: durationThresholds,
+		},
+		UserID: userID,
+		Token:  skylarkFlowAddress.AuthHeader,
+	}, nil
+}

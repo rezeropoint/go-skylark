@@ -120,3 +120,100 @@ func (f *skylarkFlowRegistry) CreateFlow(ctx context.Context, app string, flowID
 
 	return nil
 }
+
+// UpdateJourneyStatus 更新流程任务状态
+// 参数:
+//   - ctx: 上下文
+//   - app: 应用名称
+//   - flowID: 流程ID（用于获取字段映射）
+//   - journeyID: 流程记录ID
+//   - assignmentID: 任务ID
+//   - userID: 用户ID
+//   - authHeader: 认证头信息
+//   - operation: 操作类型 (approve/refuse/transfer/cancel)
+//   - options: 可选参数
+func (f *skylarkFlowRegistry) UpdateJourneyStatus(
+	ctx context.Context,
+	app string,
+	flowID int64,
+	journeyID int64,
+	assignmentID int64,
+	userID int64,
+	authHeader string,
+	operation string,
+	options UpdateJourneyStatusOptions,
+) error {
+	// 构建流程地址信息
+	skylarkFlowAddress := core.BasicSkylarkAddress{
+		App:        app,
+		UserID:     strconv.FormatInt(userID, 10),
+		AuthHeader: authHeader,
+	}
+
+	// 初始化字段映射（如果有数据需要处理）
+	var fieldMappings map[string]core.FieldMapping
+	if len(options.Data) > 0 {
+		var err error
+		fieldMappings, err = f.getFlowFieldMappings(ctx, skylarkFlowAddress, flowID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 构建更新任务状态请求体
+	updateRequest, err := f.buildUpdateJourneyStatusRequest(
+		ctx,
+		skylarkFlowAddress,
+		flowID,
+		operation,
+		options.NextVertexID,
+		options.Comment,
+		options.CarbonCopyUserIDs,
+		options.DurationThresholds,
+		options.Data,
+		fieldMappings,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 构建API请求URL
+	apiURL := core.BuildJourneyAssignmentAPIURL(skylarkFlowAddress, journeyID, assignmentID)
+
+	// 准备工作完成，现在获取分布式锁
+	lockKey := fmt.Sprintf("journey:lock:%s:%d:%d:%d", app, journeyID, assignmentID, userID)
+	lockValue := uuid.New().String()
+	lockExpiry := 30 // 默认30秒过期时间
+
+	// 获取分布式锁，支持重试
+	if err = f.cache.AcquireLockWithRetry(ctx, lockKey, lockValue, lockExpiry); err != nil {
+		return err
+	}
+
+	// 确保释放锁
+	defer func() {
+		if releaseErr := f.cache.ReleaseLock(ctx, lockKey, lockValue); releaseErr != nil {
+			// 记录释放锁失败的错误，但不影响主流程的返回
+			// 这里可以添加日志记录
+		}
+	}()
+
+	// 发送更新任务状态请求
+	updateResult, err := httpc.Do(ctx, http.MethodPost, apiURL, updateRequest)
+	if err != nil {
+		return fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer updateResult.Body.Close()
+
+	// 读取响应体
+	updateBody, err := io.ReadAll(updateResult.Body)
+	if err != nil {
+		return fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
+	}
+
+	if updateResult.StatusCode != http.StatusOK {
+		return fmt.Errorf("%w: 状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, updateResult.StatusCode, updateBody)
+	}
+
+	return nil
+}
