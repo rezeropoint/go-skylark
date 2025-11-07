@@ -280,11 +280,6 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 	comment string,
 	carbonCopyUserIDs []int,
 ) (UpdateJourneyStatusRequest, error) {
-	userID, err := strconv.Atoi(skylarkFlowAddress.UserID)
-	if err != nil {
-		return UpdateJourneyStatusRequest{}, fmt.Errorf("%w: %v", core.ErrUserIDConversionFailed, err)
-	}
-
 	// 如果 carbonCopyUserIDs 为 nil，初始化为空数组
 	if carbonCopyUserIDs == nil {
 		carbonCopyUserIDs = []int{}

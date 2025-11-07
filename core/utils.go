@@ -1,3 +1,7 @@
+// Package core 提供 go-skylark SDK 的核心类型定义
+//
+// 本文件用途：🔵 API 请求
+// 说明：本文件定义的工具函数用于构建 Skylark REST API 的 URL
 package core
 
 import (

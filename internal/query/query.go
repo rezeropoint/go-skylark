@@ -1,0 +1,38 @@
+package query
+
+import (
+	"context"
+
+	"github.com/rezeropoint/go-skylark/core"
+
+	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
+)
+
+// Manager 远程查询管理器接口
+// 职责：查询远程Skylark数据库 + 组织权限过滤 + SQL构建 + 用户名转换 + 统计分析
+type Manager interface {
+	QueryEventData(ctx context.Context, req *core.QueryRequest) (*core.QueryResponse, error)       // QueryEventData 查询事件数据列表（Journey聚合 + 权限过滤）
+	GetEventDetail(ctx context.Context, req *core.DetailRequest) (*core.DetailResponse, error)     // GetEventDetail 获取事件详情（完整流转历史 + 用户名转换）
+	GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error)                    // GetFlowList 获取远程flows列表（供前端配置）
+	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*core.FieldMetadata, error) // GetFlowFields 获取远程flow字段列表（供前端配置）
+}
+
+// NewManager 创建远程查询管理器
+// 参数：
+//   - config: 查询管理器配置
+//   - db: 本地数据库连接
+//   - getRemoteDB: 获取远程数据库连接的函数（由 Platform Manager 提供）
+//   - getEventConfig: 获取事件配置（含字段）的函数（由 Event Manager 提供）
+//   - listOrgMappings: 获取组织映射列表的函数（由 Mapping Manager 提供）
+//   - rdb: Redis客户端（必须提供，用于缓存）
+func NewManager(
+	config Config,
+	db sqlx.SqlConn,
+	getRemoteDB core.GetRemoteDBFunc,
+	getEventConfig core.GetEventConfigWithFieldsFunc,
+	listOrgMappings core.ListOrgMappingsFunc,
+	rdb *redis.Redis,
+) (Manager, error) {
+	return newQueryManager(config, db, getRemoteDB, getEventConfig, listOrgMappings, rdb)
+}

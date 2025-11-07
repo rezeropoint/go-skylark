@@ -1,3 +1,7 @@
+// Package core 提供 go-skylark SDK 的核心类型定义
+//
+// 本文件用途：🔵 API 请求 + 🟢 数据库查询
+// 说明：缓存接口同时服务于 API 请求（字段映射缓存、分布式锁）和数据库查询（查询结果缓存）两种场景
 package core
 
 import "context"
