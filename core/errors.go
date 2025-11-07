@@ -12,7 +12,8 @@ import "errors"
 
 var (
 	// 配置错误
-	ErrConfigNil = errors.New("配置不能为空")
+	ErrConfigNil   = errors.New("配置不能为空")
+	ErrLocalDBNil  = errors.New("本地数据库连接不能为空")
 
 	// 字段映射错误
 	ErrFieldMappingEmpty                    = errors.New("字段映射为空，已清除字段缓存，请再次尝试")

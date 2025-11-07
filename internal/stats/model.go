@@ -18,11 +18,11 @@ type DurationStatsModel struct {
 
 // EventPendingStatsModel 是数据库查询专用结构体（基础设施层）
 type EventPendingStatsModel struct {
-	EventConfigID   string `db:"event_config_id"` // 事件配置ID
-	EventName       string `db:"event_name"`      // 事件名称
-	PendingCount    int64  `db:"pending_count"`   // 未开始事件数
+	EventConfigID   string `db:"event_config_id"`  // 事件配置ID
+	EventName       string `db:"event_name"`       // 事件名称
+	PendingCount    int64  `db:"pending_count"`    // 未开始事件数
 	ProcessingCount int64  `db:"processing_count"` // 处理中事件数
-	Total           int64  `db:"total"`           // 该事件的总数
+	Total           int64  `db:"total"`            // 该事件的总数
 }
 
 // ToDomain 将数据库模型转换为领域模型

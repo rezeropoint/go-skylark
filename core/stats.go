@@ -148,9 +148,9 @@ type PendingStats struct {
 
 // EventPendingStats 单个事件的待处理统计（纯领域模型）
 type EventPendingStats struct {
-	EventConfigID   string `json:"eventConfigId"`    // 事件配置ID
-	EventName       string `json:"eventName"`        // 事件名称
-	PendingCount    int64  `json:"pendingCount"`     // 未开始事件数（只有发起节点）
-	ProcessingCount int64  `json:"processingCount"`  // 处理中事件数（有多个节点）
-	Total           int64  `json:"total"`            // 该事件的总数（未完成的事件）
+	EventConfigID   string `json:"eventConfigId"`   // 事件配置ID
+	EventName       string `json:"eventName"`       // 事件名称
+	PendingCount    int64  `json:"pendingCount"`    // 未开始事件数（只有发起节点）
+	ProcessingCount int64  `json:"processingCount"` // 处理中事件数（有多个节点）
+	Total           int64  `json:"total"`           // 该事件的总数（未完成的事件）
 }

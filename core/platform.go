@@ -31,18 +31,18 @@ type GetRemoteDBFunc func(ctx context.Context, tenantID string) (sqlx.SqlConn, e
 
 // PlatformConfig Skylark平台对接配置（纯领域模型）
 type PlatformConfig struct {
-	ID          string     // 配置UUID
-	TenantID    string     // 租户ID（一租户一平台）
-	Host        string     // 数据库地址（如：110.41.35.134）
-	Port        int        // 端口（如：5432）
-	Database    string     // 数据库名（如：sync）
-	Username    string     // 用户名
-	Password    string     // 密码（加密存储）
-	NamespaceID int        // 命名空间ID（用于筛选flows）
-	CreatedBy   *string    // 创建者用户ID
-	UpdatedBy   *string    // 最后修改者用户ID
-	CreatedAt   time.Time  // 创建时间
-	UpdatedAt   time.Time  // 更新时间
+	ID          string    // 配置UUID
+	TenantID    string    // 租户ID（一租户一平台）
+	Host        string    // 数据库地址（如：110.41.35.134）
+	Port        int       // 端口（如：5432）
+	Database    string    // 数据库名（如：sync）
+	Username    string    // 用户名
+	Password    string    // 密码（加密存储）
+	NamespaceID int       // 命名空间ID（用于筛选flows）
+	CreatedBy   *string   // 创建者用户ID
+	UpdatedBy   *string   // 最后修改者用户ID
+	CreatedAt   time.Time // 创建时间
+	UpdatedAt   time.Time // 更新时间
 }
 
 // BuildDSN 构建数据库连接字符串
