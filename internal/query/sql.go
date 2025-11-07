@@ -46,8 +46,8 @@ func (m *queryManager) buildQuerySQLWithConfig(req *core.QueryRequest, eventConf
 	whereClauses := []string{}
 
 	// 3.1 组织权限过滤（如果配置了组织字段且有映射）
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("a.%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex))
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("a.%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex))
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -75,8 +75,8 @@ func (m *queryManager) buildQuerySQLWithConfig(req *core.QueryRequest, eventConf
 			subWhereParts := []string{"slp_status NOT IN ('completed', 'rejected')"}
 
 			// 子查询也需要应用组织权限过滤
-			if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-				subWhereParts = append(subWhereParts, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex))
+			if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+				subWhereParts = append(subWhereParts, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex))
 				args = append(args, pq.Array(allowedOrgValues))
 				argIndex++
 			}
@@ -183,8 +183,8 @@ func (m *queryManager) countJourneysWithConfig(ctx context.Context, remoteDB sql
 	whereClauses := []string{}
 
 	// 组织权限过滤
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex))
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex))
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -212,8 +212,8 @@ func (m *queryManager) countJourneysWithConfig(ctx context.Context, remoteDB sql
 			subWhereParts := []string{"slp_status NOT IN ('completed', 'rejected')"}
 
 			// 子查询也需要应用组织权限过滤
-			if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-				subWhereParts = append(subWhereParts, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex))
+			if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+				subWhereParts = append(subWhereParts, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex))
 				args = append(args, pq.Array(allowedOrgValues))
 				argIndex++
 			}

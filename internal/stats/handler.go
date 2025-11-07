@@ -81,9 +81,9 @@ func (m *statsManager) GetDurationStats(ctx context.Context, req *core.StatsRequ
 		// 如果租户下没有任何事件配置，返回空统计结果
 		if len(allIDs) == 0 {
 			return &core.DurationStats{
-				AvgDuration:    sql.NullFloat64{Float64: 0, Valid: false},
-				MinDuration:    sql.NullFloat64{Float64: 0, Valid: false},
-				MaxDuration:    sql.NullFloat64{Float64: 0, Valid: false},
+				AvgDuration:    nil,
+				MinDuration:    nil,
+				MaxDuration:    nil,
 				TotalCount:     0,
 				CompletedCount: 0,
 			}, nil
@@ -952,7 +952,7 @@ func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsReq
 	}
 
 	// 3. 检查是否配置了组织字段
-	if !eventConfigWithFields.EventConfig.OrgFieldName.Valid {
+	if eventConfigWithFields.EventConfig.OrgFieldName == nil {
 		return nil, fmt.Errorf("该事件未配置组织字段，无法进行组织统计")
 	}
 

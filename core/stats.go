@@ -5,7 +5,6 @@
 package core
 
 import (
-	"database/sql"
 	"time"
 )
 
@@ -56,14 +55,14 @@ type StatsRequest struct {
 	TopN    int    // Top N数量（用户统计使用，默认10）
 }
 
-// DurationStats 处理时长统计响应
+// DurationStats 处理时长统计响应（纯领域模型）
 // 说明：统计已完成事件的处理时长（从Journey第一个Assignment创建到最后一个Assignment更新）
 type DurationStats struct {
-	AvgDuration    sql.NullFloat64 `db:"avg_duration"`    // 平均处理时长（秒）
-	MinDuration    sql.NullFloat64 `db:"min_duration"`    // 最短处理时长（秒）
-	MaxDuration    sql.NullFloat64 `db:"max_duration"`    // 最长处理时长（秒）
-	TotalCount     int64           `db:"total_count"`     // 统计范围内的总事件数（Journey数量）
-	CompletedCount int64           `db:"completed_count"` // 已完成事件数
+	AvgDuration    *float64 // 平均处理时长（秒）
+	MinDuration    *float64 // 最短处理时长（秒）
+	MaxDuration    *float64 // 最长处理时长（秒）
+	TotalCount     int64    // 统计范围内的总事件数（Journey数量）
+	CompletedCount int64    // 已完成事件数
 }
 
 // StatusStats 状态统计响应
@@ -147,11 +146,11 @@ type PendingStats struct {
 	Total           int64                // 总事件数（未完成的事件）
 }
 
-// EventPendingStats 单个事件的待处理统计
+// EventPendingStats 单个事件的待处理统计（纯领域模型）
 type EventPendingStats struct {
-	EventConfigID   string `db:"event_config_id" json:"eventConfigId"`    // 事件配置ID
-	EventName       string `db:"event_name" json:"eventName"`             // 事件名称
-	PendingCount    int64  `db:"pending_count" json:"pendingCount"`       // 未开始事件数（只有发起节点）
-	ProcessingCount int64  `db:"processing_count" json:"processingCount"` // 处理中事件数（有多个节点）
-	Total           int64  `db:"total" json:"total"`                      // 该事件的总数（未完成的事件）
+	EventConfigID   string `json:"eventConfigId"`    // 事件配置ID
+	EventName       string `json:"eventName"`        // 事件名称
+	PendingCount    int64  `json:"pendingCount"`     // 未开始事件数（只有发起节点）
+	ProcessingCount int64  `json:"processingCount"`  // 处理中事件数（有多个节点）
+	Total           int64  `json:"total"`            // 该事件的总数（未完成的事件）
 }

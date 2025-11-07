@@ -90,11 +90,15 @@
 |--------|-----|--------|
 | `<manager>.go` | 接口定义 | ✅ 必需 |
 | `handler.go` | 接口实现 | ✅ 必需 |
-| `model.go` | 数据库查询结构体（包含 db 标签） | ✅ 必需 |
-| `helpers.go` | 纯函数辅助方法、转换函数 | 🟡 推荐 |
+| `model.go` | 数据库模型（包含 db 标签和 ToDomain 方法） | ✅ 必需 |
+| `helpers.go` | 未导出的辅助函数（convertNullString等） | 🟡 推荐 |
 | `internal.go` | 内部方法（不对外暴露） | 🟡 推荐 |
 | `sql.go` | SQL 语句常量 | 🟡 可选 |
 | `config.go` | Manager 配置结构体 | ✅ 必需 |
+
+**重要约定**：
+- `model.go` 只包含结构体定义和导出方法（如 `ToDomain()`）
+- `helpers.go` 包含所有未导出的辅助函数（如类型转换函数）
 
 #### model.go 的作用
 

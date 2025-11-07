@@ -5,25 +5,24 @@
 package core
 
 import (
-	"database/sql"
 	"fmt"
 	"time"
 )
 
-// EventConfig 事件配置领域模型（本地元数据）
+// EventConfig 事件配置领域模型（纯领域模型）
 type EventConfig struct {
-	ID           string         `db:"id"`             // 配置UUID
-	Name         string         `db:"name"`           // 事件显示名称（自定义名称）
-	FlowID       int            `db:"flow_id"`        // 远程流程ID（关联flows.id）
-	FlowTitle    string         `db:"flow_title"`     // 远程流程名称（冗余，来自flows.title）
-	OrgFieldName sql.NullString `db:"org_field_name"` // 组织字段名（用于权限过滤，可选）
-	Description  sql.NullString `db:"description"`    // 描述
-	Enabled      bool           `db:"enabled"`        // 是否启用
-	TenantID     string         `db:"tenant_id"`      // 租户ID
-	CreatedBy    sql.NullString `db:"created_by"`     // 创建者用户ID
-	UpdatedBy    sql.NullString `db:"updated_by"`     // 最后修改者用户ID
-	CreatedAt    time.Time      `db:"created_at"`     // 创建时间
-	UpdatedAt    time.Time      `db:"updated_at"`     // 更新时间
+	ID           string    // 配置UUID
+	Name         string    // 事件显示名称（自定义名称）
+	FlowID       int       // 远程流程ID（关联flows.id）
+	FlowTitle    string    // 远程流程名称（冗余，来自flows.title）
+	OrgFieldName *string   // 组织字段名（用于权限过滤，可选）
+	Description  *string   // 描述
+	Enabled      bool      // 是否启用
+	TenantID     string    // 租户ID
+	CreatedBy    *string   // 创建者用户ID
+	UpdatedBy    *string   // 最后修改者用户ID
+	CreatedAt    time.Time // 创建时间
+	UpdatedAt    time.Time // 更新时间
 }
 
 // GetRemoteTableName 获取远程表名

@@ -102,8 +102,8 @@ func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.Platf
 		WHERE tenant_id = $1
 	`
 
-	var cfg core.PlatformConfig
-	err := m.dbConn.QueryRowCtx(ctx, &cfg, query, tenantID)
+	var model PlatformConfigModel
+	err := m.dbConn.QueryRowCtx(ctx, &model, query, tenantID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, core.ErrPlatformConfigNotFound
@@ -111,7 +111,7 @@ func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.Platf
 		return nil, fmt.Errorf("查询平台配置失败: %w", err)
 	}
 
-	return &cfg, nil
+	return model.ToDomain(), nil
 }
 
 // Update 更新平台配置

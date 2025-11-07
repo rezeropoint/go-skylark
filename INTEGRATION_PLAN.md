@@ -191,320 +191,46 @@ foreach ($file in $files) {
 
 ---
 
-### 阶段四：合并冲突和适配（待执行）
+### 🔄 阶段四：合并冲突和适配（部分完成）
 
-#### 4.1 领域模型重构（优先级 P0）
+#### ✅ 4.1 领域模型重构（优先级 P0）- 已完成
 
-**背景：**
-当前 Core 层存在严重的领域设计问题，违反了 DDD 原则：
-- ❌ Core 层包含 50+ 个 `db:` 标签
-- ❌ 所有 Internal 子包缺失 `model.go` 文件
-- ❌ Core 层使用 `sql.NullString` 等框架类型
+通过阶段六完成，详见下方阶段六。
 
-**目标：**
-- Core 层成为纯粹的领域模型（无框架依赖）
-- Internal 层通过 `model.go` 处理数据库映射
-- 明确的转换边界（model → domain）
+**完成情况：**
+- ✅ Core 层 db 标签：0 个
+- ✅ Core 层 sql.Null* 使用：0 次
+- ✅ Internal 子包 model.go：7/7 个
+- ✅ 编译验证：通过
 
-**详细计划见阶段六**
+#### ✅ 4.2 字段类型系统整合 - 已完成
 
-#### 4.2 字段类型系统整合
+**完成方案：** `core/field.go` 统一包含两部分：
+- 🔵 API 请求相关：TypedValue, FieldMapping, FieldOption
+- 🟢 数据库查询相关：FieldConfig（纯领域模型，无 db 标签）
 
-**问题：**
-- `go-skylark` 使用 `TypedValue` 结构
-- `skylarkq` 使用 `FieldConfig` 结构
+#### ❌ 4.3 缓存接口适配 - 未完成
 
-**解决方案：扩展 `core/field.go`**
+**当前状态：**
+- `core/cache.go` CacheInterface 仅包含原有方法（字段映射缓存、分布式锁）
+- 缺少通用缓存方法：Get, Set, Setex, Del, GetJSON, SetJSON, SetJSONEx
 
-```go
-// 保留原有的 TypedValue, FieldMapping, FieldOption
+**需要做：**
+1. 扩展 `core/cache.go` 接口（新增 7 个方法）
+2. 在 `internal/cache/cache.go` 实现新方法
+3. 修改 platform/event/mapping/query/stats 的 handler，用 CacheInterface 替换 *redis.Redis
 
-// 新增 skylarkq 的字段配置
-type FieldConfig struct {
-    ID            string    `db:"id"`
-    EventConfigID string    `db:"event_config_id"`
-    FieldName     string    `db:"field_name"`
-    DisplayName   string    `db:"display_name"`
-    FieldType     string    `db:"field_type"`
-    IsVisible     bool      `db:"is_visible"`
-    DisplayOrder  int       `db:"display_order"`
-    IsSearchable  bool      `db:"is_searchable"`
-    TenantID      string    `db:"tenant_id"`
-    CreatedAt     time.Time `db:"created_at"`
-    UpdatedAt     time.Time `db:"updated_at"`
-}
+#### ❌ 4.4 Engine 接口扩展 - 未完成
 
-// FieldMapping 和 FieldConfig 的转换方法
-func (fc *FieldConfig) ToFieldMapping() FieldMapping {
-    return FieldMapping{
-        ID:          0, // FieldConfig 不存储远程 ID
-        IdentityKey: fc.FieldName,
-        Type:        fc.FieldType,
-        Options:     []FieldOption{}, // 需要单独加载
-    }
-}
-```
+**当前状态：**
+- `engine/engine.go` 仅包含 SkylarkEngine 接口（3 个方法）
+- `engine/config.go` 仅包含 Cache 配置
+- `engine/handler.go` 仅初始化 cache, flows, forms
 
-#### 4.3 缓存接口适配
-
-**问题：**
-- `go-skylark` 使用 `CacheInterface` 接口抽象
-- `skylarkq` 直接使用 `*redis.Redis` 客户端
-
-**解决方案：保留接口抽象，扩展实现**
-
-**扩展 `core/cache.go` 接口：**
-```go
-type CacheInterface interface {
-    // 原有方法（流程/表单字段映射缓存）
-    ClearFieldMappingsCache(ctx context.Context, cacheKey string) error
-    GetFieldMappingsFromCache(ctx context.Context, cacheKey string) (map[string]FieldMapping, bool, error)
-    SaveFieldMappingsToCache(ctx context.Context, cacheKey string, fieldMappings map[string]FieldMapping) error
-    AcquireLock(ctx context.Context, key string, value string, expiry int) (bool, error)
-    AcquireLockWithRetry(ctx context.Context, key string, value string, expiry int) error
-    ReleaseLock(ctx context.Context, key string, value string) error
-    ExtendLock(ctx context.Context, key string, value string, expiry int) error
-
-    // 新增方法（skylarkq 查询缓存）
-    // 通用缓存操作
-    Get(ctx context.Context, key string) (string, error)
-    Set(ctx context.Context, key string, value string) error
-    Setex(ctx context.Context, key string, value string, seconds int) error
-    Del(ctx context.Context, keys ...string) error
-
-    // 结构化数据缓存（JSON）
-    GetJSON(ctx context.Context, key string, dest interface{}) error
-    SetJSON(ctx context.Context, key string, value interface{}) error
-    SetJSONEx(ctx context.Context, key string, value interface{}, seconds int) error
-}
-```
-
-**扩展 `internal/cache/cache.go` 实现：**
-```go
-// 实现新增的缓存方法
-func (c *SkylarkCache) Get(ctx context.Context, key string) (string, error) {
-    return c.redisClient.GetCtx(ctx, key)
-}
-
-func (c *SkylarkCache) Setex(ctx context.Context, key string, value string, seconds int) error {
-    return c.redisClient.SetexCtx(ctx, key, value, seconds)
-}
-
-func (c *SkylarkCache) GetJSON(ctx context.Context, key string, dest interface{}) error {
-    val, err := c.redisClient.GetCtx(ctx, key)
-    if err != nil {
-        return err
-    }
-    return json.Unmarshal([]byte(val), dest)
-}
-
-func (c *SkylarkCache) SetJSONEx(ctx context.Context, key string, value interface{}, seconds int) error {
-    data, err := json.Marshal(value)
-    if err != nil {
-        return err
-    }
-    return c.redisClient.SetexCtx(ctx, key, string(data), seconds)
-}
-```
-
-**修改 skylarkq 模块的缓存调用：**
-
-在 `internal/platform/`, `internal/event/`, `internal/mapping/`, `internal/query/`, `internal/stats/` 的所有文件中：
-
-```go
-// 原代码（skylarkq）
-type platformManager struct {
-    localDB     sqlx.SqlConn
-    remoteDBs   map[string]sqlx.SqlConn
-    rdb         *redis.Redis  // 直接依赖 Redis
-}
-
-// 修改为（go-skylark）
-type platformManager struct {
-    localDB     sqlx.SqlConn
-    remoteDBs   map[string]sqlx.SqlConn
-    cache       core.CacheInterface  // 使用接口
-}
-
-// 修改缓存调用
-// 原：m.rdb.Setex(key, val, ttl)
-// 新：m.cache.Setex(ctx, key, val, ttl)
-```
-
-#### 4.4 Engine 接口扩展
-
-**扩展 `engine/engine.go`：**
-
-```go
-// SkylarkEngine - 原有的创建能力
-type SkylarkEngine interface {
-    CreateFlow(ctx context.Context, app string, flowID int64, userID int64,
-               authHeader string, data map[string]core.TypedValue) error
-    CreateFormRow(ctx context.Context, app string, formID int64, userID int64,
-                  authHeader string, data map[string]core.TypedValue) error
-    UpdateFlowJourneyStatus(ctx context.Context, app string, flowID int64,
-                           journeyID int64, assignmentID int64, userID int64,
-                           authHeader string, operation string,
-                           options flows.UpdateJourneyStatusOptions) error
-}
-
-// SkylarkQuery - 新增的查询能力（来自 skylarkq）
-type SkylarkQuery interface {
-    // 平台配置管理
-    CreatePlatformConfig(ctx context.Context, config *core.PlatformConfig) error
-    GetPlatformConfig(ctx context.Context, tenantID string) (*core.PlatformConfig, error)
-    UpdatePlatformConfig(ctx context.Context, config *core.PlatformConfig) error
-    DeletePlatformConfig(ctx context.Context, tenantID string) error
-    ValidatePlatformConnection(ctx context.Context, tenantID string) error
-
-    // 事件配置管理
-    CreateEventConfigWithFields(ctx context.Context, eventConfig *core.EventConfigWithFields) error
-    GetEventConfigWithFields(ctx context.Context, eventConfigID string) (*core.EventConfigWithFields, error)
-    ListEventConfigsWithFields(ctx context.Context, tenantID string) ([]*core.EventConfigWithFields, error)
-    UpdateEventConfigWithFields(ctx context.Context, eventConfig *core.EventConfigWithFields) error
-    DeleteEventConfig(ctx context.Context, eventConfigID string) error
-
-    // 组织映射管理
-    CreateOrgMapping(ctx context.Context, mapping *core.OrgMapping) error
-    GetOrgMapping(ctx context.Context, id string) (*core.OrgMapping, error)
-    ListOrgMappings(ctx context.Context, tenantID string) ([]*core.OrgMapping, error)
-    UpdateOrgMapping(ctx context.Context, mapping *core.OrgMapping) error
-    DeleteOrgMapping(ctx context.Context, id string) error
-
-    // 远程数据查询
-    GetFlowList(ctx context.Context, req *core.FlowListRequest) (*core.FlowListResponse, error)
-    GetFlowFields(ctx context.Context, req *core.FlowFieldsRequest) (*core.FlowFieldsResponse, error)
-    QueryEventData(ctx context.Context, req *core.QueryRequest) (*core.QueryResponse, error)
-    GetEventDetail(ctx context.Context, req *core.DetailRequest) (*core.DetailResponse, error)
-
-    // 统计分析
-    GetDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error)
-    GetStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error)
-    GetTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error)
-    GetNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error)
-    GetUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error)
-    GetOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error)
-    GetPendingStats(ctx context.Context, req *core.StatsRequest) (*core.PendingStats, error)
-
-    // 资源管理
-    Close() error
-}
-
-// SkylarkSDK - 统一的 SDK 接口
-type SkylarkSDK interface {
-    SkylarkEngine
-    SkylarkQuery
-}
-```
-
-**扩展 `engine/config.go`：**
-
-```go
-type Config struct {
-    // 原有配置
-    Cache *cache.Config
-    Flows *flows.Config
-    Forms *forms.Config
-
-    // 新增配置
-    LocalDB      sqlx.SqlConn        // 本地数据库（存储配置）
-    Platform     *platform.Config    // 平台管理配置
-    Event        *event.Config       // 事件管理配置
-    Mapping      *mapping.Config     // 映射管理配置
-    Query        *query.Config       // 查询配置
-    Stats        *stats.Config       // 统计配置
-}
-```
-
-**扩展 `engine/handler.go`：**
-
-```go
-type skylarkSDK struct {
-    // 原有管理器
-    cache *cache.SkylarkCache
-    flows flows.SkylarkFlowRegistry
-    forms forms.SkylarkFormRegistry
-
-    // 新增管理器
-    platform platform.Manager
-    event    event.Manager
-    mapping  mapping.Manager
-    query    query.Manager
-    stats    stats.Manager
-}
-
-func NewSkylarkSDK(config *Config, redisClient *redis.Redis) (SkylarkSDK, error) {
-    // 初始化缓存
-    cacheInstance, err := cache.NewSkylarkCache(config.Cache, redisClient)
-    if err != nil {
-        return nil, err
-    }
-
-    // 初始化原有管理器
-    flowsRegistry, err := flows.NewSkylarkFlowRegistry(config.Flows, cacheInstance)
-    if err != nil {
-        return nil, err
-    }
-
-    formsRegistry, err := forms.NewSkylarkFormRegistry(config.Forms, cacheInstance)
-    if err != nil {
-        return nil, err
-    }
-
-    // 初始化新管理器（按依赖顺序）
-    platformMgr := platform.NewManager(config.Platform, config.LocalDB)
-
-    eventMgr := event.NewManager(config.Event, config.LocalDB, platformMgr.GetRemoteDB)
-
-    mappingMgr := mapping.NewManager(config.Mapping, config.LocalDB, cacheInstance)
-
-    queryMgr := query.NewManager(config.Query, config.LocalDB,
-                                  platformMgr.GetRemoteDB,
-                                  eventMgr.GetWithFields,
-                                  mappingMgr.ListOrgMappings,
-                                  cacheInstance)
-
-    statsMgr := stats.NewManager(config.Stats, config.LocalDB,
-                                  platformMgr.GetRemoteDB,
-                                  eventMgr.GetWithFields,
-                                  mappingMgr.ListOrgMappings,
-                                  cacheInstance)
-
-    return &skylarkSDK{
-        cache:    cacheInstance,
-        flows:    flowsRegistry,
-        forms:    formsRegistry,
-        platform: platformMgr,
-        event:    eventMgr,
-        mapping:  mappingMgr,
-        query:    queryMgr,
-        stats:    statsMgr,
-    }, nil
-}
-
-// 实现 SkylarkEngine 接口（委托给原有管理器）
-func (s *skylarkSDK) CreateFlow(ctx context.Context, app string, flowID int64, userID int64,
-                                authHeader string, data map[string]core.TypedValue) error {
-    return s.flows.CreateFlow(ctx, app, flowID, userID, authHeader, data)
-}
-
-// ... 其他 SkylarkEngine 方法
-
-// 实现 SkylarkQuery 接口（委托给新管理器）
-func (s *skylarkSDK) CreatePlatformConfig(ctx context.Context, config *core.PlatformConfig) error {
-    return s.platform.Create(ctx, config)
-}
-
-func (s *skylarkSDK) QueryEventData(ctx context.Context, req *core.QueryRequest) (*core.QueryResponse, error) {
-    return s.query.QueryEventData(ctx, req)
-}
-
-// ... 其他 SkylarkQuery 方法
-
-func (s *skylarkSDK) Close() error {
-    return s.platform.Close()
-}
-```
+**需要做：**
+1. 扩展 `engine/engine.go`：新增 SkylarkQuery 接口（30+ 方法）和 SkylarkSDK 接口
+2. 扩展 `engine/config.go`：新增 LocalDB, Platform, Event, Mapping, Query, Stats 配置
+3. 扩展 `engine/handler.go`：初始化 platform, event, mapping, query, stats 管理器并实现接口方法
 
 ---
 

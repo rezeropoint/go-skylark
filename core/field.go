@@ -64,18 +64,18 @@ type Field struct {
 // 🟢 数据库查询相关类型（用于配置 Skylark 查询引擎）
 // ================================================================
 
-// FieldConfig 字段配置领域模型
+// FieldConfig 字段配置领域模型（纯领域模型）
 type FieldConfig struct {
-	ID            string    `db:"id"`              // 配置UUID
-	EventConfigID string    `db:"event_config_id"` // 关联事件配置ID
-	FieldName     string    `db:"field_name"`      // 远程表字段名
-	DisplayName   string    `db:"display_name"`    // 展示名称
-	FieldType     string    `db:"field_type"`      // 字段类型：string/number/date/datetime/boolean
-	IsVisible     bool      `db:"is_visible"`      // 是否在列表页展示
-	DisplayOrder  int       `db:"display_order"`   // 展示顺序
-	IsSearchable  bool      `db:"is_searchable"`   // 是否可搜索
-	CreatedAt     time.Time `db:"created_at"`      // 创建时间
-	UpdatedAt     time.Time `db:"updated_at"`      // 更新时间
+	ID            string    // 配置UUID
+	EventConfigID string    // 关联事件配置ID
+	FieldName     string    // 远程表字段名
+	DisplayName   string    // 展示名称
+	FieldType     string    // 字段类型：string/number/date/datetime/boolean
+	IsVisible     bool      // 是否在列表页展示
+	DisplayOrder  int       // 展示顺序
+	IsSearchable  bool      // 是否可搜索
+	CreatedAt     time.Time // 创建时间
+	UpdatedAt     time.Time // 更新时间
 }
 
 // FieldType 字段类型常量

@@ -284,7 +284,7 @@ func (m *queryManager) QueryEventData(ctx context.Context, req *core.QueryReques
 	}
 
 	// 6.1 如果配置了组织字段但没有任何映射，返回空结果（防止查询所有数据）
-	if eventConfigWithFields.EventConfig.OrgFieldName.Valid && len(orgMappings) > 0 && len(allowedOrgValues) == 0 {
+	if eventConfigWithFields.EventConfig.OrgFieldName != nil && len(orgMappings) > 0 && len(allowedOrgValues) == 0 {
 		// 有映射配置，但用户组织不在映射中，返回空结果
 		return &core.QueryResponse{
 			Columns: buildColumnInfo(visibleFields),

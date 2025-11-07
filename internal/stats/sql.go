@@ -18,8 +18,8 @@ func buildDurationStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []str
 
 	// 构建权限WHERE条件
 	var whereConditions string
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex)
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex)
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -85,8 +85,8 @@ func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []strin
 
 	// 构建权限WHERE条件
 	var whereConditions string
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex)
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex)
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -173,8 +173,8 @@ func buildTrendStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string
 
 	// 构建权限WHERE条件
 	var whereConditions string
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex)
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex)
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -242,8 +242,8 @@ func buildNodeStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string,
 
 	// 构建权限WHERE条件
 	var whereConditions string
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereConditions = fmt.Sprintf("a.%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex)
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereConditions = fmt.Sprintf("a.%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex)
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -304,8 +304,8 @@ func buildUserStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string,
 
 	// 构建权限WHERE条件
 	var whereConditions string
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex)
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex)
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}
@@ -358,11 +358,11 @@ func buildOrgStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, 
 	argIndex := 1
 
 	// 必须配置组织字段才能统计
-	if !eventConfig.OrgFieldName.Valid {
+	if eventConfig.OrgFieldName == nil {
 		return "", nil
 	}
 
-	orgFieldName := quoteFieldName(eventConfig.OrgFieldName.String)
+	orgFieldName := quoteFieldName(*eventConfig.OrgFieldName)
 
 	// 构建权限WHERE条件
 	var whereConditions string
@@ -430,8 +430,8 @@ func buildPendingStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []stri
 
 	// 构建权限WHERE条件
 	var whereConditions string
-	if eventConfig.OrgFieldName.Valid && len(allowedOrgValues) > 0 {
-		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(eventConfig.OrgFieldName.String), argIndex)
+	if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
+		whereConditions = fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex)
 		args = append(args, pq.Array(allowedOrgValues))
 		argIndex++
 	}

@@ -4,18 +4,18 @@
 // 说明：本文件定义的类型用于查询 Skylark PostgreSQL 数据库（读操作：Flow 信息查询、字段元数据）
 package core
 
-// FlowInfo 远程流程信息（来自flows表）
+// FlowInfo 远程流程信息（纯领域模型）
 type FlowInfo struct {
-	ID          int    `db:"id"`           // 流程ID
-	Title       string `db:"title"`        // 流程名称
-	NamespaceID int    `db:"namespace_id"` // 命名空间ID
+	ID          int    // 流程ID
+	Title       string // 流程名称
+	NamespaceID int    // 命名空间ID
 }
 
-// FieldMetadata 远程表字段元数据（用于前端字段选择）
+// FieldMetadata 远程表字段元数据（纯领域模型）
 type FieldMetadata struct {
-	FieldName string `db:"column_name"` // 字段名
-	DataType  string `db:"data_type"`   // 数据类型（PostgreSQL类型）
-	IsSystem  bool   `db:"-"`           // 是否为系统字段（slp_前缀），通过IsSystemField()计算，不从数据库扫描
+	FieldName string // 字段名
+	DataType  string // 数据类型（PostgreSQL类型）
+	IsSystem  bool   // 是否为系统字段（slp_前缀），通过IsSystemField()计算
 }
 
 // IsSystemField 判断字段是否为系统字段

@@ -32,23 +32,23 @@ func mergeDurationStats(results []*core.DurationStats) *core.DurationStats {
 
 	for _, stats := range results {
 		// 加权求和（用于计算平均值）
-		if stats.AvgDuration.Valid {
-			weightedSum += stats.AvgDuration.Float64 * float64(stats.TotalCount)
+		if stats.AvgDuration != nil {
+			weightedSum += *stats.AvgDuration * float64(stats.TotalCount)
 		}
 		totalCount += stats.TotalCount
 
 		// 更新最小值
-		if stats.MinDuration.Valid {
-			if !hasValidMin || stats.MinDuration.Float64 < minDuration {
-				minDuration = stats.MinDuration.Float64
+		if stats.MinDuration != nil {
+			if !hasValidMin || *stats.MinDuration < minDuration {
+				minDuration = *stats.MinDuration
 				hasValidMin = true
 			}
 		}
 
 		// 更新最大值
-		if stats.MaxDuration.Valid {
-			if !hasValidMax || stats.MaxDuration.Float64 > maxDuration {
-				maxDuration = stats.MaxDuration.Float64
+		if stats.MaxDuration != nil {
+			if !hasValidMax || *stats.MaxDuration > maxDuration {
+				maxDuration = *stats.MaxDuration
 				hasValidMax = true
 			}
 		}
@@ -61,18 +61,16 @@ func mergeDurationStats(results []*core.DurationStats) *core.DurationStats {
 
 	// 计算加权平均
 	if totalCount > 0 && weightedSum > 0 {
-		merged.AvgDuration.Float64 = weightedSum / float64(totalCount)
-		merged.AvgDuration.Valid = true
+		avgVal := weightedSum / float64(totalCount)
+		merged.AvgDuration = &avgVal
 	}
 
 	// 设置最小值和最大值
 	if hasValidMin {
-		merged.MinDuration.Float64 = minDuration
-		merged.MinDuration.Valid = true
+		merged.MinDuration = &minDuration
 	}
 	if hasValidMax {
-		merged.MaxDuration.Float64 = maxDuration
-		merged.MaxDuration.Valid = true
+		merged.MaxDuration = &maxDuration
 	}
 
 	return merged
