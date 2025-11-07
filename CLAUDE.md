@@ -2,6 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 快速参考
+
+### 最常用命令
+```bash
+go build ./...                          # 构建所有模块
+go test ./...                           # 运行所有测试
+go test ./internal/query -v             # 测试特定包(详细输出)
+go test -run TestQueryBuilder ./...    # 运行特定测试
+go fmt ./...                            # 格式化代码
+go vet ./...                            # 静态分析
+go mod tidy                             # 整理依赖
+```
+
+### 核心架构原则(必须遵守)
+1. **依赖方向**: Engine → Internal → Core (禁止反向依赖)
+2. **Core 层纯净**: 禁止 `db` 标签、`sql.Null*` 等框架类型
+3. **Manager 解耦**: 通过 Core 层函数类型注入,避免循环依赖
+4. **数据流向**: `数据库 → model.go(DataModel) → core/(DomainModel) → 用户`
+
+### 常见陷阱
+- ❌ 在 Core 层使用 `sql.NullString`
+- ❌ Manager 之间直接相互引用
+- ❌ 在 Config 中包含具体实现类型(如 `*redis.Client`)
+- ❌ 忘记在 model.go 使用 `sql.Null*` 处理可空字段
+- ❌ 不使用预定义错误(`core/var.go`)
+
 ## 项目简介
 
 go-skylark 是一个用于对接 Skylark 低代码平台的 Go SDK，提供流程管理、事件查询、统计分析等功能。采用三层架构（Engine → Internal → Core），支持多租户、远程数据库连接池、组织权限过滤等企业级特性。
@@ -142,6 +168,37 @@ type EventConfig struct {
 
 **错误定义**：36 个预定义错误（`core/var.go`）
 
+## 测试规范
+
+### 测试文件组织
+- 测试文件命名: `*_test.go`
+- 单元测试: `Test<FunctionName>`
+- 基准测试: `Benchmark<FunctionName>`
+- 示例测试: `Example<FunctionName>`
+
+### 测试覆盖率要求
+- 新增代码: 核心逻辑 ≥ 80%
+- 边界情况: 必须覆盖错误处理路径
+- Mock 使用: 使用 `gomock` 或接口注入方式
+
+### 测试示例
+```go
+// ✅ 正确：测试使用接口注入 Mock
+func TestQueryManager_Query(t *testing.T) {
+    mockDB := sqlmock.New()
+    mockCache := &MockCacheInterface{}
+
+    mgr := query.NewManager(query.Config{
+        Cache: mockCache,
+        GetRemoteDB: func(tenantID string) (sqlx.SqlConn, error) {
+            return mockDB, nil
+        },
+    })
+
+    // 测试逻辑...
+}
+```
+
 ## 常用开发命令
 
 ### 构建和测试
@@ -155,10 +212,16 @@ go test ./...
 # 运行特定包的测试（带详细输出）
 go test ./internal/query -v
 
+# 运行单个测试
+go test -run TestQueryBuilder ./internal/query
+
 # 测试覆盖率
 go test -cover ./...
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
+
+# 基准测试
+go test -bench=. ./internal/query
 
 # 格式化代码
 go fmt ./...
@@ -177,6 +240,9 @@ go mod verify
 
 # 更新依赖
 go get -u ./...
+
+# 检查循环依赖
+go mod graph | grep 'go-skylark'
 ```
 
 ## Manager 开发规范
@@ -193,76 +259,62 @@ go get -u ./...
 
 ### model.go 规范
 
+**数据模型 → 领域模型转换** (详见 `DEVELOPMENT.md`)：
 ```go
-// ✅ 正确：数据模型允许框架类型
+// internal/*/model.go - 允许框架类型
 type EventConfigModel struct {
-    ID           string         `db:"id"`
-    OrgFieldName sql.NullString `db:"org_field_name"`  // 可空字段
+    OrgFieldName sql.NullString `db:"org_field_name"`  // ✅ 可空字段
 }
-
 func (m *EventConfigModel) ToDomain() *core.EventConfig {
     return &core.EventConfig{
-        ID:           m.ID,
-        OrgFieldName: convertNullString(m.OrgFieldName),  // 转换为 *string
+        OrgFieldName: convertNullString(m.OrgFieldName),  // 转为 *string
     }
 }
 
-// ❌ 错误：Core 层禁止框架类型
+// core/*.go - 纯 Go 类型
 type EventConfig struct {
-    OrgFieldName sql.NullString  // ❌ 禁止在 Core 层使用
+    OrgFieldName *string  // ✅ 使用指针表示可空
 }
 ```
 
-### 数据库查询规范
+### 关键规范
 
-```bash
-# 使用 go-zero sqlx
-var model PlatformConfigModel
-err := conn.QueryRow(&model, query, args...)
+**数据库查询**：
+- 使用 `go-zero sqlx`: `conn.QueryRow(&model, query, args...)`
+- 数组类型使用 `pq.Array`: `Tags pq.StringArray`
 
-# 数组类型使用 pq.Array
-import "github.com/lib/pq"
-Tags pq.StringArray `db:"tags"`
-```
-
-### 错误处理规范
-
-```go
-// 使用预定义错误（core/var.go）
-if errors.Is(err, sqlx.ErrNotFound) {
-    return nil, core.ErrEventConfigNotFound
-}
-
-// logx 使用 Error，禁止使用 Warn
-logx.Error("创建流程失败", err)
-```
+**错误处理**：
+- 使用预定义错误 (`core/var.go`): `return core.ErrEventConfigNotFound`
+- logx 使用 `Error`，禁止使用 `Warn`
 
 ## 重要约定
 
-### Manager 依赖注入
+### Manager 依赖注入 (避免循环依赖)
 
-通过 Core 层函数类型解耦：
+✅ **正确**: 使用函数类型或接口
 ```go
-// ✅ 正确：使用函数类型
 type Config struct {
-    GetRemoteDB core.GetRemoteDBFunc  // 函数类型
+    GetRemoteDB core.GetRemoteDBFunc  // 函数类型注入
+    Cache       core.CacheInterface   // 接口注入
 }
+```
 
-// ❌ 错误：直接依赖具体 Manager
+❌ **错误**: 直接依赖具体 Manager
+```go
 type Config struct {
-    PlatformMgr *platform.Manager  // 会导致循环依赖
+    PlatformMgr *platform.Manager  // 导致循环依赖
 }
 ```
 
 ### 字段类型处理
 
-**图片字段后缀**：
-- `_Img`：图片 URL（直接传递）
-- `_Base64Img`：Base64 图片（上传七牛云后转 URL）
+| 字段后缀 | 类型 | 处理方式 |
+|---------|------|----------|
+| `_Img` | 图片 URL | 直接传递 |
+| `_Base64Img` | Base64 图片 | 上传七牛云 → URL |
 
-**选项字段类型**：RadioButton、Checkbox、SelectField、MultipleSelectField
-
-**判断函数**：`core.IsOptionField(fieldType)`
+**选项字段**: RadioButton、Checkbox、SelectField、MultipleSelectField
+**判断函数**: `core.IsOptionField(fieldType)`
 
 ### Skylark 远程表结构
 
@@ -297,6 +349,59 @@ users
 | 用户名 | `skylark:users:{tenant}:{user_id}` | 24h |
 | 组织映射 | `skylark:mapping:{id}` | 30天 |
 | 统计结果 | `skylark:stats:{type}:{tenant}:{event}:{hash}` | 5分钟 |
+
+## 开发技巧
+
+### 调试特定功能
+```bash
+# 查看函数调用链
+go build -gcflags="-m" ./internal/query
+
+# 查看接口实现
+grep -r "implements.*Interface" ./internal
+
+# 查找 TODO 标记
+grep -r "TODO\|FIXME" ./
+```
+
+### 代码质量检查
+```bash
+# 查找 Core 层的框架依赖（应该为空）
+grep -r 'db:"' ./core
+grep -r 'sql\.Null' ./core
+
+# 检查循环依赖
+go list -f '{{.ImportPath}} {{.Imports}}' ./... | grep -E "(query.*platform|platform.*query)"
+```
+
+### 性能分析
+```bash
+# CPU 分析
+go test -cpuprofile=cpu.prof -bench=. ./internal/query
+go tool pprof cpu.prof
+
+# 内存分析
+go test -memprofile=mem.prof -bench=. ./internal/query
+go tool pprof mem.prof
+```
+
+## 常见问题
+
+### Q: 如何添加新的 Manager?
+1. 在 `internal/<manager>/` 创建目录
+2. 创建 `<manager>.go`, `handler.go`, `model.go`, `config.go`
+3. 在 `engine/handler.go` 初始化 Manager
+4. 参考 `internal/event/` 或 `internal/mapping/` 实现
+
+### Q: Manager 之间如何通信?
+- 使用 Core 层函数类型注入 (如 `GetRemoteDBFunc`)
+- 通过接口注入 (如 `CacheInterface`)
+- 禁止直接依赖具体 Manager
+
+### Q: 如何处理可空字段?
+- Internal 层 model.go: 使用 `sql.NullString`
+- Core 层: 使用指针 `*string`
+- 转换函数: `helpers.go` 中的 `convertNullString()`
 
 ## 参考文档
 
