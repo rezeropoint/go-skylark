@@ -10,21 +10,20 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 // mappingManager 组织映射管理器实现
 type mappingManager struct {
-	dbConn sqlx.SqlConn // 本地数据库连接
-	rdb    *redis.Redis // Redis客户端（go-zero版本，用于缓存）
+	dbConn sqlx.SqlConn        // 本地数据库连接
+	cache  core.CacheInterface // 缓存接口（统一缓存管理）
 }
 
 // newMappingManager 创建组织映射管理器
-func newMappingManager(db sqlx.SqlConn, rdb *redis.Redis) (*mappingManager, error) {
+func newMappingManager(db sqlx.SqlConn, cache core.CacheInterface) (*mappingManager, error) {
 	return &mappingManager{
 		dbConn: db,
-		rdb:    rdb,
+		cache:  cache,
 	}, nil
 }
 
@@ -96,12 +95,12 @@ func (m *mappingManager) CreateOrgMapping(ctx context.Context, mapping *core.Org
 		}
 
 		// 更新缓存（单个映射）
-		if m.rdb != nil {
-			if err := m.setCachedMapping(ctx, &createdMapping); err != nil {
+		if m.cache != nil {
+			if err := m.cache.SetOrgMapping(ctx, &createdMapping, int(30*24*60*60)); err != nil {
 				logx.WithContext(ctx).Error("缓存组织映射失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载
-			if err := m.deleteCachedMappingList(ctx, mapping.TenantID); err != nil {
+			if err := m.cache.DeleteOrgMappingList(ctx, mapping.TenantID); err != nil {
 				logx.WithContext(ctx).Error("删除映射列表缓存失败（非致命错误）:", err)
 			}
 		}
@@ -127,8 +126,8 @@ func (m *mappingManager) CreateOrgMapping(ctx context.Context, mapping *core.Org
 // GetOrgMapping 获取组织映射（根据ID查询）
 func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.OrgMapping, error) {
 	// 1. 尝试从缓存获取
-	if m.rdb != nil {
-		cachedMapping, err := m.getCachedMapping(ctx, id)
+	if m.cache != nil {
+		cachedMapping, err := m.cache.GetOrgMapping(ctx, id)
 		if err == nil {
 			return cachedMapping, nil
 		}
@@ -160,8 +159,8 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 	}
 
 	// 3. 更新缓存
-	if m.rdb != nil {
-		if err := m.setCachedMapping(ctx, &mapping); err != nil {
+	if m.cache != nil {
+		if err := m.cache.SetOrgMapping(ctx, &mapping, int(30*24*60*60)); err != nil {
 			logx.WithContext(ctx).Error("缓存组织映射失败（非致命错误）:", err)
 		}
 	}
@@ -172,8 +171,8 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 // ListOrgMappings 查询组织映射列表（根据租户ID）
 func (m *mappingManager) ListOrgMappings(ctx context.Context, tenantID string) ([]*core.OrgMapping, error) {
 	// 1. 尝试从缓存获取
-	if m.rdb != nil {
-		cachedList, err := m.getCachedMappingList(ctx, tenantID)
+	if m.cache != nil {
+		cachedList, err := m.cache.GetOrgMappingList(ctx, tenantID)
 		if err == nil {
 			return cachedList, nil
 		}
@@ -208,8 +207,8 @@ func (m *mappingManager) ListOrgMappings(ctx context.Context, tenantID string) (
 	}
 
 	// 3. 更新缓存
-	if m.rdb != nil {
-		if err := m.setCachedMappingList(ctx, tenantID, mappings); err != nil {
+	if m.cache != nil {
+		if err := m.cache.SetOrgMappingList(ctx, tenantID, mappings, int(30*24*60*60)); err != nil {
 			logx.WithContext(ctx).Error("缓存组织映射列表失败（非致命错误）:", err)
 		}
 	}
@@ -306,13 +305,13 @@ func (m *mappingManager) UpdateOrgMapping(ctx context.Context, mapping *core.Org
 		}
 
 		// 更新缓存
-		if m.rdb != nil {
+		if m.cache != nil {
 			// 更新单个映射缓存
-			if err := m.setCachedMapping(ctx, &updatedMapping); err != nil {
+			if err := m.cache.SetOrgMapping(ctx, &updatedMapping, int(30*24*60*60)); err != nil {
 				logx.WithContext(ctx).Error("更新组织映射缓存失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载
-			if err := m.deleteCachedMappingList(ctx, mapping.TenantID); err != nil {
+			if err := m.cache.DeleteOrgMappingList(ctx, mapping.TenantID); err != nil {
 				logx.WithContext(ctx).Error("删除映射列表缓存失败（非致命错误）:", err)
 			}
 		}
@@ -369,13 +368,13 @@ func (m *mappingManager) DeleteOrgMapping(ctx context.Context, id string) error 
 		}
 
 		// 清理缓存
-		if m.rdb != nil {
+		if m.cache != nil {
 			// 删除单个映射缓存
-			if err := m.deleteCachedMapping(ctx, id); err != nil {
+			if err := m.cache.DeleteOrgMapping(ctx, id); err != nil {
 				logx.WithContext(ctx).Error("删除组织映射缓存失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载
-			if err := m.deleteCachedMappingList(ctx, mapping.TenantID); err != nil {
+			if err := m.cache.DeleteOrgMappingList(ctx, mapping.TenantID); err != nil {
 				logx.WithContext(ctx).Error("删除映射列表缓存失败（非致命错误）:", err)
 			}
 		}

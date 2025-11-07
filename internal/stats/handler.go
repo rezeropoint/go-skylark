@@ -9,7 +9,6 @@ import (
 	"github.com/rezeropoint/go-skylark/core"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
@@ -20,7 +19,7 @@ type statsManager struct {
 	getRemoteDB     core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
 	getEventConfig  core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
 	listOrgMappings core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
-	rdb             *redis.Redis                      // Redis客户端（go-zero版本，用于缓存）
+	cache           core.CacheInterface               // 缓存接口（统一缓存管理）
 }
 
 // newStatsManager 创建统计分析管理器
@@ -30,7 +29,7 @@ func newStatsManager(
 	getRemoteDB core.GetRemoteDBFunc,
 	getEventConfig core.GetEventConfigWithFieldsFunc,
 	listOrgMappings core.ListOrgMappingsFunc,
-	rdb *redis.Redis,
+	cache core.CacheInterface,
 ) (*statsManager, error) {
 	// 验证必填参数
 	if getRemoteDB == nil {
@@ -43,9 +42,9 @@ func newStatsManager(
 		return nil, fmt.Errorf("listOrgMappings 函数不能为空")
 	}
 
-	// Redis 客户端必须提供
-	if rdb == nil {
-		return nil, fmt.Errorf("redis 客户端不能为空")
+	// 缓存接口必须提供
+	if cache == nil {
+		return nil, fmt.Errorf("缓存接口不能为空")
 	}
 
 	if config.UserNameCacheTTL <= 0 {
@@ -61,7 +60,7 @@ func newStatsManager(
 		getRemoteDB:     getRemoteDB,
 		getEventConfig:  getEventConfig,
 		listOrgMappings: listOrgMappings,
-		rdb:             rdb,
+		cache:           cache,
 	}
 
 	return manager, nil

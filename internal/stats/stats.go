@@ -5,7 +5,6 @@ import (
 
 	"github.com/rezeropoint/go-skylark/core"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
@@ -28,14 +27,14 @@ type Manager interface {
 //   - getRemoteDB: 获取远程数据库连接的函数（由 Platform Manager 提供）
 //   - getEventConfig: 获取事件配置（含字段）的函数（由 Event Manager 提供）
 //   - listOrgMappings: 获取组织映射列表的函数（由 Mapping Manager 提供）
-//   - rdb: Redis客户端（必须提供，用于缓存）
+//   - cache: 缓存接口（必须提供，用于缓存）
 func NewManager(
 	config Config,
 	db sqlx.SqlConn,
 	getRemoteDB core.GetRemoteDBFunc,
 	getEventConfig core.GetEventConfigWithFieldsFunc,
 	listOrgMappings core.ListOrgMappingsFunc,
-	rdb *redis.Redis,
+	cache core.CacheInterface,
 ) (Manager, error) {
-	return newStatsManager(config, db, getRemoteDB, getEventConfig, listOrgMappings, rdb)
+	return newStatsManager(config, db, getRemoteDB, getEventConfig, listOrgMappings, cache)
 }

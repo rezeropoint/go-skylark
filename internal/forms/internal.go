@@ -18,7 +18,7 @@ import (
 // 先尝试从缓存获取，缓存未命中则从API获取
 func (f *skylarkFormRegistry) getFormFieldMappings(ctx context.Context, skylarkFormAddress core.BasicSkylarkAddress, formID int64) (map[string]core.FieldMapping, error) {
 	// 生成缓存键
-	cacheKey := fmt.Sprintf("%s:%d", skylarkFormAddress.App, formID)
+	cacheKey := fmt.Sprintf("%s%s:%d", core.CacheFieldMappingKeyPrefix, skylarkFormAddress.App, formID)
 
 	// 尝试从缓存中获取
 	fieldMappings, found, err := f.cache.GetFieldMappingsFromCache(ctx, cacheKey)

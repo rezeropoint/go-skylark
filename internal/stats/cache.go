@@ -15,7 +15,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
-// batchGetUserNames 批量查询用户名（优先从 Redis 缓存获取）
+// batchGetUserNames 批量查询用户名（优先从缓存获取）
 func (m *statsManager) batchGetUserNames(ctx context.Context, remoteDB sqlx.SqlConn, tenantID string, userIDs []string) (map[string]string, error) {
 	if len(userIDs) == 0 {
 		return make(map[string]string), nil
@@ -24,19 +24,14 @@ func (m *statsManager) batchGetUserNames(ctx context.Context, remoteDB sqlx.SqlC
 	userNames := make(map[string]string, len(userIDs))
 	uncachedIDs := []string{}
 
-	// 1. 尝试从 Redis 获取缓存（go-zero Redis 逐个获取）
-	if m.rdb != nil {
-		for _, userID := range userIDs {
-			key := fmt.Sprintf("%s%s:%s", core.CacheUserNameKeyPrefix, tenantID, userID)
-			val, err := m.rdb.Get(key)
-			if err == nil && val != "" {
-				userNames[userID] = val
-			} else {
-				uncachedIDs = append(uncachedIDs, userID)
-			}
+	// 1. 尝试从缓存获取
+	for _, userID := range userIDs {
+		val, err := m.cache.GetUserName(ctx, tenantID, userID)
+		if err == nil && val != "" {
+			userNames[userID] = val
+		} else {
+			uncachedIDs = append(uncachedIDs, userID)
 		}
-	} else {
-		uncachedIDs = userIDs
 	}
 
 	// 2. 查询未命中的用户名（从远程 users 表）
@@ -56,11 +51,8 @@ func (m *statsManager) batchGetUserNames(ctx context.Context, remoteDB sqlx.SqlC
 		for _, user := range users {
 			userNames[user.ID] = user.Name
 
-			// 3. 写入 Redis 缓存
-			if m.rdb != nil {
-				cacheKey := fmt.Sprintf("%s%s:%s", core.CacheUserNameKeyPrefix, tenantID, user.ID)
-				_ = m.rdb.Setex(cacheKey, user.Name, int(m.config.UserNameCacheTTL.Seconds()))
-			}
+			// 3. 写入缓存
+			_ = m.cache.SetUserName(ctx, tenantID, user.ID, user.Name, int(m.config.UserNameCacheTTL.Seconds()))
 		}
 	}
 
@@ -119,7 +111,7 @@ func (m *statsManager) buildStatsCacheKey(prefix, tenantID string, eventConfigID
 // getCachedDurationStats 从缓存获取处理时长统计
 func (m *statsManager) getCachedDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {
 	key := m.buildStatsCacheKey(core.CacheDurationStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
-	val, err := m.rdb.GetCtx(ctx, key)
+	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +132,7 @@ func (m *statsManager) setCachedDurationStats(ctx context.Context, req *core.Sta
 		return fmt.Errorf("序列化处理时长统计失败: %w", err)
 	}
 
-	return m.rdb.SetexCtx(ctx, key, string(data), int(m.config.StatsCacheTTL.Seconds()))
+	return m.cache.SetStats(ctx, key, string(data), int(m.config.StatsCacheTTL.Seconds()))
 }
 
 // ========== 状态统计缓存 ==========
@@ -148,7 +140,7 @@ func (m *statsManager) setCachedDurationStats(ctx context.Context, req *core.Sta
 // getCachedStatusStats 从缓存获取状态统计
 func (m *statsManager) getCachedStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error) {
 	key := m.buildStatsCacheKey(core.CacheStatusStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
-	val, err := m.rdb.GetCtx(ctx, key)
+	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +161,7 @@ func (m *statsManager) setCachedStatusStats(ctx context.Context, req *core.Stats
 		return fmt.Errorf("序列化状态统计失败: %w", err)
 	}
 
-	return m.rdb.SetexCtx(ctx, key, string(data), int(m.config.StatsCacheTTL.Seconds()))
+	return m.cache.SetStats(ctx, key, string(data), int(m.config.StatsCacheTTL.Seconds()))
 }
 
 // ========== 趋势统计缓存 ==========
@@ -177,7 +169,7 @@ func (m *statsManager) setCachedStatusStats(ctx context.Context, req *core.Stats
 // getCachedTrendStats 从缓存获取趋势统计
 func (m *statsManager) getCachedTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error) {
 	key := m.buildStatsCacheKey(core.CacheTrendStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
-	val, err := m.rdb.GetCtx(ctx, key)
+	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +200,7 @@ func (m *statsManager) setCachedTrendStats(ctx context.Context, req *core.StatsR
 		ttl = time.Hour
 	}
 
-	return m.rdb.SetexCtx(ctx, key, string(data), int(ttl.Seconds()))
+	return m.cache.SetStats(ctx, key, string(data), int(ttl.Seconds()))
 }
 
 // ========== 节点统计缓存 ==========
@@ -216,7 +208,7 @@ func (m *statsManager) setCachedTrendStats(ctx context.Context, req *core.StatsR
 // getCachedNodeStats 从缓存获取节点统计
 func (m *statsManager) getCachedNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error) {
 	key := m.buildStatsCacheKey(core.CacheNodeStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
-	val, err := m.rdb.GetCtx(ctx, key)
+	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +231,7 @@ func (m *statsManager) setCachedNodeStats(ctx context.Context, req *core.StatsRe
 
 	// 节点统计相对稳定，可以缓存10分钟
 	ttl := 10 * time.Minute
-	return m.rdb.SetexCtx(ctx, key, string(data), int(ttl.Seconds()))
+	return m.cache.SetStats(ctx, key, string(data), int(ttl.Seconds()))
 }
 
 // ========== 处理人统计缓存 ==========
@@ -247,7 +239,7 @@ func (m *statsManager) setCachedNodeStats(ctx context.Context, req *core.StatsRe
 // getCachedUserStats 从缓存获取处理人统计
 func (m *statsManager) getCachedUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error) {
 	key := m.buildStatsCacheKey(core.CacheUserStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
-	val, err := m.rdb.GetCtx(ctx, key)
+	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +262,7 @@ func (m *statsManager) setCachedUserStats(ctx context.Context, req *core.StatsRe
 
 	// 处理人统计可以缓存10分钟
 	ttl := 10 * time.Minute
-	return m.rdb.SetexCtx(ctx, key, string(data), int(ttl.Seconds()))
+	return m.cache.SetStats(ctx, key, string(data), int(ttl.Seconds()))
 }
 
 // ========== 组织统计缓存 ==========
@@ -278,7 +270,7 @@ func (m *statsManager) setCachedUserStats(ctx context.Context, req *core.StatsRe
 // getCachedOrgStats 从缓存获取组织统计
 func (m *statsManager) getCachedOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error) {
 	key := m.buildStatsCacheKey(core.CacheOrgStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
-	val, err := m.rdb.GetCtx(ctx, key)
+	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -301,5 +293,5 @@ func (m *statsManager) setCachedOrgStats(ctx context.Context, req *core.StatsReq
 
 	// 组织统计可以缓存10分钟
 	ttl := 10 * time.Minute
-	return m.rdb.SetexCtx(ctx, key, string(data), int(ttl.Seconds()))
+	return m.cache.SetStats(ctx, key, string(data), int(ttl.Seconds()))
 }

@@ -58,7 +58,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 2. 初始化组织映射管理器
-	mappingMgr, err := mapping.NewManager(db, redisClient)
+	mappingMgr, err := mapping.NewManager(db, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		platformMgr.GetRemoteDB,
 		eventMgr.GetWithFields,
 		mappingMgr.ListOrgMappings,
-		redisClient,
+		cache,
 	)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		platformMgr.GetRemoteDB,
 		eventMgr.GetWithFields,
 		mappingMgr.ListOrgMappings,
-		redisClient,
+		cache,
 	)
 	if err != nil {
 		return nil, err

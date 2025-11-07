@@ -8,8 +8,8 @@ import (
 
 	"github.com/rezeropoint/go-skylark/core"
 
+	"github.com/lib/pq"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
@@ -20,7 +20,7 @@ type queryManager struct {
 	getRemoteDB     core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
 	getEventConfig  core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
 	listOrgMappings core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
-	rdb             *redis.Redis                      // Redis客户端（go-zero版本，用于缓存）
+	cache           core.CacheInterface               // 缓存接口（统一缓存管理）
 }
 
 // newQueryManager 创建远程查询管理器
@@ -30,7 +30,7 @@ func newQueryManager(
 	getRemoteDB core.GetRemoteDBFunc,
 	getEventConfig core.GetEventConfigWithFieldsFunc,
 	listOrgMappings core.ListOrgMappingsFunc,
-	rdb *redis.Redis,
+	cache core.CacheInterface,
 ) (*queryManager, error) {
 	// 验证必填参数
 	if getRemoteDB == nil {
@@ -43,9 +43,9 @@ func newQueryManager(
 		return nil, fmt.Errorf("listOrgMappings 函数不能为空")
 	}
 
-	// Redis 客户端必须提供
-	if rdb == nil {
-		return nil, fmt.Errorf("redis 客户端不能为空")
+	// 缓存接口必须提供
+	if cache == nil {
+		return nil, fmt.Errorf("缓存接口不能为空")
 	}
 
 	// 验证和设置默认配置
@@ -75,7 +75,7 @@ func newQueryManager(
 		getRemoteDB:     getRemoteDB,
 		getEventConfig:  getEventConfig,
 		listOrgMappings: listOrgMappings,
-		rdb:             rdb,
+		cache:           cache,
 	}
 
 	return manager, nil
@@ -102,9 +102,9 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		return nil, fmt.Errorf("读取平台配置失败: %w", err)
 	}
 
-	// 3. 尝试从 Redis 缓存获取
+	// 3. 尝试从缓存获取
 	var flows []*core.FlowInfo
-	flows, err = m.getCachedFlowList(ctx, tenantID, namespaceID)
+	flows, err = m.cache.GetFlowList(ctx, tenantID, namespaceID)
 	if err == nil && flows != nil {
 		logx.WithContext(ctx).WithFields(
 			logx.Field("module", "query_manager"),
@@ -135,9 +135,9 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		flows = []*core.FlowInfo{}
 	}
 
-	// 5. 写入 Redis 缓存
+	// 5. 写入缓存
 	if len(flows) > 0 {
-		_ = m.setCachedFlowList(ctx, tenantID, namespaceID, flows)
+		_ = m.cache.SetFlowList(ctx, tenantID, namespaceID, flows, int(m.config.FlowListCacheTTL.Seconds()))
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -159,8 +159,8 @@ func (m *queryManager) GetFlowFields(ctx context.Context, tenantID string, flowI
 		return nil, core.ErrInvalidFlowID
 	}
 
-	// 2. 尝试从 Redis 缓存获取
-	fields, err := m.getCachedFlowFields(ctx, tenantID, flowID)
+	// 2. 尝试从缓存获取
+	fields, err := m.cache.GetFlowFields(ctx, tenantID, flowID)
 	if err == nil && fields != nil {
 		logx.WithContext(ctx).WithFields(
 			logx.Field("module", "query_manager"),
@@ -207,9 +207,9 @@ func (m *queryManager) GetFlowFields(ctx context.Context, tenantID string, flowI
 		fields = []*core.FieldMetadata{}
 	}
 
-	// 6. 写入 Redis 缓存
+	// 6. 写入缓存
 	if len(fields) > 0 {
-		_ = m.setCachedFlowFields(ctx, tenantID, flowID, fields)
+		_ = m.cache.SetFlowFields(ctx, tenantID, flowID, fields, int(m.config.FlowFieldsCacheTTL.Seconds()))
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -392,4 +392,50 @@ func (m *queryManager) GetEventDetail(ctx context.Context, req *core.DetailReque
 	).Info("查询事件详情成功")
 
 	return response, nil
+}
+
+// ========== 辅助方法 ==========
+
+// batchGetUserNames 批量查询用户名（优先从缓存获取）
+func (m *queryManager) batchGetUserNames(ctx context.Context, remoteDB sqlx.SqlConn, tenantID string, userIDs []string) (map[string]string, error) {
+	if len(userIDs) == 0 {
+		return make(map[string]string), nil
+	}
+
+	userNames := make(map[string]string, len(userIDs))
+	uncachedIDs := []string{}
+
+	// 1. 尝试从缓存获取
+	for _, userID := range userIDs {
+		val, err := m.cache.GetUserName(ctx, tenantID, userID)
+		if err == nil && val != "" {
+			userNames[userID] = val
+		} else {
+			uncachedIDs = append(uncachedIDs, userID)
+		}
+	}
+
+	// 2. 查询未命中的用户名（从远程 users 表）
+	if len(uncachedIDs) > 0 {
+		type userRow struct {
+			ID   string `db:"id"`
+			Name string `db:"name"`
+		}
+
+		query := "SELECT id, name FROM users WHERE id = ANY($1)"
+		var users []*userRow
+		err := remoteDB.QueryRowsCtx(ctx, &users, query, pq.Array(uncachedIDs))
+		if err != nil && err != sql.ErrNoRows {
+			return nil, fmt.Errorf("批量查询用户名失败: %w", err)
+		}
+
+		for _, user := range users {
+			userNames[user.ID] = user.Name
+
+			// 3. 写入缓存
+			_ = m.cache.SetUserName(ctx, tenantID, user.ID, user.Name, int(m.config.UserNameCacheTTL.Seconds()))
+		}
+	}
+
+	return userNames, nil
 }

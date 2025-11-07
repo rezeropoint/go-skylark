@@ -5,7 +5,6 @@ import (
 
 	"github.com/rezeropoint/go-skylark/core"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
@@ -55,7 +54,7 @@ type Manager interface {
 // NewManager 创建组织映射管理器
 // 参数：
 //   - db: 本地数据库连接（sqlx.SqlConn）
-//   - rdb: Redis客户端（go-zero版本，用于缓存）
-func NewManager(db sqlx.SqlConn, rdb *redis.Redis) (Manager, error) {
-	return newMappingManager(db, rdb)
+//   - cache: 缓存接口（用于缓存）
+func NewManager(db sqlx.SqlConn, cache core.CacheInterface) (Manager, error) {
+	return newMappingManager(db, cache)
 }

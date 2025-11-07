@@ -118,7 +118,7 @@ func (f *skylarkFlowRegistry) buildEntriesFromData(
 // 先尝试从缓存获取，缓存未命中则从API获取
 func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkFlowAddress core.BasicSkylarkAddress, flowID int64) (map[string]core.FieldMapping, error) {
 	// 生成缓存键
-	cacheKey := fmt.Sprintf("%s:%d", skylarkFlowAddress.App, flowID)
+	cacheKey := fmt.Sprintf("%s%s:%d", core.CacheFieldMappingKeyPrefix, skylarkFlowAddress.App, flowID)
 
 	// 尝试从缓存中获取
 	fieldMappings, found, err := f.cache.GetFieldMappingsFromCache(ctx, cacheKey)
@@ -179,7 +179,7 @@ func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylark
 	}
 	if len(entries) == 0 {
 		// 字段映射为空，可能是缓存没有更新，清除字段映射缓存
-		cacheKey := fmt.Sprintf("%s:%d", skylarkFlowAddress.App, flowID)
+		cacheKey := fmt.Sprintf("%s%s:%d", core.CacheFieldMappingKeyPrefix, skylarkFlowAddress.App, flowID)
 		if cacheErr := f.cache.ClearFieldMappingsCache(ctx, cacheKey); cacheErr != nil {
 			// 缓存清除失败，返回包含缓存清除失败信息的错误
 			return FlowRouteRequest{}, fmt.Errorf("%w: 字段映射为: %+v, 缓存清除错误为: %v", core.ErrFieldMappingEmptyAndCacheClearFailed, fieldMappings, cacheErr)

@@ -1,58 +1,43 @@
 // Package core 提供 go-skylark SDK 的核心类型定义
 //
-// 本文件用途：🔵 API 请求 + 🟢 数据库查询
-// 说明：缓存接口同时服务于 API 请求（字段映射缓存、分布式锁）和数据库查询（查询结果缓存）两种场景
+// 本文件用途：缓存接口定义
+// 说明：统一的缓存抽象层，支持字段映射、分布式锁、查询结果等多种缓存场景
 package core
 
 import "context"
 
-// CacheInterface 定义缓存操作接口
-// 用于字段映射的缓存管理
+// CacheInterface 缓存操作接口
 type CacheInterface interface {
-	// ClearFieldMappingsCache 清除字段映射缓存
+	// 字段映射缓存（flows/forms 模块）
 	ClearFieldMappingsCache(ctx context.Context, cacheKey string) error
-	// GetFieldMappingsFromCache 从缓存获取字段映射
 	GetFieldMappingsFromCache(ctx context.Context, cacheKey string) (map[string]FieldMapping, bool, error)
-	// SaveFieldMappingsToCache 保存字段映射到缓存
 	SaveFieldMappingsToCache(ctx context.Context, cacheKey string, fieldMappings map[string]FieldMapping) error
 
-	// AcquireLock 获取分布式锁
-	// 参数:
-	//   - ctx: 上下文
-	//   - key: 锁的键
-	//   - value: 锁的值，用于确保只有锁的持有者才能释放锁
-	//   - expiry: 锁的过期时间（秒）
-	// 返回:
-	//   - bool: 是否成功获取锁
-	//   - error: 错误信息
+	// 分布式锁
 	AcquireLock(ctx context.Context, key string, value string, expiry int) (bool, error)
-
-	// AcquireLockWithRetry 获取分布式锁，支持重试
-	// 参数:
-	//   - ctx: 上下文
-	//   - key: 锁的键
-	//   - value: 锁的值，用于确保只有锁的持有者才能释放锁
-	//   - expiry: 锁的过期时间（秒）
-	// 返回:
-	//   - error: 错误信息，如果获取失败返回 ErrFlowAlreadyProcessing
 	AcquireLockWithRetry(ctx context.Context, key string, value string, expiry int) error
-
-	// ReleaseLock 释放分布式锁
-	// 参数:
-	//   - ctx: 上下文
-	//   - key: 锁的键
-	//   - value: 锁的值，用于确保只有锁的持有者才能释放锁
-	// 返回:
-	//   - error: 错误信息
 	ReleaseLock(ctx context.Context, key string, value string) error
-
-	// ExtendLock 延长分布式锁的过期时间
-	// 参数:
-	//   - ctx: 上下文
-	//   - key: 锁的键
-	//   - value: 锁的值，用于确保只有锁的持有者才能延长锁
-	//   - expiry: 新的过期时间（秒）
-	// 返回:
-	//   - error: 错误信息
 	ExtendLock(ctx context.Context, key string, value string, expiry int) error
+
+	// Flow 缓存（query 模块）
+	GetFlowList(ctx context.Context, tenantID string, namespaceID int) ([]*FlowInfo, error)
+	SetFlowList(ctx context.Context, tenantID string, namespaceID int, flows []*FlowInfo, ttl int) error
+	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*FieldMetadata, error)
+	SetFlowFields(ctx context.Context, tenantID string, flowID int, fields []*FieldMetadata, ttl int) error
+
+	// 用户名缓存（query/stats 模块）
+	GetUserName(ctx context.Context, tenantID string, userID string) (string, error)
+	SetUserName(ctx context.Context, tenantID string, userID string, name string, ttl int) error
+
+	// 组织映射缓存（mapping 模块）
+	GetOrgMapping(ctx context.Context, id string) (*OrgMapping, error)
+	SetOrgMapping(ctx context.Context, mapping *OrgMapping, ttl int) error
+	DeleteOrgMapping(ctx context.Context, id string) error
+	GetOrgMappingList(ctx context.Context, tenantID string) ([]*OrgMapping, error)
+	SetOrgMappingList(ctx context.Context, tenantID string, mappings []*OrgMapping, ttl int) error
+	DeleteOrgMappingList(ctx context.Context, tenantID string) error
+
+	// 统计结果缓存（stats 模块）
+	GetStats(ctx context.Context, key string) (string, error)
+	SetStats(ctx context.Context, key string, jsonData string, ttl int) error
 }

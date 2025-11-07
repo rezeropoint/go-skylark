@@ -96,3 +96,35 @@ func IsValidFieldType(fieldType string) bool {
 		return false
 	}
 }
+
+// ================================================================
+// 字段后缀常量（用于识别图片字段）
+// ================================================================
+
+const (
+	SuffixImage                = "_Img"       // 图片字段后缀
+	SuffixBase64Image          = "_Base64Img" // Base64图片字段后缀
+	MinSuffixImageLength       = 4            // 图片后缀最小长度
+	MinSuffixBase64ImageLength = 10           // Base64图片后缀最小长度
+)
+
+// ================================================================
+// 字段类型常量（Skylark API 返回的字段类型）
+// ================================================================
+
+const (
+	FieldTypeRadioButton         = "Field::RadioButton"         // 字段类型: 单选按钮
+	FieldTypeCheckbox            = "Field::Checkbox"            // 字段类型: 复选框
+	FieldTypeSelectField         = "Field::SelectField"         // 字段类型: 下拉选择
+	FieldTypeMultipleSelectField = "Field::MultipleSelectField" // 字段类型: 多选下拉
+)
+
+// ================================================================
+// 缓存键前缀常量
+// ================================================================
+
+const (
+	// CacheFieldMappingKeyPrefix 字段映射缓存键前缀（flows/forms 模块使用）
+	// 完整格式：skylark:field_mapping:{app}:{flowID}
+	CacheFieldMappingKeyPrefix = "skylark:field_mapping:"
+)
