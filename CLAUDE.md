@@ -4,66 +4,166 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目简介
 
-go-skylark 是一个用于对接 Skylark 低代码平台复杂 API 的 Go SDK 包。Skylark 是一个通过积木式搭建模式，帮助快速构建多种业务场景应用的低代码平台，支持角色管理、空间管理、标签管理、组织管理、推送包管理、级联选择管理、消息管理、表单管理、模板通知管理、流程管理、文章管理等模块。
+go-skylark 是一个用于对接 Skylark 低代码平台的 Go SDK，提供流程管理、事件查询、统计分析等功能。采用三层架构（Engine → Internal → Core），支持多租户、远程数据库连接池、组织权限过滤等企业级特性。
 
-## 代码架构
+## 核心架构
 
-### 核心模块结构
+### 三层架构与依赖流向
 
-- **core/**: 核心数据类型和常量定义
-  - `auth.go`: 认证相关结构体
-  - `field.go`: 字段类型定义，包括 TypedValue、FieldMapping、FieldOption 等
-  - `var.go`: 错误定义、API 路径常量、字段类型常量等
-  - `utils.go`: 工具函数
-  - `address.go`: 地址相关功能
-  - `cache.go`: 缓存接口定义
+```
+Engine Layer (engine/)          ← 对外接口，聚合所有 Manager
+    ↓ 依赖
+Internal Layer (internal/*)     ← Manager 模式，业务逻辑实现
+    ↓ 依赖
+Core Layer (core/)              ← 领域模型，纯 Go 类型，无框架依赖
+```
 
-- **engine/**: 主引擎模块
-  - `engine.go`: 定义 SkylarkEngine 接口，提供 CreateFlow 和 CreateFormRow 方法
-  - `config.go`: 引擎配置结构
-  - `handler.go`: 具体实现逻辑
+**关键原则**：
+- Core 层不依赖任何框架（无 `db` 标签、无 `sql.Null*`）
+- Internal 层通过 `model.go` 处理数据库类型，通过 `ToDomain()` 转换为 Core 类型
+- Manager 之间通过 Core 层的**函数类型注入**解耦（避免循环依赖）
 
-- **internal/**: 内部实现模块
-  - `cache/`: 缓存管理，实现 CacheInterface 接口
-  - `flows/`: 流程管理，实现 SkylarkFlowRegistry 接口，依赖 CacheInterface
-  - `forms/`: 表单管理，实现 SkylarkFormRegistry 接口，依赖 CacheInterface
-  - `images/`: 图片处理功能
+### 关键设计模式
 
-### 核心接口
+#### 1. 函数注入解耦模式
 
-1. **SkylarkEngine**: 主引擎接口
-   - `CreateFlow()`: 创建并启动流程
-   - `CreateFormRow()`: 创建表单行
+**问题**：QueryManager 需要 PlatformManager 提供远程连接，但不能直接依赖
 
-2. **SkylarkFlowRegistry**: 流程注册表接口
-3. **SkylarkFormRegistry**: 表单注册表接口
-4. **CacheInterface**: 缓存操作接口，定义字段映射缓存方法
+**解决方案**：
+```go
+// core/platform.go - 定义函数签名
+type GetRemoteDBFunc func(ctx context.Context, tenantID string) (sqlx.SqlConn, error)
 
-### 数据类型系统
+// internal/query/query.go - 接收函数
+type queryManager struct {
+    getRemoteDB core.GetRemoteDBFunc  // 函数类型，不依赖具体 Manager
+}
 
-- **TypedValue**: 带类型的值结构，支持 string、imageURL、imageBase64 等类型
-- **FieldMapping**: 字段映射，包含字段 ID、标识键、类型和选项
-- **FieldOption**: 字段选项，支持单选、多选、下拉等选择类型
+// engine/handler.go - 注入实现
+queryMgr := query.NewManager(
+    platformMgr.GetRemoteDB,  // 传入方法引用
+)
+```
+
+#### 2. 领域模型与数据模型分离
+
+**数据流向**：`数据库 → DataModel (model.go) → DomainModel (core/) → 用户`
+
+```go
+// internal/event/model.go - 数据模型（允许框架类型）
+type EventConfigModel struct {
+    OrgFieldName sql.NullString `db:"org_field_name"`  // ✅ 框架类型
+}
+func (m *EventConfigModel) ToDomain() *core.EventConfig {
+    return &core.EventConfig{
+        OrgFieldName: convertNullString(m.OrgFieldName),  // 转换为指针
+    }
+}
+
+// core/event.go - 领域模型（纯 Go 类型）
+type EventConfig struct {
+    OrgFieldName *string  // ✅ 使用指针表示可空
+}
+```
+
+#### 3. 聚合管理模式（DDD）
+
+事件配置和字段配置作为**聚合根**一起管理：
+- 创建/更新使用**数据库事务**保证原子性
+- 更新字段时采用**完整替换策略**（先删除全部，再插入）
+- 删除事件时字段**级联删除**（ON DELETE CASCADE）
+
+## 核心模块职责
+
+### Engine 层（engine/）
+
+**职责**：对外统一接口，管理所有 Manager 生命周期
+
+**初始化顺序**（`engine/handler.go:32-115`）：
+```
+1. Cache → 2. Flows/Forms → 3. Platform → 4. Mapping → 5. Event → 6. Query/Stats
+```
+
+**接口分类**（15个方法）：
+- 旧模块：CreateFlow、CreateFormRow、UpdateFlowJourneyStatus
+- 平台配置：Create/Get/Update/Delete/ValidatePlatformConfig
+- 事件配置：Create/Update/Get/List/DeleteEventWithFields
+- 组织映射：Create/Get/List/Update/DeleteOrgMapping
+- 远程查询：QueryEventData、GetEventDetail、GetFlowList、GetFlowFields
+- 统计分析：GetDurationStats、GetStatusStats、GetTrendStats、GetNodeStats、GetUserStats、GetOrgStats、GetPendingStats
+
+### Internal 层关键模块
+
+#### internal/platform（平台管理）
+- 管理远程 Skylark 平台配置（PostgreSQL 存储）
+- **管理远程数据库连接池**（`map[tenantID]sqlx.SqlConn`，并发安全）
+- 提供 `GetRemoteDB()` 给 Query/Stats 使用
+
+#### internal/event（事件配置）
+- 聚合管理事件配置+字段配置（事务保证原子性）
+- 验证远程 flow_id 存在性
+- 提供字段配置给 Query/Stats 使用（通过函数注入）
+
+#### internal/mapping（组织映射）
+- 管理组织映射：`(TenantID + RemoteOrgValue) → LocalOrgID`
+- 创建时验证 local_org_id 存在于 organizations 表
+- 删除时检查是否被事件配置使用
+- 提供映射列表给 Query/Stats 使用（通过函数注入）
+
+#### internal/query（远程查询引擎）
+- 构建 Skylark PostgreSQL 查询（`assignments_{flow_id}` 表）
+- **Journey 聚合**：使用 `DISTINCT ON (slp_journey_id)` 获取最新 Assignment
+- **组织权限过滤**：通过 OrgMapping 计算用户可见的远程组织值，构建 `WHERE org_field = ANY($1)` 条件
+- **虚拟状态支持**：`pending`（只有1个节点）、`processing`（多个节点）
+- **用户名批量转换**：Redis 批量查询远程 users 表（TTL 24h）
+
+#### internal/stats（统计分析）
+- 提供 7 种统计维度（时长、状态、趋势、节点、用户、组织、待处理）
+- **多事件ID聚合**：支持 `EventConfigIDs` 数组，合并多个事件的统计结果
+- 缓存统计结果（Redis，TTL 5分钟）
+
+#### internal/flows & internal/forms（旧模块，仍在使用）
+- 负责**写操作**（调用 Skylark REST API）
+- 处理字段类型转换（Base64 → 七牛云 URL）
+- 与新模块分工：旧模块写，新模块读
+
+### Core 层（core/）
+
+**领域模型**：
+- `EventConfig`/`FieldConfig`：事件和字段配置
+- `OrgMapping`：组织映射
+- `QueryRequest`/`StatsRequest`：查询和统计请求
+- `TypedValue`：带类型的值（支持 string、imageURL、imageBase64）
+
+**函数类型**（用于依赖注入）：
+- `GetRemoteDBFunc`：获取远程数据库连接
+- `GetEventConfigWithFieldsFunc`：获取事件配置
+- `ListOrgMappingsFunc`：获取组织映射列表
+
+**错误定义**：36 个预定义错误（`core/var.go`）
 
 ## 常用开发命令
 
 ### 构建和测试
 ```bash
-# 构建模块
+# 构建所有模块
 go build ./...
 
-# 运行测试
+# 运行所有测试
 go test ./...
 
-# 运行特定包的测试
-go test ./core
-go test ./engine
-go test ./internal/flows
+# 运行特定包的测试（带详细输出）
+go test ./internal/query -v
+
+# 测试覆盖率
+go test -cover ./...
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
 
 # 格式化代码
 go fmt ./...
 
-# 运行静态分析
+# 静态分析
 go vet ./...
 ```
 
@@ -75,36 +175,130 @@ go mod tidy
 # 验证依赖
 go mod verify
 
-# 查看依赖图
-go mod graph
+# 更新依赖
+go get -u ./...
+```
+
+## Manager 开发规范
+
+### 文件组织（所有 internal/* 必须遵守）
+
+| 文件 | 职责 | 必需性 |
+|------|-----|--------|
+| `<manager>.go` | 接口定义 + NewManager() 构造函数 | ✅ 必需 |
+| `handler.go` | 接口实现 | ✅ 必需 |
+| `model.go` | 数据库模型 + ToDomain() 转换方法 | ✅ 必需 |
+| `helpers.go` | 辅助函数（convertNullString 等） | 🟡 推荐 |
+| `config.go` | Manager 配置结构 | ✅ 必需 |
+
+### model.go 规范
+
+```go
+// ✅ 正确：数据模型允许框架类型
+type EventConfigModel struct {
+    ID           string         `db:"id"`
+    OrgFieldName sql.NullString `db:"org_field_name"`  // 可空字段
+}
+
+func (m *EventConfigModel) ToDomain() *core.EventConfig {
+    return &core.EventConfig{
+        ID:           m.ID,
+        OrgFieldName: convertNullString(m.OrgFieldName),  // 转换为 *string
+    }
+}
+
+// ❌ 错误：Core 层禁止框架类型
+type EventConfig struct {
+    OrgFieldName sql.NullString  // ❌ 禁止在 Core 层使用
+}
+```
+
+### 数据库查询规范
+
+```bash
+# 使用 go-zero sqlx
+var model PlatformConfigModel
+err := conn.QueryRow(&model, query, args...)
+
+# 数组类型使用 pq.Array
+import "github.com/lib/pq"
+Tags pq.StringArray `db:"tags"`
+```
+
+### 错误处理规范
+
+```go
+// 使用预定义错误（core/var.go）
+if errors.Is(err, sqlx.ErrNotFound) {
+    return nil, core.ErrEventConfigNotFound
+}
+
+// logx 使用 Error，禁止使用 Warn
+logx.Error("创建流程失败", err)
 ```
 
 ## 重要约定
 
-### 错误处理
-- 使用 `core/var.go` 中预定义的错误类型
-- 数据库操作时使用 sql.NullString 或 sql.NullTime 防止 NULL 值转换错误
+### Manager 依赖注入
+
+通过 Core 层函数类型解耦：
+```go
+// ✅ 正确：使用函数类型
+type Config struct {
+    GetRemoteDB core.GetRemoteDBFunc  // 函数类型
+}
+
+// ❌ 错误：直接依赖具体 Manager
+type Config struct {
+    PlatformMgr *platform.Manager  // 会导致循环依赖
+}
+```
 
 ### 字段类型处理
-- 图片字段使用 `_Img` 后缀
-- Base64 图片字段使用 `_Base64Img` 后缀
-- 选项类型字段包括: RadioButton、Checkbox、SelectField、MultipleSelectField
 
-### API 路径
-- 流程 API: `/api/v4/yaw/flows/`
-- 表单 API: `/api/v4/forms/`
-- 附件 API: `/api/v4/attachments/uptoken`
+**图片字段后缀**：
+- `_Img`：图片 URL（直接传递）
+- `_Base64Img`：Base64 图片（上传七牛云后转 URL）
 
-## 依赖关系
+**选项字段类型**：RadioButton、Checkbox、SelectField、MultipleSelectField
 
-主要依赖:
-- **go-zero**: 微服务框架，用于 Redis 客户端等
-- **标准库**: context、errors 等
+**判断函数**：`core.IsOptionField(fieldType)`
 
-## 开发注意事项
+### Skylark 远程表结构
 
-1. 所有外部 API 调用都需要传入认证头 (authHeader)
-2. 支持七牛云图片上传，使用固定的 x:key 值 "1593586993541"
-3. 使用 Redis 进行缓存管理，通过 CacheInterface 接口抽象缓存操作
-4. 字段值类型需要通过 TypedValue 结构进行包装
-5. 选项字段需要通过 IsOptionField() 函数判断类型
+```sql
+-- 动态表名：assignments_{flow_id}
+assignments_123
+├─ slp_assignment_id    # 主键
+├─ slp_journey_id       # 流程实例ID（聚合键）
+├─ slp_status           # 状态
+├─ slp_vertex_id        # 节点ID
+├─ slp_user_id          # 处理人ID
+└─ 业务字段...
+
+-- 节点表
+vertices
+├─ id
+├─ name                 # 节点名
+└─ alias_name           # 节点别名
+
+-- 用户表
+users
+├─ id
+└─ name                 # 用户姓名
+```
+
+### 缓存键设计（所有键定义在 core/*.go）
+
+| 数据类型 | 缓存键 | TTL |
+|---------|--------|-----|
+| Flow列表 | `skylark:flows:{tenant}:{namespace}` | 1h |
+| Flow字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 1h |
+| 用户名 | `skylark:users:{tenant}:{user_id}` | 24h |
+| 组织映射 | `skylark:mapping:{id}` | 30天 |
+| 统计结果 | `skylark:stats:{type}:{tenant}:{event}:{hash}` | 5分钟 |
+
+## 参考文档
+
+- **DEVELOPMENT.md**：详细的架构设计、开发规范、代码示例
+- **README.md**：项目介绍、快速开始
