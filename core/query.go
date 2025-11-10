@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// ========== 查询缓存键常量 ==========
+// 查询缓存键常量
 
 const (
 	// CacheFlowListKeyPrefix flows 列表缓存键前缀
@@ -25,7 +25,7 @@ const (
 	CacheUserNameKeyPrefix = "skylark:users:"
 )
 
-// ========== 函数类型定义（避免循环依赖） ==========
+// 函数类型定义（避免循环依赖）
 
 // GetEventConfigWithFieldsFunc 获取事件配置（含字段）的函数类型
 type GetEventConfigWithFieldsFunc func(ctx context.Context, id, tenantID string) (*EventConfigWithFields, error)
@@ -33,7 +33,7 @@ type GetEventConfigWithFieldsFunc func(ctx context.Context, id, tenantID string)
 // ListOrgMappingsFunc 获取组织映射列表的函数类型
 type ListOrgMappingsFunc func(ctx context.Context, tenantID string) ([]*OrgMapping, error)
 
-// ========== 查询请求/响应定义 ==========
+// 查询请求/响应定义
 
 // QueryRequest 事件数据查询请求
 type QueryRequest struct {

@@ -11,7 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
-// ========== 权限计算 ==========
+// 权限计算
 
 // calculateAllowedOrgValues 计算用户有权访问的远程组织值
 // 通过 OrgMapping 映射：UserOrgIDs → RemoteOrgValues
@@ -75,7 +75,7 @@ func (m *queryManager) calculateAllowedOrgValues(userOrgIDs []string, orgMapping
 	return result, nil
 }
 
-// ========== 查询结果解析 ==========
+// 查询结果解析
 
 // queryRow 用于接收单行 JSON 数据
 type queryRow struct {

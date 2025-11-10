@@ -81,7 +81,7 @@ func newQueryManager(
 	return manager, nil
 }
 
-// ========== 远程流程查询 ==========
+// 远程流程查询
 
 // GetFlowList 获取远程flows列表（供前端配置使用）
 func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error) {

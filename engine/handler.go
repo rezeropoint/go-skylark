@@ -135,7 +135,7 @@ func (e *skylarkEngine) Close() error {
 	return nil
 }
 
-// ========== 平台配置管理方法 ==========
+// 平台配置管理方法
 
 func (e *skylarkEngine) CreatePlatformConfig(ctx context.Context, cfg *core.PlatformConfig) (string, error) {
 	return e.platform.Create(ctx, cfg)
@@ -157,7 +157,7 @@ func (e *skylarkEngine) ValidatePlatformConfig(ctx context.Context, cfg *core.Pl
 	return e.platform.Validate(ctx, cfg)
 }
 
-// ========== 事件配置管理方法 ==========
+// 事件配置管理方法
 
 func (e *skylarkEngine) CreateEventWithFields(ctx context.Context, req *core.CreateEventRequest) (string, error) {
 	return e.event.CreateWithFields(ctx, req)
@@ -179,7 +179,7 @@ func (e *skylarkEngine) DeleteEvent(ctx context.Context, id, tenantID string) er
 	return e.event.Delete(ctx, id, tenantID)
 }
 
-// ========== 组织映射管理方法 ==========
+// 组织映射管理方法
 
 func (e *skylarkEngine) CreateOrgMapping(ctx context.Context, mapping *core.OrgMapping) (string, error) {
 	return e.mapping.CreateOrgMapping(ctx, mapping)
@@ -201,7 +201,7 @@ func (e *skylarkEngine) DeleteOrgMapping(ctx context.Context, id string) error {
 	return e.mapping.DeleteOrgMapping(ctx, id)
 }
 
-// ========== 远程查询方法 ==========
+// 远程查询方法
 
 func (e *skylarkEngine) QueryEventData(ctx context.Context, req *core.QueryRequest) (*core.QueryResponse, error) {
 	return e.query.QueryEventData(ctx, req)
@@ -219,7 +219,7 @@ func (e *skylarkEngine) GetFlowFields(ctx context.Context, tenantID string, flow
 	return e.query.GetFlowFields(ctx, tenantID, flowID)
 }
 
-// ========== 统计分析方法 ==========
+// 统计分析方法
 
 func (e *skylarkEngine) GetDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {
 	return e.stats.GetDurationStats(ctx, req)

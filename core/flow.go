@@ -48,9 +48,7 @@ func TranslateStatus(status string) string {
 	return status
 }
 
-// ================================================================
 // API 请求常量（调用 Skylark REST API 使用）
-// ================================================================
 
 // HTTP 协议常量
 const (

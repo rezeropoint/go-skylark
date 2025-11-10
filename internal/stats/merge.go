@@ -6,7 +6,7 @@ import (
 	"github.com/rezeropoint/go-skylark/core"
 )
 
-// ========== 1. 处理时长统计合并 ==========
+// 处理时长统计合并
 
 // mergeDurationStats 合并多个处理时长统计结果
 // 说明：
@@ -76,7 +76,7 @@ func mergeDurationStats(results []*core.DurationStats) *core.DurationStats {
 	return merged
 }
 
-// ========== 2. 状态统计合并 ==========
+// 状态统计合并
 
 // mergeStatusStats 合并多个状态统计结果
 // 说明：
@@ -136,7 +136,7 @@ func mergeStatusStats(results []*core.StatusStats) *core.StatusStats {
 	}
 }
 
-// ========== 3. 趋势统计合并 ==========
+// 趋势统计合并
 
 // mergeTrendStats 合并多个趋势统计结果
 // 说明：
@@ -191,7 +191,7 @@ func mergeTrendStats(results []*core.TrendStats) *core.TrendStats {
 	}
 }
 
-// ========== 4. 节点统计合并 ==========
+// 节点统计合并
 
 // mergeNodeStats 合并多个节点统计结果
 // 说明：
@@ -265,7 +265,7 @@ func mergeNodeStats(results []*core.NodeStats) *core.NodeStats {
 	}
 }
 
-// ========== 5. 处理人统计合并 ==========
+// 处理人统计合并
 
 // mergeUserStats 合并多个处理人统计结果
 // 说明：
@@ -348,7 +348,7 @@ func mergeUserStats(results []*core.UserStats, topN int) *core.UserStats {
 	}
 }
 
-// ========== 6. 组织统计合并 ==========
+// 组织统计合并
 
 // mergeOrgStats 合并多个组织统计结果
 // 说明：
@@ -414,7 +414,7 @@ func mergeOrgStats(results []*core.OrgStats) *core.OrgStats {
 	}
 }
 
-// ========== 7. 待处理事件统计合并 ==========
+// 待处理事件统计合并
 
 // mergePendingStats 合并多个待处理事件统计结果
 // 说明：

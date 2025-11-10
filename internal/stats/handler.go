@@ -66,7 +66,7 @@ func newStatsManager(
 	return manager, nil
 }
 
-// ========== 1. 处理时长统计 ==========
+// 处理时长统计
 
 // GetDurationStats 获取事件处理时长统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
 func (m *statsManager) GetDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {

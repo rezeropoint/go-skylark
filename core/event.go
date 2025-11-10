@@ -43,7 +43,7 @@ func (e *EventConfig) GetJourneyIDField() string {
 	return "slp_journey_id"
 }
 
-// ========== 聚合数据结构（用于事件+字段统一管理） ==========
+// 聚合数据结构（用于事件+字段统一管理）
 
 // CreateEventRequest 创建事件配置请求（包含字段）
 // 用途：前端一次提交事件配置和字段配置，引擎使用事务保证原子性

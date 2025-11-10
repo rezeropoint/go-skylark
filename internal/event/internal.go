@@ -62,7 +62,7 @@ func (m *eventManager) list(ctx context.Context, tenantID string, enabled *bool)
 	return configs, nil
 }
 
-// ========== 事件配置内部方法 ==========
+// 事件配置内部方法
 
 // insertEvent 插入事件配置（事务内使用）
 func (m *eventManager) insertEvent(ctx context.Context, session sqlx.Session, config *core.EventConfig) (string, error) {

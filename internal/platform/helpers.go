@@ -2,7 +2,7 @@ package platform
 
 import "database/sql"
 
-// ========== 数据库类型转换辅助函数 ==========
+// 数据库类型转换辅助函数
 // 说明：用于 Model 和 Domain 之间的类型转换
 
 // convertNullString 将 sql.NullString 转换为 *string
