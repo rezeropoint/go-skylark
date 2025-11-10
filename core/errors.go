@@ -73,10 +73,35 @@ var (
 	ErrFlowNotFound  = errors.New("流程不存在")
 	ErrInvalidFlowID = errors.New("流程ID无效")
 
-	// 组织映射相关错误
+	// 组织映射相关错误（业务字段值映射，用于 Query/Stats）
 	ErrOrgMappingNotFound = errors.New("组织映射不存在")
 	ErrOrgMappingExists   = errors.New("组织映射已存在")
 	ErrInvalidLocalOrgID  = errors.New("本地组织ID无效")
 	ErrOrgMappingInUse    = errors.New("组织映射正在使用中")
 	ErrLocalOrgIDInUse    = errors.New("本地组织ID已被映射")
+)
+
+// 组织管理错误（组织ID映射及 Skylark 组织 CRUD 操作）
+
+var (
+	// 组织相关错误
+	ErrOrgNotFound       = errors.New("organization not found in Skylark")
+	ErrOrgCreateFailed   = errors.New("failed to create organization in Skylark")
+	ErrOrgDeleteFailed   = errors.New("failed to delete organization in Skylark")
+	ErrParentOrgNotFound = errors.New("parent organization mapping not found")
+
+	// 用户相关错误
+	ErrUserNotFound        = errors.New("user not found in Skylark")
+	ErrUserMappingNotFound = errors.New("user mapping not found")
+	ErrUserMappingExists   = errors.New("user mapping already exists")
+	ErrUserCreateFailed    = errors.New("failed to create user in Skylark")
+)
+
+// Skylark API 错误（调用 Skylark REST API 时的 HTTP 错误）
+
+var (
+	ErrSkylarkAPIUnauthorized = errors.New("Skylark API unauthorized")
+	ErrSkylarkAPINotFound     = errors.New("Skylark API resource not found")
+	ErrSkylarkAPIBadRequest   = errors.New("Skylark API bad request")
+	ErrSkylarkAPIServerError  = errors.New("Skylark API server error")
 )
