@@ -39,8 +39,8 @@ type PlatformConfig struct {
 	Username    string    // 用户名
 	Password    string    // 密码（加密存储）
 	NamespaceID int       // 命名空间ID（用于筛选flows）
-	APIBaseURL  string    // Skylark API基础地址（如：https://skylark.example.com）
-	APIToken    string    // API认证Token
+	APIBaseURL  *string   // Skylark API基础地址，纯域名（如：skylark.example.com，不含https://前缀）
+	APIToken    *string   // API认证Token
 	CreatedBy   *string   // 创建者用户ID
 	UpdatedBy   *string   // 最后修改者用户ID
 	CreatedAt   time.Time // 创建时间

@@ -20,6 +20,8 @@ type PlatformConfigModel struct {
 	Username    string         `db:"username"`     // 用户名
 	Password    string         `db:"password"`     // 密码（加密存储）
 	NamespaceID int            `db:"namespace_id"` // 命名空间ID（用于筛选flows）
+	APIBaseURL  sql.NullString `db:"api_base_url"` // Skylark API地址，纯域名（如：skylark.example.com，不含https://前缀）
+	APIToken    sql.NullString `db:"api_token"`    // API认证Token（加密存储）
 	CreatedBy   sql.NullString `db:"created_by"`   // 创建者用户ID
 	UpdatedBy   sql.NullString `db:"updated_by"`   // 最后修改者用户ID
 	CreatedAt   time.Time      `db:"created_at"`   // 创建时间
@@ -37,6 +39,8 @@ func (m *PlatformConfigModel) ToDomain() *core.PlatformConfig {
 		Username:    m.Username,
 		Password:    m.Password,
 		NamespaceID: m.NamespaceID,
+		APIBaseURL:  convertNullString(m.APIBaseURL),
+		APIToken:    convertNullString(m.APIToken),
 		CreatedBy:   convertNullString(m.CreatedBy),
 		UpdatedBy:   convertNullString(m.UpdatedBy),
 		CreatedAt:   m.CreatedAt,
@@ -55,6 +59,8 @@ func FromDomain(config *core.PlatformConfig) *PlatformConfigModel {
 		Username:    config.Username,
 		Password:    config.Password,
 		NamespaceID: config.NamespaceID,
+		APIBaseURL:  convertToNullString(config.APIBaseURL),
+		APIToken:    convertToNullString(config.APIToken),
 		CreatedBy:   convertToNullString(config.CreatedBy),
 		UpdatedBy:   convertToNullString(config.UpdatedBy),
 		CreatedAt:   config.CreatedAt,

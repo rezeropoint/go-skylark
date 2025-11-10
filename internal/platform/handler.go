@@ -71,12 +71,12 @@ func (m *platformManager) Create(ctx context.Context, cfg *core.PlatformConfig) 
 	// 5. 插入数据库
 	insertQuery := `
 		INSERT INTO skylark_platform_configs
-		(id, tenant_id, host, port, database, username, password, namespace_id, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		(id, tenant_id, host, port, database, username, password, namespace_id, api_base_url, api_token, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err = m.dbConn.ExecCtx(ctx, insertQuery,
 		cfg.ID, cfg.TenantID, cfg.Host, cfg.Port, cfg.Database,
-		cfg.Username, cfg.Password, cfg.NamespaceID, cfg.CreatedBy,
+		cfg.Username, cfg.Password, cfg.NamespaceID, cfg.APIBaseURL, cfg.APIToken, cfg.CreatedBy,
 	)
 	if err != nil {
 		return "", fmt.Errorf("插入平台配置失败: %w", err)
@@ -97,7 +97,7 @@ func (m *platformManager) Create(ctx context.Context, cfg *core.PlatformConfig) 
 func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.PlatformConfig, error) {
 	query := `
 		SELECT id, tenant_id, host, port, database, username, password, namespace_id,
-		       created_by, updated_by, created_at, updated_at
+		       api_base_url, api_token, created_by, updated_by, created_at, updated_at
 		FROM skylark_platform_configs
 		WHERE tenant_id = $1
 	`
@@ -152,12 +152,12 @@ func (m *platformManager) Update(ctx context.Context, cfg *core.PlatformConfig) 
 	updateQuery := `
 		UPDATE skylark_platform_configs
 		SET host = $1, port = $2, database = $3, username = $4, password = $5,
-		    namespace_id = $6, updated_by = $7, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $8 AND tenant_id = $9
+		    namespace_id = $6, api_base_url = $7, api_token = $8, updated_by = $9, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $10 AND tenant_id = $11
 	`
 	result, err := m.dbConn.ExecCtx(ctx, updateQuery,
 		cfg.Host, cfg.Port, cfg.Database, cfg.Username, cfg.Password,
-		cfg.NamespaceID, cfg.UpdatedBy, cfg.ID, cfg.TenantID,
+		cfg.NamespaceID, cfg.APIBaseURL, cfg.APIToken, cfg.UpdatedBy, cfg.ID, cfg.TenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("更新平台配置失败: %w", err)
@@ -270,4 +270,33 @@ func (m *platformManager) GetRemoteDB(ctx context.Context, tenantID string) (sql
 // Close 关闭管理器
 func (m *platformManager) Close() error {
 	return m.closeAllRemoteConns()
+}
+
+// InitTable 初始化数据库表
+func (m *platformManager) InitTable(ctx context.Context) error {
+	// 先检查表是否已存在
+	var count int
+	err := m.dbConn.QueryRowCtx(ctx, &count, CheckTableExistsSQL)
+	if err != nil {
+		return fmt.Errorf("检查平台配置表存在性失败: %w", err)
+	}
+
+	// 如果表已存在，直接返回
+	if count > 0 {
+		return nil
+	}
+
+	// 表不存在，执行创建
+	_, err = m.dbConn.ExecCtx(ctx, CreateTableSQL)
+	if err != nil {
+		return fmt.Errorf("创建平台配置表失败: %w", err)
+	}
+
+	logx.WithContext(ctx).WithFields(
+		logx.Field("module", "platform_manager"),
+		logx.Field("operation", "init_table"),
+		logx.Field("table", TableName),
+	).Info("平台配置表初始化成功")
+
+	return nil
 }
