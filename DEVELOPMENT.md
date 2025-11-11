@@ -532,55 +532,33 @@ logx.Warn("警告信息") // 禁止使用
 
 #### 问题：Manager 之间如何通信？
 
-示例：`QueryManager` 需要调用 `PlatformManager` 获取配置。
+示例：`OrganizationManager` 需要调用 `PlatformManager` 获取配置，同时需要缓存支持。
 
-#### 解决方案：通过 Core 包接口
+#### 解决方案：通过 NewManager 函数参数注入依赖
 
-```go
-// core/cache.go
-type CacheInterface interface {
-	GetFieldMapping(tenantID string) ([]FieldMapping, error)
-	SetFieldMapping(tenantID string, mappings []FieldMapping) error
-}
-```
+**核心原则**：依赖通过构造函数参数传入，不放在 Config 中。
 
 ```go
-// internal/query/config.go
+// config.go - 只包含配置参数
 type Config struct {
-	Cache core.CacheInterface // 依赖接口，不依赖具体实现
+	// 空或只包含基础配置
 }
 
-// internal/query/query.go
-func NewSkylarkQueryRegistry(cfg Config) core.SkylarkQueryRegistry {
-	return &handler{
-		cache: cfg.Cache, // 注入
-	}
-}
+// 依赖通过 NewManager 参数传入
+func NewManager(
+	config Config,                        // 纯配置
+	db sqlx.SqlConn,                      // 依赖1
+	cache core.CacheInterface,            // 依赖2
+	getPlatformConfig core.GetPlatformConfigFunc, // 依赖3（函数注入）
+) (Manager, error)
+
+// 使用示例
+orgMgr, _ := organization.NewManager(
+	organization.Config{}, db, cacheMgr, platformMgr.Get,
+)
 ```
 
-```go
-// engine/handler.go
-cacheManager := cache.NewCacheManager(redisClient)
-queryManager := query.NewSkylarkQueryRegistry(query.Config{
-	Cache: cacheManager, // 注入具体实现
-})
-```
-
-#### 使用函数类型避免循环依赖
-
-```go
-// internal/query/config.go
-type GetRemoteDBFunc func(tenantID string) (sqlx.SqlConn, error)
-
-type Config struct {
-	GetRemoteDB GetRemoteDBFunc // 函数类型
-}
-
-// engine/handler.go
-queryManager := query.NewSkylarkQueryRegistry(query.Config{
-	GetRemoteDB: platformManager.GetRemoteDB, // 传入函数
-})
-```
+**优势**：Config 职责单一、依赖显式化、易于测试、避免循环依赖
 
 ---
 
@@ -589,28 +567,56 @@ queryManager := query.NewSkylarkQueryRegistry(query.Config{
 #### 黄金法则
 
 ✅ **Config 只能包含**：
-- 基础配置参数（字符串、数字、布尔值）
-- 接口类型（如 `CacheInterface`）
-- 函数类型（如 `GetRemoteDBFunc`）
+- 基础配置参数（字符串、数字、布尔值、time.Duration 等）
 
 ❌ **Config 禁止包含**：
-- 具体实现类型（如 `*redis.Client`）
+- 具体实现类型（如 `*redis.Client`、`sqlx.SqlConn`）
+- 接口类型（如 `CacheInterface`）
+- 函数类型（如 `GetRemoteDBFunc`）
 - 运行时实例（如 `*sql.DB`）
+
+**原因**：Config 结构体应该只存储**静态配置参数**，所有依赖（接口、函数、运行时实例）都应该通过 **NewManager 函数参数**传入。
 
 #### 示例
 
 ```go
 // ✅ 正确的 Config
 type Config struct {
-	TenantID    string              // 基础配置
-	Cache       core.CacheInterface // 接口
-	GetRemoteDB GetRemoteDBFunc     // 函数类型
+	MaxPageSize      int           // 数字配置
+	DefaultPageSize  int           // 数字配置
+	FlowListCacheTTL time.Duration // 时长配置
+	QueryTimeout     time.Duration // 时长配置
 }
 
 // ❌ 错误的 Config
 type Config struct {
-	RedisClient *redis.Client // 具体实现
-	DB          *sql.DB       // 运行时实例
+	Cache       core.CacheInterface // ❌ 接口类型
+	GetRemoteDB GetRemoteDBFunc     // ❌ 函数类型
+	RedisClient *redis.Client       // ❌ 具体实现
+	DB          sqlx.SqlConn        // ❌ 运行时实例
+}
+```
+
+#### 正确的依赖注入方式
+
+依赖应该通过 NewManager 函数参数传入：
+
+```go
+// ✅ 正确：依赖作为函数参数传入
+func NewManager(
+	config Config,                        // 纯配置参数
+	db sqlx.SqlConn,                      // 依赖1：数据库连接
+	cache core.CacheInterface,            // 依赖2：缓存接口
+	getPlatformConfig core.GetPlatformConfigFunc, // 依赖3：函数注入
+) (Manager, error) {
+	// ...
+}
+
+// ❌ 错误：依赖放在 Config 中
+type Config struct {
+	DB                sqlx.SqlConn
+	Cache             core.CacheInterface
+	GetPlatformConfig core.GetPlatformConfigFunc
 }
 ```
 

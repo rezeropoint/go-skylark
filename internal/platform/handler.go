@@ -15,19 +15,27 @@ import (
 
 // platformManager 平台配置管理器实现
 type platformManager struct {
+	config   Config
 	dbConn   sqlx.SqlConn            // 本地数据库连接
 	connPool map[string]sqlx.SqlConn // 远程数据库连接池（key: tenantID）
 	mu       sync.RWMutex            // 连接池并发保护
 }
 
 // newPlatformManager 创建平台配置管理器
-func newPlatformManager(db sqlx.SqlConn) (*platformManager, error) {
+func newPlatformManager(config Config, db sqlx.SqlConn) (*platformManager, error) {
 	manager := &platformManager{
+		config: config,
 		dbConn: db,
 	}
 
 	// 初始化连接池
 	manager.initConnPool()
+
+	// 初始化数据库表（在包初始化时执行）
+	ctx := context.Background()
+	if err := manager.initTable(ctx); err != nil {
+		return nil, fmt.Errorf("初始化平台配置表失败: %w", err)
+	}
 
 	return manager, nil
 }
@@ -272,8 +280,8 @@ func (m *platformManager) Close() error {
 	return m.closeAllRemoteConns()
 }
 
-// InitTable 初始化数据库表
-func (m *platformManager) InitTable(ctx context.Context) error {
+// initTable 初始化数据库表（私有方法，在包初始化时调用）
+func (m *platformManager) initTable(ctx context.Context) error {
 	// 先检查表是否已存在
 	var count int
 	err := m.dbConn.QueryRowCtx(ctx, &count, CheckTableExistsSQL)

@@ -291,18 +291,19 @@ type EventConfig struct {
 
 ### Manager 依赖注入 (避免循环依赖)
 
-✅ **正确**: 使用函数类型或接口
+✅ **正确**: Config 只包含配置参数，依赖通过 NewManager 参数传入
 ```go
 type Config struct {
-    GetRemoteDB core.GetRemoteDBFunc  // 函数类型注入
-    Cache       core.CacheInterface   // 接口注入
+    MaxPageSize int // ✅ 只有配置参数
 }
+func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface) (Manager, error)
 ```
 
-❌ **错误**: 直接依赖具体 Manager
+❌ **错误**: 在 Config 中包含依赖
 ```go
 type Config struct {
-    PlatformMgr *platform.Manager  // 导致循环依赖
+    Cache core.CacheInterface // ❌ 接口
+    DB    sqlx.SqlConn        // ❌ 运行时实例
 }
 ```
 

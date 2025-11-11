@@ -50,6 +50,6 @@ type Manager interface {
 // NewManager 创建平台配置管理器
 // 参数：
 //   - db: 本地数据库连接（sqlx.SqlConn）
-func NewManager(db sqlx.SqlConn) (Manager, error) {
-	return newPlatformManager(db)
+func NewManager(config Config, db sqlx.SqlConn) (Manager, error) {
+	return newPlatformManager(config, db)
 }

@@ -9,23 +9,27 @@ import (
 	"github.com/rezeropoint/go-skylark/internal/flows"
 	"github.com/rezeropoint/go-skylark/internal/forms"
 	"github.com/rezeropoint/go-skylark/internal/mapping"
+	"github.com/rezeropoint/go-skylark/internal/organization"
 	"github.com/rezeropoint/go-skylark/internal/platform"
 	"github.com/rezeropoint/go-skylark/internal/query"
 	"github.com/rezeropoint/go-skylark/internal/stats"
+	"github.com/rezeropoint/go-skylark/internal/user"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 type skylarkEngine struct {
-	cache    *cache.SkylarkCache
-	flows    flows.SkylarkFlowRegistry
-	forms    forms.SkylarkFormRegistry
-	platform platform.Manager
-	event    event.Manager
-	mapping  mapping.Manager
-	query    query.Manager
-	stats    stats.Manager
+	cache        *cache.SkylarkCache
+	flows        flows.SkylarkFlowRegistry
+	forms        forms.SkylarkFormRegistry
+	platform     platform.Manager
+	organization organization.Manager
+	user         user.Manager
+	event        event.Manager
+	mapping      mapping.Manager
+	query        query.Manager
+	stats        stats.Manager
 }
 
 // newSkylarkEngine 创建新的 Skylark 引擎实例
@@ -52,24 +56,36 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 1. 初始化平台管理器（核心依赖，最先初始化）
-	platformMgr, err := platform.NewManager(db)
+	platformMgr, err := platform.NewManager(platform.Config{}, db)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 初始化组织映射管理器
+	// 2. 初始化组织ID映射管理器（依赖 Platform）
+	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.Get)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 初始化用户ID映射管理器（依赖 Platform）
+	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.Get)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 初始化组织映射管理器（业务字段值映射）
 	mappingMgr, err := mapping.NewManager(db, cache)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 初始化事件配置管理器（注入 platform.GetRemoteDB）
+	// 4. 初始化事件配置管理器（注入 platform.GetRemoteDB）
 	eventMgr, err := event.NewManager(db, platformMgr.GetRemoteDB)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. 初始化查询管理器（注入多个依赖函数）
+	// 5. 初始化查询管理器（注入多个依赖函数）
 	queryConfig := config.Query
 	if queryConfig == nil {
 		queryConfig = &query.Config{} // 使用默认配置
@@ -86,7 +102,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 5. 初始化统计管理器（注入多个依赖函数）
+	// 6. 初始化统计管理器（注入多个依赖函数）
 	statsConfig := config.Stats
 	if statsConfig == nil {
 		statsConfig = &stats.Config{} // 使用默认配置
@@ -104,14 +120,16 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	return &skylarkEngine{
-		cache:    cache,
-		flows:    flows,
-		forms:    forms,
-		platform: platformMgr,
-		event:    eventMgr,
-		mapping:  mappingMgr,
-		query:    queryMgr,
-		stats:    statsMgr,
+		cache:        cache,
+		flows:        flows,
+		forms:        forms,
+		platform:     platformMgr,
+		organization: orgMgr,
+		user:         userMgr,
+		event:        eventMgr,
+		mapping:      mappingMgr,
+		query:        queryMgr,
+		stats:        statsMgr,
 	}, nil
 }
 
@@ -248,3 +266,29 @@ func (e *skylarkEngine) GetOrgStats(ctx context.Context, req *core.StatsRequest)
 func (e *skylarkEngine) GetPendingStats(ctx context.Context, req *core.StatsRequest) (*core.PendingStats, error) {
 	return e.stats.GetPendingStats(ctx, req)
 }
+
+// 组织管理方法
+
+func (e *skylarkEngine) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) (*core.Organization, error) {
+	return e.organization.CreateOrganization(ctx, tenantID, localOrgID, name, description, founderID)
+}
+
+func (e *skylarkEngine) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) (*core.Organization, error) {
+	return e.organization.CreateSubOrganization(ctx, tenantID, localOrgID, parentLocalOrgID, name, description, founderID)
+}
+
+func (e *skylarkEngine) DeleteOrganization(ctx context.Context, tenantID, localOrgID string) error {
+	return e.organization.DeleteOrganization(ctx, tenantID, localOrgID)
+}
+
+// 用户管理接口
+
+func (e *skylarkEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error) {
+	return e.user.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
+}
+
+func (e *skylarkEngine) GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error) {
+	return e.user.GetUser(ctx, tenantID, localUserID)
+}
+
+// 资源管理方法

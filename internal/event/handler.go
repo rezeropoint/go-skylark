@@ -29,6 +29,12 @@ func newEventManager(db sqlx.SqlConn, getRemoteDB core.GetRemoteDBFunc) (*eventM
 		getRemoteDB: getRemoteDB,
 	}
 
+	// 初始化数据库表（在包初始化时执行）
+	ctx := context.Background()
+	if err := manager.initTable(ctx); err != nil {
+		return nil, fmt.Errorf("初始化事件配置表失败: %w", err)
+	}
+
 	return manager, nil
 }
 
@@ -380,6 +386,49 @@ func (m *eventManager) Update(ctx context.Context, config *core.EventConfig) err
 		logx.Field("event_config_id", config.ID),
 		logx.Field("tenant_id", config.TenantID),
 	).Info("更新事件配置成功")
+
+	return nil
+}
+
+// initTable 初始化事件配置相关表（event_configs + event_field_configs）（私有方法，在包初始化时调用）
+func (m *eventManager) initTable(ctx context.Context) error {
+	// 1. 检查并创建事件配置表
+	var eventTableCount int
+	err := m.dbConn.QueryRowCtx(ctx, &eventTableCount, CheckEventConfigTableExistsSQL)
+	if err != nil {
+		return fmt.Errorf("检查事件配置表存在性失败: %w", err)
+	}
+
+	if eventTableCount == 0 {
+		_, err = m.dbConn.ExecCtx(ctx, CreateEventConfigTableSQL)
+		if err != nil {
+			return fmt.Errorf("创建事件配置表失败: %w", err)
+		}
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "event_manager"),
+			logx.Field("operation", "init_table"),
+			logx.Field("table", EventConfigTableName),
+		).Info("事件配置表初始化成功")
+	}
+
+	// 2. 检查并创建字段配置表
+	var fieldTableCount int
+	err = m.dbConn.QueryRowCtx(ctx, &fieldTableCount, CheckFieldConfigTableExistsSQL)
+	if err != nil {
+		return fmt.Errorf("检查字段配置表存在性失败: %w", err)
+	}
+
+	if fieldTableCount == 0 {
+		_, err = m.dbConn.ExecCtx(ctx, CreateFieldConfigTableSQL)
+		if err != nil {
+			return fmt.Errorf("创建字段配置表失败: %w", err)
+		}
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "event_manager"),
+			logx.Field("operation", "init_table"),
+			logx.Field("table", FieldConfigTableName),
+		).Info("字段配置表初始化成功")
+	}
 
 	return nil
 }

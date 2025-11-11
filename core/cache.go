@@ -29,13 +29,29 @@ type CacheInterface interface {
 	GetUserName(ctx context.Context, tenantID string, userID string) (string, error)
 	SetUserName(ctx context.Context, tenantID string, userID string, name string, ttl int) error
 
-	// 组织映射缓存（mapping 模块）
+	// 组织映射缓存（mapping 模块 - 业务字段值映射）
 	GetOrgMapping(ctx context.Context, id string) (*OrgMapping, error)
 	SetOrgMapping(ctx context.Context, mapping *OrgMapping, ttl int) error
 	DeleteOrgMapping(ctx context.Context, id string) error
 	GetOrgMappingList(ctx context.Context, tenantID string) ([]*OrgMapping, error)
 	SetOrgMappingList(ctx context.Context, tenantID string, mappings []*OrgMapping, ttl int) error
 	DeleteOrgMappingList(ctx context.Context, tenantID string) error
+
+	// 组织ID映射缓存（organization 模块 - 组织ID双向映射）
+	GetOrgIDMapping(ctx context.Context, tenantID, localOrgID string) (int, error)
+	SetOrgIDMapping(ctx context.Context, tenantID, localOrgID string, remoteOrgID int, ttl int) error
+	DeleteOrgIDMapping(ctx context.Context, tenantID, localOrgID string) error
+	GetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int) (string, error)
+	SetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int, localOrgID string, ttl int) error
+	DeleteOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int) error
+
+	// 用户ID映射缓存（user 模块 - 用户ID双向映射）
+	GetUserIDMapping(ctx context.Context, tenantID, localUserID string) (int, error)
+	SetUserIDMapping(ctx context.Context, tenantID, localUserID string, remoteUserID int, ttl int) error
+	DeleteUserIDMapping(ctx context.Context, tenantID, localUserID string) error
+	GetUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int) (string, error)
+	SetUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int, localUserID string, ttl int) error
+	DeleteUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int) error
 
 	// 统计结果缓存（stats 模块）
 	GetStats(ctx context.Context, key string) (string, error)

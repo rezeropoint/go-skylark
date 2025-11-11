@@ -21,10 +21,18 @@ type mappingManager struct {
 
 // newMappingManager 创建组织映射管理器
 func newMappingManager(db sqlx.SqlConn, cache core.CacheInterface) (*mappingManager, error) {
-	return &mappingManager{
+	manager := &mappingManager{
 		dbConn: db,
 		cache:  cache,
-	}, nil
+	}
+
+	// 初始化数据库表（在包初始化时执行）
+	ctx := context.Background()
+	if err := manager.initTable(ctx); err != nil {
+		return nil, fmt.Errorf("初始化组织映射表失败: %w", err)
+	}
+
+	return manager, nil
 }
 
 // CreateOrgMapping 创建组织映射
@@ -392,6 +400,35 @@ func (m *mappingManager) DeleteOrgMapping(ctx context.Context, id string) error 
 		logx.Field("tenant_id", mapping.TenantID),
 		logx.Field("remote_org_value", mapping.RemoteOrgValue),
 	).Info("删除组织映射成功")
+
+	return nil
+}
+
+// initTable 初始化组织映射表（私有方法，在包初始化时调用）
+func (m *mappingManager) initTable(ctx context.Context) error {
+	// 检查表是否已存在
+	var count int
+	err := m.dbConn.QueryRowCtx(ctx, &count, CheckTableExistsSQL)
+	if err != nil {
+		return fmt.Errorf("检查组织映射表存在性失败: %w", err)
+	}
+
+	// 如果表已存在，直接返回
+	if count > 0 {
+		return nil
+	}
+
+	// 表不存在，执行创建
+	_, err = m.dbConn.ExecCtx(ctx, CreateTableSQL)
+	if err != nil {
+		return fmt.Errorf("创建组织映射表失败: %w", err)
+	}
+
+	logx.WithContext(ctx).WithFields(
+		logx.Field("module", "mapping_manager"),
+		logx.Field("operation", "init_table"),
+		logx.Field("table", TableName),
+	).Info("组织映射表初始化成功")
 
 	return nil
 }

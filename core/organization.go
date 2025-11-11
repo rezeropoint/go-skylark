@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+// 组织ID映射缓存键常量
+const (
+	// CacheOrgIDMappingKeyPrefix 组织ID映射缓存键前缀（正向：local_org_id -> remote_org_id）
+	// 格式：skylark:org_mapping:{tenantID}:{localOrgID}
+	// TTL: 30天
+	CacheOrgIDMappingKeyPrefix = "skylark:org_mapping"
+
+	// CacheOrgIDMappingReverseKeyPrefix 组织ID映射反向缓存键前缀（反向：remote_org_id -> local_org_id）
+	// 格式：skylark:org_mapping_rev:{tenantID}:{remoteOrgID}
+	// TTL: 30天
+	CacheOrgIDMappingReverseKeyPrefix = "skylark:org_mapping_rev"
+)
+
 // Organization Skylark 组织领域模型
 // 说明：存储 Skylark 组织的 ID 和层级关系信息（纯 Go 类型，无框架依赖）
 // 注意：不存储 name、description 等本地已有的信息，本地组织信息由调用方的 GO 项目管理

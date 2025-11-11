@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+// 用户ID映射缓存键定义
+const (
+	// CacheUserIDMappingKeyPrefix 用户ID映射缓存键前缀（正向映射：local → remote）
+	// 格式：skylark:user_mapping:{tenantID}:{localUserID}
+	// 值：remoteUserID (int)
+	// TTL: 30天
+	CacheUserIDMappingKeyPrefix = "skylark:user_mapping"
+
+	// CacheUserIDMappingReverseKeyPrefix 用户ID映射反向缓存键前缀（反向映射：remote → local）
+	// 格式：skylark:user_mapping_rev:{tenantID}:{remoteUserID}
+	// 值：localUserID (string)
+	// TTL: 30天
+	CacheUserIDMappingReverseKeyPrefix = "skylark:user_mapping_rev"
+)
+
 // User Skylark 用户领域模型
 // 说明：只存储 Skylark 用户ID（纯 Go 类型，无框架依赖）
 // 注意：
