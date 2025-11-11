@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/internal/httputils"
 	"github.com/rezeropoint/go-skylark/internal/images"
 
 	"github.com/zeromicro/go-zero/rest/httpc"
@@ -138,21 +138,10 @@ func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkF
 	}
 	defer resp.Body.Close()
 
-	// 从响应体中读取数据
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: 状态码: %d, 响应体: %s", core.ErrHTTPRequestFailed, resp.StatusCode, string(respBody))
-	}
-
-	// 反序列化 JSON 数据到结构体
+	// 使用 httputils 统一处理响应
 	var respField core.Field
-	err = json.Unmarshal(respBody, &respField)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", core.ErrJSONUnmarshalFailed, err)
+	if err := httputils.ReadJSONResponse(resp, &respField); err != nil {
+		return nil, err
 	}
 
 	fieldMappings = make(map[string]core.FieldMapping, len(respField.Fields))

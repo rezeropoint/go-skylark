@@ -3,11 +3,11 @@ package forms
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/internal/httputils"
 
 	"github.com/zeromicro/go-zero/rest/httpc"
 )
@@ -57,14 +57,9 @@ func (f *skylarkFormRegistry) CreateFormRow(ctx context.Context, app string, for
 	}
 	defer formCreateRowResult.Body.Close()
 
-	// 读取响应体
-	formCreateRowBody, err := io.ReadAll(formCreateRowResult.Body)
-	if err != nil {
-		return fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	if formCreateRowResult.StatusCode != http.StatusOK && formCreateRowResult.StatusCode != http.StatusCreated {
-		return fmt.Errorf("%w: 状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, formCreateRowResult.StatusCode, formCreateRowBody)
+	// 使用 httputils 统一处理响应（创建表单行无需解析响应体）
+	if err := httputils.ReadJSONResponse(formCreateRowResult, nil); err != nil {
+		return err
 	}
 
 	return nil

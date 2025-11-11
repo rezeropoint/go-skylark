@@ -15,9 +15,9 @@ import (
 // skylarkHTTPClient Skylark用户API客户端
 //
 // 说明：
-//  - 封装 Skylark 用户相关 REST API 调用
-//  - 使用原生 net/http（30秒超时）
-//  - 使用 httputils 统一处理错误和响应
+//   - 封装 Skylark 用户相关 REST API 调用
+//   - 使用原生 net/http（30秒超时）
+//   - 使用 httputils 统一处理错误和响应
 type skylarkHTTPClient struct {
 	httpClient *http.Client
 }

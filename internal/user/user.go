@@ -16,10 +16,10 @@ import (
 //  4. 提供批量查询优化（减少数据库访问）
 //
 // 设计说明：
-//  - 映射管理：本地用户ID（string）↔ Skylark用户ID（int）
-//  - 缓存策略：30天TTL，批量查询优化
-//  - 错误处理：使用预定义错误（core.ErrUserNotFound等）
-//  - 依赖注入：通过GetPlatformConfigFunc获取API配置
+//   - 映射管理：本地用户ID（string）↔ Skylark用户ID（int）
+//   - 缓存策略：30天TTL，批量查询优化
+//   - 错误处理：使用预定义错误（core.ErrUserNotFound等）
+//   - 依赖注入：通过GetPlatformConfigFunc获取API配置
 type Manager interface {
 	// CreateUser 创建Skylark用户
 	//

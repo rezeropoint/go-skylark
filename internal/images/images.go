@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 
 	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/internal/httputils"
 
 	"github.com/zeromicro/go-zero/rest/httpc"
 )
@@ -74,17 +74,10 @@ func getUPToken(ctx context.Context, skylarkAddress core.BasicSkylarkAddress) (s
 	// 关闭资源，避免作用域连接池
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%w: 状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, resp.StatusCode, string(body))
-	}
-
+	// 使用 httputils 统一处理响应
 	var response tokenResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return "", fmt.Errorf("%w: %v", core.ErrJSONUnmarshalFailed, err)
+	if err := httputils.ReadJSONResponse(resp, &response); err != nil {
+		return "", err
 	}
 
 	return response.UpToken, nil
@@ -141,20 +134,10 @@ func uploadImageData(ctx context.Context, skylarkAddress core.BasicSkylarkAddres
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, "", fmt.Errorf("%w: 上传图片请求失败，状态码: %d", core.ErrHTTPRequestFailed, resp.StatusCode)
-	}
-
-	// 读取响应
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, "", fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	// 解析JSON响应
+	// 使用 httputils 统一处理响应
 	var response uploadResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return 0, "", fmt.Errorf("%w: %v", core.ErrJSONUnmarshalFailed, err)
+	if err := httputils.ReadJSONResponse(resp, &response); err != nil {
+		return 0, "", err
 	}
 
 	// 返回ID和Name

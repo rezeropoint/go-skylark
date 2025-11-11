@@ -9,9 +9,9 @@ import (
 // UserIDMappingModel 数据库查询专用结构体
 //
 // 说明：
-//  - 用于数据库扫描操作（sqlx.QueryRow, sqlx.QueryRows）
-//  - 包含 db 标签（允许框架类型）
-//  - 通过 ToDomain() 方法转换为 core.UserIDMapping
+//   - 用于数据库扫描操作（sqlx.QueryRow, sqlx.QueryRows）
+//   - 包含 db 标签（允许框架类型）
+//   - 通过 ToDomain() 方法转换为 core.UserIDMapping
 //
 // 数据库表：skylark_user_mappings
 type UserIDMappingModel struct {
@@ -26,8 +26,8 @@ type UserIDMappingModel struct {
 // ToDomain 转换为领域模型
 //
 // 说明：
-//  - 将数据库模型转换为 core.UserIDMapping（纯Go类型）
-//  - 用于返回给调用方
+//   - 将数据库模型转换为 core.UserIDMapping（纯Go类型）
+//   - 用于返回给调用方
 //
 // 返回：
 //   - *core.UserIDMapping: 领域模型
@@ -45,8 +45,8 @@ func (m *UserIDMappingModel) ToDomain() *core.UserIDMapping {
 // FromDomain 从领域模型转换
 //
 // 说明：
-//  - 将 core.UserIDMapping 转换为数据库模型
-//  - 用于插入数据库
+//   - 将 core.UserIDMapping 转换为数据库模型
+//   - 用于插入数据库
 //
 // 参数：
 //   - mapping: 领域模型

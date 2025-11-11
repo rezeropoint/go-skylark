@@ -3,12 +3,12 @@ package flows
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/internal/httputils"
 
 	"github.com/zeromicro/go-zero/rest/httpc"
 )
@@ -85,20 +85,34 @@ func (f *skylarkFlowRegistry) CreateFlow(ctx context.Context, app string, flowID
 	}
 	defer routeFlowResult.Body.Close()
 
-	// 读取响应体
-	routeFlowBody, err := io.ReadAll(routeFlowResult.Body)
-	if err != nil {
-		return fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	if routeFlowResult.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: 状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, routeFlowResult.StatusCode, routeFlowBody)
-	}
-
-	// 解析 Skylark 流程路由响应，获取下一个节点 ID
-	flowProposeRequest, err := f.buildFlowProposeRequest(skylarkFlowAddress, routeFlowBody)
-	if err != nil {
+	// 使用 httputils 统一处理响应并解析为 FlowRouteResponse
+	var routeResp FlowRouteResponse
+	if err := httputils.ReadJSONResponse(routeFlowResult, &routeResp); err != nil {
 		return err
+	}
+
+	// 检查 NextVertices 是否为空
+	if len(routeResp.NextVertices) == 0 {
+		return fmt.Errorf("%w: 响应为: %+v", core.ErrNoNextVertices, routeResp)
+	}
+
+	// 构建提议请求
+	userIDInt, err := strconv.Atoi(skylarkFlowAddress.UserID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", core.ErrUserIDConversionFailed, err)
+	}
+	flowProposeRequest := FlowProposeRequest{
+		Assignment: ProposeAssignment{
+			Operation:          core.OperationPropose,
+			NextVertexID:       routeResp.NextVertices[0].NextVerticesID,
+			DurationThresholds: []map[string]string{},
+		},
+		UserID: userIDInt,
+		Webhook: Webhook{
+			PayloadURL:       "",
+			SubscribedEvents: []string{core.EventJourneyStatus},
+		},
+		Token: skylarkFlowAddress.AuthHeader,
 	}
 
 	// 发送 Skylark 流程提议请求
@@ -108,14 +122,9 @@ func (f *skylarkFlowRegistry) CreateFlow(ctx context.Context, app string, flowID
 	}
 	defer proposeFlowResult.Body.Close()
 
-	// 读取响应体
-	proposeFlowBody, err := io.ReadAll(proposeFlowResult.Body)
-	if err != nil {
-		return fmt.Errorf("%w: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	if proposeFlowResult.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: 状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, proposeFlowResult.StatusCode, proposeFlowBody)
+	// 使用 httputils 统一处理响应（propose 请求无需解析响应体）
+	if err := httputils.ReadJSONResponse(proposeFlowResult, nil); err != nil {
+		return err
 	}
 
 	return nil
@@ -200,14 +209,9 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 	defer routeResult.Body.Close()
 
-	// 读取第一次请求的响应体
-	routeBody, err := io.ReadAll(routeResult.Body)
-	if err != nil {
-		return fmt.Errorf("%w: 读取第一次请求响应失败: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	if routeResult.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: 第一次请求失败，状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, routeResult.StatusCode, routeBody)
+	// 使用 httputils 统一处理第一次请求的响应（route 请求无需解析响应体）
+	if err := httputils.ReadJSONResponse(routeResult, nil); err != nil {
+		return fmt.Errorf("第一次请求失败: %w", err)
 	}
 
 	// 第二次请求：执行操作（approve/refuse/transfer/cancel）
@@ -229,14 +233,9 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 	defer operationResult.Body.Close()
 
-	// 读取第二次请求的响应体
-	operationBody, err := io.ReadAll(operationResult.Body)
-	if err != nil {
-		return fmt.Errorf("%w: 读取第二次请求响应失败: %v", core.ErrResponseBodyReadFailed, err)
-	}
-
-	if operationResult.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: 第二次请求失败，状态码: %d，响应体: %s", core.ErrHTTPRequestFailed, operationResult.StatusCode, operationBody)
+	// 使用 httputils 统一处理第二次请求的响应（operation 请求无需解析响应体）
+	if err := httputils.ReadJSONResponse(operationResult, nil); err != nil {
+		return fmt.Errorf("第二次请求失败: %w", err)
 	}
 
 	return nil
