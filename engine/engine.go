@@ -97,6 +97,38 @@ type SkylarkEngine interface {
 	//       fmt.Printf("%s %s %s\n", moment.CreatedAt, moment.OperatorName, core.TranslateStatus(moment.Status))
 	//   }
 	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
+	// GetCurrentProcessingUsers 获取当前流程任务的处理者
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - []*core.ProcessingUser: 当前处理人列表
+	//   - error: 错误信息
+	// 示例:
+	//   users, err := engine.GetCurrentProcessingUsers(ctx, "tenant-001", 123, 456)
+	//   for _, user := range users {
+	//       fmt.Printf("处理人: %s (ID: %d)\n", user.Name, user.ID)
+	//   }
+	GetCurrentProcessingUsers(ctx context.Context, tenantID string, flowID int64, journeyID int64) ([]*core.ProcessingUser, error)
+	// AbortJourney 终止流程任务
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - error: 错误信息
+	// 说明:
+	//   - 终止操作不可逆，请谨慎使用
+	//   - 建议在业务层添加权限校验（只允许发起人或管理员终止）
+	// 示例:
+	//   err := engine.AbortJourney(ctx, "tenant-001", 123, 456)
+	//   if err != nil {
+	//       log.Printf("终止流程失败: %v", err)
+	//   }
+	AbortJourney(ctx context.Context, tenantID string, flowID int64, journeyID int64) error
 
 	// 平台配置管理
 

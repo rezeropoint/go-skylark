@@ -179,3 +179,17 @@ type Moment struct {
 	UpdatedAt    string  // 更新时间（ISO 8601格式）
 	Duration     *int    // 处理时长（秒，可为空）
 }
+
+// ProcessingUser 当前处理人信息（领域模型）
+// 说明：表示流程当前待处理人的完整信息（从 Skylark API 返回）
+// 用途：GetCurrentProcessingUsers 接口返回当前流程任务的处理者列表
+// 注意：部分字段可能为空（nickname、phone、identifier、headimgurl）
+type ProcessingUser struct {
+	ID         int64    // 用户ID
+	Name       string   // 用户名称
+	Nickname   *string  // 昵称（可为空）
+	Phone      *string  // 手机号（可为空）
+	Identifier *string  // 标识符（可为空）
+	Headimgurl *string  // 头像URL（可为空）
+	Tags       []string // 标签列表
+}

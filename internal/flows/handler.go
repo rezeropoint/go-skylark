@@ -495,7 +495,7 @@ func (f *skylarkFlowRegistry) GetFlowDetail(
 // 参数:
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于获取平台配置）
-//   - remoteUserID: 远程用户ID（Skylark用户ID）
+//   - localUserID: 本地用户ID（SDK内部自动转换为远程用户ID）
 //   - category: 任务类别（使用 core.AssignmentCategoryXXX 常量）
 //   - page: 页码（从1开始）
 //   - pageSize: 每页数量
@@ -504,30 +504,34 @@ func (f *skylarkFlowRegistry) GetFlowDetail(
 //   - []*core.Assignment: 任务列表（已补充 flow_id 和 flow_title）
 //   - int: 总数
 //   - error: 错误信息
-func (f *skylarkFlowRegistry) GetUserAssignments(
-	ctx context.Context,
-	tenantID string,
-	remoteUserID int,
-	category string,
-	page, pageSize int,
-) ([]*core.Assignment, int, error) {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID string, localUserID string, category string, page, pageSize int) ([]*core.Assignment, int, error) {
+	// 1. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
+	if err != nil {
+		return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+	}
+	if len(remoteUserIDs) == 0 {
+		return nil, 0, core.ErrUserMappingNotFound
+	}
+	remoteUserID := remoteUserIDs[0]
+
+	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 2. 构建 SkylarkAPIContext
+	// 3. 构建 SkylarkAPIContext
 	skylarkAddress := core.SkylarkAPIContext{
 		App:        apiCfg.App,
 		UserID:     "",
 		AuthHeader: apiCfg.Token,
 	}
 
-	// 3. 构建 API URL: /api/v4/yaw/flows/user_assignments.json
+	// 4. 构建 API URL: /api/v4/yaw/flows/user_assignments.json
 	apiURL := core.BuildUserAssignmentsURL(skylarkAddress)
 
-	// 4. 构建查询参数
+	// 5. 构建查询参数
 	apiURL = fmt.Sprintf("%s?user_id=%d&category=%s&page=%d&per_page=%d",
 		apiURL, remoteUserID, category, page, pageSize)
 
@@ -573,7 +577,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(
 // 参数:
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于获取平台配置）
-//   - remoteUserID: 远程用户ID（Skylark用户ID）
+//   - localUserID: 本地用户ID（SDK内部自动转换为远程用户ID）
 //   - page: 页码（从1开始）
 //   - pageSize: 每页数量
 //
@@ -581,29 +585,34 @@ func (f *skylarkFlowRegistry) GetUserAssignments(
 //   - []*core.Journey: 流程列表
 //   - int: 总数
 //   - error: 错误信息
-func (f *skylarkFlowRegistry) GetProposedJourneys(
-	ctx context.Context,
-	tenantID string,
-	remoteUserID int,
-	page, pageSize int,
-) ([]*core.Journey, int, error) {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error) {
+	// 1. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
+	if err != nil {
+		return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+	}
+	if len(remoteUserIDs) == 0 {
+		return nil, 0, core.ErrUserMappingNotFound
+	}
+	remoteUserID := remoteUserIDs[0]
+
+	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 2. 构建 SkylarkAPIContext
+	// 3. 构建 SkylarkAPIContext
 	skylarkAddress := core.SkylarkAPIContext{
 		App:        apiCfg.App,
 		UserID:     "",
 		AuthHeader: apiCfg.Token,
 	}
 
-	// 3. 构建 API URL: /api/v4/yaw/flows/proposed_journeys.json
+	// 4. 构建 API URL: /api/v4/yaw/flows/proposed_journeys.json
 	apiURL := core.BuildProposedJourneysURL(skylarkAddress)
 
-	// 4. 构建查询参数
+	// 5. 构建查询参数
 	apiURL = fmt.Sprintf("%s?user_id=%d&page=%d&per_page=%d",
 		apiURL, remoteUserID, page, pageSize)
 
@@ -642,18 +651,29 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(
 // 参数:
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于获取平台配置）
-//   - req: 搜索请求
+//   - localUserID: 本地用户ID（可选，SDK内部自动转换为远程用户ID作为发起人筛选条件）
+//   - req: 搜索请求（如果包含 InitiatorID，会被 SDK 覆盖）
 //
 // 返回:
 //   - []*core.Journey: 流程列表
 //   - int: 总数
 //   - error: 错误信息
-func (f *skylarkFlowRegistry) SearchJourneys(
-	ctx context.Context,
-	tenantID string,
-	req *core.JourneySearchRequest,
-) ([]*core.Journey, int, error) {
-	// 1. 参数校验
+func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID string, localUserID *string, req *core.JourneySearchRequest) ([]*core.Journey, int, error) {
+	// 1. 如果提供了 localUserID，转换为远程用户ID并覆盖请求中的 InitiatorID
+	if localUserID != nil && *localUserID != "" {
+		remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{*localUserID})
+		if err != nil {
+			return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+		}
+		if len(remoteUserIDs) == 0 {
+			return nil, 0, fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", *localUserID)
+		}
+		// 覆盖请求中的 InitiatorID
+		remoteUserID := int64(remoteUserIDs[0])
+		req.InitiatorID = &remoteUserID
+	}
+
+	// 2. 参数校验
 	if req.Page < 1 {
 		return nil, 0, fmt.Errorf("page 必须大于等于 1")
 	}
@@ -664,23 +684,23 @@ func (f *skylarkFlowRegistry) SearchJourneys(
 		return nil, 0, fmt.Errorf("flowID 必须大于 0")
 	}
 
-	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 3. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 3. 构建 SkylarkAPIContext
+	// 4. 构建 SkylarkAPIContext
 	skylarkAddress := core.SkylarkAPIContext{
 		App:        apiCfg.App,
 		UserID:     "",
 		AuthHeader: apiCfg.Token,
 	}
 
-	// 4. 构建 API URL: POST /api/v4/yaw/flows/:id/journeys/search
+	// 5. 构建 API URL: POST /api/v4/yaw/flows/:id/journeys/search
 	apiURL := core.BuildJourneySearchURL(skylarkAddress, req.FlowID)
 
-	// 5. 构建请求体
+	// 6. 构建请求体
 	searchBody := map[string]interface{}{
 		"page":     req.Page,
 		"per_page": req.PageSize,
@@ -800,4 +820,143 @@ func (f *skylarkFlowRegistry) GetJourneyMoments(
 
 	// 9. 返回结果
 	return moments, nil
+}
+
+// GetCurrentProcessingUsers 获取当前流程任务的处理者
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - []*core.ProcessingUser: 当前处理人列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) GetCurrentProcessingUsers(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	journeyID int64,
+) ([]*core.ProcessingUser, error) {
+	// 1. 参数校验
+	if flowID <= 0 {
+		return nil, fmt.Errorf("flowID 必须大于 0")
+	}
+	if journeyID <= 0 {
+		return nil, fmt.Errorf("journeyID 必须大于 0")
+	}
+
+	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 4. 构建 API URL: GET /api/v4/yaw/flows/:flow_id/journeys/:id/current_processing_users
+	apiURL := core.BuildCurrentProcessingUsersURL(skylarkAddress, flowID, journeyID)
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 处理 404 错误（流程或流程记录不存在）
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, core.ErrJourneyNotFound
+	}
+
+	// 7. 解析响应
+	var userResponses []ProcessingUserResponse
+	if err := httputils.ReadJSONResponse(resp, &userResponses); err != nil {
+		return nil, err
+	}
+
+	// 8. 转换为领域模型
+	users := make([]*core.ProcessingUser, len(userResponses))
+	for i, ur := range userResponses {
+		users[i] = ur.ToDomain()
+	}
+
+	// 9. 返回结果
+	return users, nil
+}
+
+// AbortJourney 终止流程任务
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) AbortJourney(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	journeyID int64,
+) error {
+	// 1. 参数校验
+	if flowID <= 0 {
+		return fmt.Errorf("flowID 必须大于 0")
+	}
+	if journeyID <= 0 {
+		return fmt.Errorf("journeyID 必须大于 0")
+	}
+
+	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	// 3. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 4. 构建 API URL: PUT /api/v4/yaw/flows/:flow_id/journeys/:id
+	apiURL := core.BuildAbortJourneyURL(skylarkAddress, flowID, journeyID)
+
+	// 5. 构建请求体
+	requestBody := AbortJourneyRequest{
+		Status: core.StatusAborted,
+	}
+
+	// 6. 发送 HTTP PUT 请求
+	resp, err := httpc.Do(ctx, http.MethodPut, apiURL, requestBody)
+	if err != nil {
+		return fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 7. 处理 404 错误（流程或流程记录不存在）
+	if resp.StatusCode == http.StatusNotFound {
+		return core.ErrJourneyNotFound
+	}
+
+	// 8. 解析响应（验证终止成功）
+	var abortResp AbortJourneyResponse
+	if err := httputils.ReadJSONResponse(resp, &abortResp); err != nil {
+		return err
+	}
+
+	// 9. 验证状态是否已更新为 aborted
+	if abortResp.Status != core.StatusAborted {
+		return fmt.Errorf("终止流程失败: 期望状态为 aborted，实际为 %s", abortResp.Status)
+	}
+
+	// 10. 返回成功
+	return nil
 }

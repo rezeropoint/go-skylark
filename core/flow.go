@@ -96,6 +96,32 @@ func BuildJourneyMomentsAPIURL(apiCtx SkylarkAPIContext, journeyID int64) string
 	return BuildJourneyAPIURL(apiCtx, journeyID, "moments")
 }
 
+// BuildCurrentProcessingUsersURL 构建获取当前处理人 API URL
+// 格式：https://{app}/api/v4/yaw/flows/{flow_id}/journeys/{journey_id}/current_processing_users
+// 参数：
+//   - apiCtx: API 调用上下文
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回：完整的 API URL
+func BuildCurrentProcessingUsersURL(apiCtx SkylarkAPIContext, flowID int64, journeyID int64) string {
+	return fmt.Sprintf("%s%s%s%d/journeys/%d/current_processing_users",
+		SchemeHTTPS, apiCtx.App, APIFlowsPath, flowID, journeyID)
+}
+
+// BuildAbortJourneyURL 构建终止流程 API URL
+// 格式：https://{app}/api/v4/yaw/flows/{flow_id}/journeys/{journey_id}
+// 参数：
+//   - apiCtx: API 调用上下文
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回：完整的 API URL
+func BuildAbortJourneyURL(apiCtx SkylarkAPIContext, flowID int64, journeyID int64) string {
+	return fmt.Sprintf("%s%s%s%d/journeys/%d",
+		SchemeHTTPS, apiCtx.App, APIFlowsPath, flowID, journeyID)
+}
+
 // FlowDetail 流程详情（领域模型）
 // 说明：包含流程的完整结构信息，包括字段、节点、边
 // 用于 GetFlowDetail 接口返回流程的元数据

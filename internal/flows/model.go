@@ -407,3 +407,41 @@ func (m *MomentResponse) ToDomain() *core.Moment {
 
 	return moment
 }
+
+// ProcessingUserResponse Skylark API 返回的处理人结构体
+// 职责：处理 GET /api/v4/yaw/flows/:flow_id/journeys/:id/current_processing_users 响应的 JSON 反序列化
+type ProcessingUserResponse struct {
+	ID         int64    `json:"id"`         // 用户ID
+	Name       string   `json:"name"`       // 用户名称
+	Nickname   *string  `json:"nickname"`   // 昵称（可为空）
+	Phone      *string  `json:"phone"`      // 手机号（可为空）
+	Identifier *string  `json:"identifier"` // 标识符（可为空）
+	Headimgurl *string  `json:"headimgurl"` // 头像URL（可为空）
+	Tags       []string `json:"tags"`       // 标签列表
+}
+
+// ToDomain 将 API 响应转换为领域模型
+func (u *ProcessingUserResponse) ToDomain() *core.ProcessingUser {
+	return &core.ProcessingUser{
+		ID:         u.ID,
+		Name:       u.Name,
+		Nickname:   u.Nickname,
+		Phone:      u.Phone,
+		Identifier: u.Identifier,
+		Headimgurl: u.Headimgurl,
+		Tags:       u.Tags,
+	}
+}
+
+// AbortJourneyRequest 终止流程请求结构体
+// 说明：用于 PUT /api/v4/yaw/flows/:flow_id/journeys/:id 请求体
+type AbortJourneyRequest struct {
+	Status string `json:"status"` // 固定为 "aborted"
+}
+
+// AbortJourneyResponse Skylark API 返回的终止流程响应结构体
+// 说明：响应包含更新后的 journey 基本信息（简化版）
+type AbortJourneyResponse struct {
+	ID     int64  `json:"id"`     // 流程记录ID
+	Status string `json:"status"` // 流程状态（应为 "aborted"）
+}

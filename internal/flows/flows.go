@@ -85,7 +85,7 @@ type SkylarkFlowRegistry interface {
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - remoteUserID: 远程用户ID（Skylark用户ID，由Engine层转换后传入）
+	//   - localUserID: 本地用户ID（SDK内部自动转换为远程用户ID）
 	//   - category: 任务类别（使用 core.AssignmentCategoryXXX 常量）
 	//   - page: 页码（从1开始）
 	//   - pageSize: 每页数量
@@ -93,31 +93,32 @@ type SkylarkFlowRegistry interface {
 	//   - []*core.Assignment: 任务列表（已补充 flow_id 和 flow_title）
 	//   - int: 总数
 	//   - error: 错误信息
-	GetUserAssignments(ctx context.Context, tenantID string, remoteUserID int, category string, page, pageSize int) ([]*core.Assignment, int, error)
+	GetUserAssignments(ctx context.Context, tenantID string, localUserID string, category string, page, pageSize int) ([]*core.Assignment, int, error)
 
 	// GetProposedJourneys 获取用户发起的流程列表
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - remoteUserID: 远程用户ID（Skylark用户ID，由Engine层转换后传入）
+	//   - localUserID: 本地用户ID（SDK内部自动转换为远程用户ID）
 	//   - page: 页码（从1开始）
 	//   - pageSize: 每页数量
 	// 返回:
 	//   - []*core.Journey: 流程列表
 	//   - int: 总数
 	//   - error: 错误信息
-	GetProposedJourneys(ctx context.Context, tenantID string, remoteUserID int, page, pageSize int) ([]*core.Journey, int, error)
+	GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error)
 
 	// SearchJourneys 搜索流程记录
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - req: 搜索请求
+	//   - localUserID: 本地用户ID（可选，SDK内部自动转换为远程用户ID作为发起人筛选条件）
+	//   - req: 搜索请求（如果包含 InitiatorID，会被 SDK 覆盖）
 	// 返回:
 	//   - []*core.Journey: 流程列表
 	//   - int: 总数
 	//   - error: 错误信息
-	SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
+	SearchJourneys(ctx context.Context, tenantID string, localUserID *string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
 
 	// GetJourneyMoments 获取流程审批历史
 	// 参数:
@@ -128,6 +129,27 @@ type SkylarkFlowRegistry interface {
 	//   - []*core.Moment: 审批历史列表
 	//   - error: 错误信息
 	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
+
+	// GetCurrentProcessingUsers 获取当前流程任务的处理者
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - []*core.ProcessingUser: 当前处理人列表
+	//   - error: 错误信息
+	GetCurrentProcessingUsers(ctx context.Context, tenantID string, flowID int64, journeyID int64) ([]*core.ProcessingUser, error)
+
+	// AbortJourney 终止流程任务
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - error: 错误信息
+	AbortJourney(ctx context.Context, tenantID string, flowID int64, journeyID int64) error
 }
 
 // NewSkylarkFlowRegistry 创建新的Skylark流程注册表实例
