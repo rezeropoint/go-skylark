@@ -122,6 +122,35 @@ func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.Platf
 	return model.ToDomain(), nil
 }
 
+// GetAPIConfig 获取Skylark API调用配置
+// 实现了 core.GetPlatformConfigFunc 函数签名，用于依赖注入
+func (m *platformManager) GetAPIConfig(ctx context.Context, tenantID string) (*core.SkylarkAPIConfig, error) {
+	// 1. 查询平台配置
+	cfg, err := m.Get(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 验证 EnableAPI 是否开启
+	if !cfg.EnableAPI {
+		return nil, fmt.Errorf("%w: 租户 %s 未启用API对接", core.ErrAPINotEnabled, tenantID)
+	}
+
+	// 3. 验证 APIBaseURL 和 APIToken 是否配置
+	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
+		return nil, fmt.Errorf("%w: 租户 %s 的 APIBaseURL 未配置", core.ErrInvalidPlatformConfig, tenantID)
+	}
+	if cfg.APIToken == nil || *cfg.APIToken == "" {
+		return nil, fmt.Errorf("%w: 租户 %s 的 APIToken 未配置", core.ErrInvalidPlatformConfig, tenantID)
+	}
+
+	// 4. 返回轻量级的 API 配置（不包含敏感数据库信息）
+	return &core.SkylarkAPIConfig{
+		App:   *cfg.APIBaseURL,
+		Token: *cfg.APIToken,
+	}, nil
+}
+
 // Update 更新平台配置
 func (m *platformManager) Update(ctx context.Context, cfg *core.PlatformConfig) error {
 	// 1. 验证配置

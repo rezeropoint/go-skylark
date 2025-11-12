@@ -56,14 +56,6 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 		return nil, fmt.Errorf("获取平台配置失败: %w", err)
 	}
 
-	// 验证 API 配置
-	if platformConfig.APIBaseURL == nil || *platformConfig.APIBaseURL == "" {
-		return nil, fmt.Errorf("平台配置缺少 API BaseURL")
-	}
-	if platformConfig.APIToken == nil || *platformConfig.APIToken == "" {
-		return nil, fmt.Errorf("平台配置缺少 API Token")
-	}
-
 	// 2. 调用 Skylark API 创建用户
 	req := &CreateUserRequest{
 		Name:       name,
@@ -72,7 +64,7 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 		Openid:     openid,
 	}
 
-	userResp, err := m.httpClient.createUser(ctx, *platformConfig.APIBaseURL, *platformConfig.APIToken, req)
+	userResp, err := m.httpClient.createUser(ctx, platformConfig.App, platformConfig.Token, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrUserCreateFailed, err)
 	}

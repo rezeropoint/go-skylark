@@ -163,21 +163,13 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	operation core.JourneyOperation,
 	options UpdateJourneyStatusOptions,
 ) error {
-	// 1. 通过 PlatformManager 获取租户配置
-	cfg, err := f.getPlatformConfig(ctx, tenantID)
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("获取租户配置失败: %w", err)
+		return err
 	}
 
-	// 2. 验证 APIBaseURL 和 APIToken 是否配置
-	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
-		return fmt.Errorf("租户 %s 的 APIBaseURL 未配置", tenantID)
-	}
-	if cfg.APIToken == nil || *cfg.APIToken == "" {
-		return fmt.Errorf("租户 %s 的 APIToken 未配置", tenantID)
-	}
-
-	// 3. 转换本地用户ID为远程用户ID
+	// 2. 转换本地用户ID为远程用户ID
 	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
 	if err != nil {
 		return fmt.Errorf("转换用户ID失败: %w", err)
@@ -187,11 +179,11 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 	remoteUserID := remoteUserIDs[0]
 
-	// 4. 从配置中构建 SkylarkAddress
+	// 3. 从配置中构建 SkylarkAddress
 	skylarkFlowAddress := core.SkylarkAPIContext{
-		App:        *cfg.APIBaseURL,
+		App:        apiCfg.App,
 		UserID:     strconv.Itoa(remoteUserID), // 操作人ID（远程）
-		AuthHeader: *cfg.APIToken,
+		AuthHeader: apiCfg.Token,
 	}
 
 	// 构建API请求URL
@@ -292,41 +284,31 @@ func (f *skylarkFlowRegistry) GetJourneyBySN(
 	flowID int64,
 	sn string,
 ) (*core.Journey, error) {
-	// 1. 通过 PlatformManager 获取租户配置
-	cfg, err := f.getPlatformConfig(ctx, tenantID)
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("获取租户配置失败: %w", err)
+		return nil, err
 	}
 
-	// 2. 验证 APIBaseURL 和 APIToken 是否配置
-	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
-		return nil, fmt.Errorf("租户 %s 的 APIBaseURL 未配置", tenantID)
-	}
-	if cfg.APIToken == nil || *cfg.APIToken == "" {
-		return nil, fmt.Errorf("租户 %s 的 APIToken 未配置", tenantID)
-	}
-
-	// 3. 从配置中构建 SkylarkAddress
+	// 2. 构建 SkylarkAddress
 	skylarkAddress := core.SkylarkAPIContext{
-		App:        *cfg.APIBaseURL, // 使用配置中的域名
-		UserID:     "",               // 查询操作不需要 UserID
-		AuthHeader: *cfg.APIToken,   // 使用配置中的 Token
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
 	}
 
-	// 4. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/find_by_sn
+	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/find_by_sn?sn=xxx
 	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "journeys", "find_by_sn")
-
-	// 5. 添加查询参数: ?sn=xxx
 	apiURL = fmt.Sprintf("%s?sn=%s", apiURL, sn)
 
-	// 6. 发送 HTTP GET 请求
+	// 4. 发送 HTTP GET 请求
 	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
 	defer resp.Body.Close()
 
-	// 7. 解析响应
+	// 5. 解析响应
 	var journeyResp JourneyResponse
 	if err := httputils.ReadJSONResponse(resp, &journeyResp); err != nil {
 		// 如果是 404 错误，转换为 ErrJourneyNotFound
@@ -336,7 +318,7 @@ func (f *skylarkFlowRegistry) GetJourneyBySN(
 		return nil, err
 	}
 
-	// 8. 转换为领域模型并返回
+	// 6. 转换为领域模型并返回
 	return journeyResp.ToDomain(), nil
 }
 
@@ -354,48 +336,144 @@ func (f *skylarkFlowRegistry) GetJourneyAssignments(
 	tenantID string,
 	journeyID int64,
 ) ([]*core.Assignment, error) {
-	// 1. 通过 PlatformManager 获取租户配置
-	cfg, err := f.getPlatformConfig(ctx, tenantID)
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("获取租户配置失败: %w", err)
+		return nil, err
 	}
 
-	// 2. 验证 APIBaseURL 和 APIToken 是否配置
-	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
-		return nil, fmt.Errorf("租户 %s 的 APIBaseURL 未配置", tenantID)
-	}
-	if cfg.APIToken == nil || *cfg.APIToken == "" {
-		return nil, fmt.Errorf("租户 %s 的 APIToken 未配置", tenantID)
-	}
-
-	// 3. 从配置中构建 SkylarkAddress
+	// 2. 构建 SkylarkAddress
 	skylarkAddress := core.SkylarkAPIContext{
-		App:        *cfg.APIBaseURL, // 使用配置中的域名
-		UserID:     "",               // 查询操作不需要 UserID
-		AuthHeader: *cfg.APIToken,   // 使用配置中的 Token
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
 	}
 
-	// 4. 构建 API URL: /api/v4/yaw/journeys/:journey_id/assignments
+	// 3. 构建 API URL: /api/v4/yaw/journeys/:journey_id/assignments
 	apiURL := core.BuildJourneyAPIURL(skylarkAddress, journeyID, "assignments")
 
-	// 5. 发送 HTTP GET 请求
+	// 4. 发送 HTTP GET 请求
 	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
 	defer resp.Body.Close()
 
-	// 6. 解析响应
+	// 5. 解析响应
 	var assignmentResponses []AssignmentResponse
 	if err := httputils.ReadJSONResponse(resp, &assignmentResponses); err != nil {
 		return nil, err
 	}
 
-	// 7. 转换为领域模型
+	// 6. 转换为领域模型
 	assignments := make([]*core.Assignment, len(assignmentResponses))
 	for i, ar := range assignmentResponses {
 		assignments[i] = ar.ToDomain()
 	}
 
 	return assignments, nil
+}
+
+// GetJourneyDetail 获取流程记录详情
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - *core.JourneyDetail: 流程记录详情（包含字段值和附件）
+//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
+func (f *skylarkFlowRegistry) GetJourneyDetail(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	journeyID int64,
+) (*core.JourneyDetail, error) {
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 构建 SkylarkAddress
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/:journey_id
+	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "journeys", fmt.Sprintf("%d", journeyID))
+
+	// 4. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 5. 解析响应
+	var journeyDetailResp JourneyDetailResponse
+	if err := httputils.ReadJSONResponse(resp, &journeyDetailResp); err != nil {
+		// 如果是 404 错误，转换为 ErrJourneyNotFound
+		if errors.Is(err, core.ErrSkylarkAPINotFound) {
+			return nil, core.ErrJourneyNotFound
+		}
+		return nil, err
+	}
+
+	// 6. 转换为领域模型并返回
+	return journeyDetailResp.ToDomain(), nil
+}
+
+// GetFlowDetail 获取流程详情
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//
+// 返回:
+//   - *core.FlowDetail: 流程详情（包含字段、节点、边信息）
+//   - error: 错误信息（如果不存在返回 core.ErrFlowNotFound）
+func (f *skylarkFlowRegistry) GetFlowDetail(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+) (*core.FlowDetail, error) {
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 构建 SkylarkAddress
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id
+	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID)
+
+	// 4. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 5. 解析响应
+	var flowDetailResp FlowDetailResponse
+	if err := httputils.ReadJSONResponse(resp, &flowDetailResp); err != nil {
+		// 如果是 404 错误，转换为 ErrFlowNotFound
+		if errors.Is(err, core.ErrSkylarkAPINotFound) {
+			return nil, core.ErrFlowNotFound
+		}
+		return nil, err
+	}
+
+	// 6. 转换为领域模型并返回
+	return flowDetailResp.ToDomain(), nil
 }

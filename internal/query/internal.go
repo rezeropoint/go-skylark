@@ -104,7 +104,7 @@ func (m *queryManager) executeQueryAndParse(ctx context.Context, remoteDB sqlx.S
 			return nil, fmt.Errorf("解析 JSON 失败: %w", err)
 		}
 
-		// 翻译状态字段
+		// 翻译状态字段（slp_status 是 Assignment 的操作状态）
 		if status, ok := record["slp_status"].(string); ok {
 			record["slp_status"] = core.TranslateStatus(status)
 		}

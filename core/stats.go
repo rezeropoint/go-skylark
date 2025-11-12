@@ -25,14 +25,6 @@ const (
 	GroupByMonth = "month" // 按月分组
 )
 
-// 事件状态常量
-const (
-	StatusCompleted  = "completed"  // 已完成状态
-	StatusRejected   = "rejected"   // 已拒绝状态
-	StatusProcessing = "processing" // 处理中状态（虚拟状态）
-	StatusPending    = "pending"    // 未开始状态（虚拟状态）
-)
-
 // StatsCriteria 统计条件（DDD值对象）
 // 说明：所有统计接口共享此结构，通过不同字段组合实现不同统计功能
 // 支持单个或多个事件配置ID的统计（多ID时会合并结果）

@@ -120,3 +120,212 @@ func (a *AssignmentResponse) ToDomain() *core.Assignment {
 		UpdatedAt:  a.UpdatedAt,
 	}
 }
+
+// JourneyDetailResponse Skylark API 返回的流程记录详情结构体
+// 职责：处理 GetJourneyDetail API 响应的 JSON 反序列化
+// 说明：继承 JourneyResponse 基础字段，扩展 Response 为 ResponseDetailData
+type JourneyDetailResponse struct {
+	ID                       int64              `json:"id"`                          // 流程记录ID
+	SN                       string             `json:"sn"`                          // 流程编号
+	Status                   string             `json:"status"`                      // 流程状态
+	CurrentVertexID          int64              `json:"current_vertex_id"`           // 当前节点ID
+	FlowID                   int64              `json:"flow_id"`                     // 流程ID
+	CurrentDurationThreshold *string            `json:"current_duration_threshold"`  // 当前持续时间阈值
+	CreatedAt                string             `json:"created_at"`                  // 创建时间
+	UpdatedAt                string             `json:"updated_at"`                  // 更新时间
+	ReviewerVertexIDs        []int64            `json:"reviewer_vertex_ids"`         // 审核节点ID列表
+	JourneyURL               string             `json:"journey_url"`                 // 流程记录URL
+	User                     UserInfo           `json:"user"`                        // 发起人信息
+	Response                 ResponseDetailData `json:"response"`                    // 响应数据（详情版）
+}
+
+// ResponseDetailData API 返回的响应详情数据结构体
+// 说明：包含完整的字段数据和附件信息（用于详情接口）
+type ResponseDetailData struct {
+	ID           int64                        `json:"id"`            // 响应ID
+	CachedValues map[string]FieldValueDetail  `json:"cached_values"` // 字段ID -> 值详情
+	MappedValues map[string]FieldValueDetail  `json:"mapped_values"` // 字段别名 -> 值详情
+	Entries      []EntryDetail                `json:"entries"`       // 字段条目列表
+}
+
+// FieldValueDetail 字段值详情结构体
+// 说明：包含字段的多种表示形式
+type FieldValueDetail struct {
+	Value         []interface{} `json:"value"`          // 原始值
+	TextValue     []string      `json:"text_value"`     // 文本值
+	ExportedValue []string      `json:"exported_value"` // 导出值
+}
+
+// EntryDetail 字段条目详情结构体
+// 说明：表示一个字段的具体条目（可能包含附件）
+type EntryDetail struct {
+	ID         int64             `json:"id"`                   // 条目ID
+	FieldID    int64             `json:"field_id"`             // 字段ID
+	OptionID   *int64            `json:"option_id"`            // 选项ID（可为空）
+	Value      string            `json:"value"`                // 值
+	ValueID    *int64            `json:"value_id"`             // 值ID（可为空）
+	Attachment *AttachmentDetail `json:"attachment,omitempty"` // 附件（可为空）
+}
+
+// AttachmentDetail 附件详情结构体
+// 说明：包含附件的完整信息
+type AttachmentDetail struct {
+	ID          int64  `json:"id"`           // 附件ID
+	Name        string `json:"name"`         // 文件名
+	Size        string `json:"size"`         // 文件大小
+	MimeType    string `json:"mime_type"`    // MIME 类型
+	Extension   string `json:"extension"`    // 文件扩展名
+	DownloadURL string `json:"download_url"` // 下载地址
+}
+
+// ToDomain 将 JourneyDetailResponse 转换为领域模型
+func (j *JourneyDetailResponse) ToDomain() *core.JourneyDetail {
+	// 构建业务数据（优先级：ExportedValue > TextValue > Value）
+	businessData := make(map[string]interface{})
+	for fieldID, fieldValue := range j.Response.CachedValues {
+		if len(fieldValue.ExportedValue) > 0 {
+			if len(fieldValue.ExportedValue) == 1 {
+				businessData[fieldID] = fieldValue.ExportedValue[0]
+			} else {
+				businessData[fieldID] = fieldValue.ExportedValue
+			}
+		} else if len(fieldValue.TextValue) > 0 {
+			if len(fieldValue.TextValue) == 1 {
+				businessData[fieldID] = fieldValue.TextValue[0]
+			} else {
+				businessData[fieldID] = fieldValue.TextValue
+			}
+		} else if len(fieldValue.Value) > 0 {
+			if len(fieldValue.Value) == 1 {
+				businessData[fieldID] = fieldValue.Value[0]
+			} else {
+				businessData[fieldID] = fieldValue.Value
+			}
+		}
+	}
+
+	// 提取附件列表
+	var attachments []*core.Attachment
+	for _, entry := range j.Response.Entries {
+		if entry.Attachment != nil {
+			attachments = append(attachments, &core.Attachment{
+				ID:          entry.Attachment.ID,
+				Name:        entry.Attachment.Name,
+				Size:        entry.Attachment.Size,
+				MimeType:    entry.Attachment.MimeType,
+				Extension:   entry.Attachment.Extension,
+				DownloadURL: entry.Attachment.DownloadURL,
+			})
+		}
+	}
+
+	return &core.JourneyDetail{
+		// 基础信息
+		ID:              j.ID,
+		SN:              j.SN,
+		Status:          j.Status,
+		CurrentVertexID: j.CurrentVertexID,
+		FlowID:          j.FlowID,
+		CreatedAt:       j.CreatedAt,
+		UpdatedAt:       j.UpdatedAt,
+		JourneyURL:      j.JourneyURL,
+
+		// 审核相关
+		ReviewerVertexIDs:        j.ReviewerVertexIDs,
+		CurrentDurationThreshold: j.CurrentDurationThreshold,
+
+		// 发起人信息
+		Initiator: j.User.ToDomain(),
+
+		// 业务数据
+		BusinessData: businessData,
+
+		// 附件信息
+		Attachments: attachments,
+	}
+}
+
+// FlowDetailResponse Skylark API 返回的流程详情结构体
+// 职责：处理 GetFlowDetail API 响应的 JSON 反序列化
+type FlowDetailResponse struct {
+	ID       int64                `json:"id"`       // 流程ID
+	Title    string               `json:"title"`    // 流程名称
+	Fields   []FlowFieldResponse  `json:"fields"`   // 字段列表
+	Vertices []FlowVertexResponse `json:"vertices"` // 节点列表
+	Edges    []FlowEdgeResponse   `json:"edges"`    // 边列表
+}
+
+// FlowFieldResponse 流程字段响应结构体
+type FlowFieldResponse struct {
+	ID          int64   `json:"id"`          // 字段ID
+	Title       string  `json:"title"`       // 字段标题
+	Description *string `json:"description"` // 字段描述（可为空）
+}
+
+// FlowVertexResponse 流程节点响应结构体
+type FlowVertexResponse struct {
+	ID   int64  `json:"id"`   // 节点ID
+	Name string `json:"name"` // 节点名称
+	Type string `json:"type"` // 节点类型（Initial/Normal/Final）
+}
+
+// FlowEdgeResponse 流程边响应结构体
+type FlowEdgeResponse struct {
+	ID           int64 `json:"id"`             // 边ID
+	FromVertexID int64 `json:"from_vertex_id"` // 起始节点ID
+	ToVertexID   int64 `json:"to_vertex_id"`   // 目标节点ID
+}
+
+// ToDomain 将 FlowDetailResponse 转换为领域模型
+func (f *FlowDetailResponse) ToDomain() *core.FlowDetail {
+	// 转换字段列表
+	fields := make([]*core.FlowField, len(f.Fields))
+	for i, field := range f.Fields {
+		fields[i] = field.ToDomain()
+	}
+
+	// 转换节点列表
+	vertices := make([]*core.FlowVertex, len(f.Vertices))
+	for i, vertex := range f.Vertices {
+		vertices[i] = vertex.ToDomain()
+	}
+
+	// 转换边列表
+	edges := make([]*core.FlowEdge, len(f.Edges))
+	for i, edge := range f.Edges {
+		edges[i] = edge.ToDomain()
+	}
+
+	return &core.FlowDetail{
+		ID:       f.ID,
+		Title:    f.Title,
+		Fields:   fields,
+		Vertices: vertices,
+		Edges:    edges,
+	}
+}
+
+// ToDomain 将 FlowFieldResponse 转换为领域模型
+func (f *FlowFieldResponse) ToDomain() *core.FlowField {
+	return &core.FlowField{
+		ID:    f.ID,
+		Title: f.Title,
+	}
+}
+
+// ToDomain 将 FlowVertexResponse 转换为领域模型
+func (v *FlowVertexResponse) ToDomain() *core.FlowVertex {
+	return &core.FlowVertex{
+		ID:   v.ID,
+		Name: v.Name,
+		Type: v.Type,
+	}
+}
+
+// ToDomain 将 FlowEdgeResponse 转换为领域模型
+func (e *FlowEdgeResponse) ToDomain() *core.FlowEdge {
+	return &core.FlowEdge{
+		FromVertexID: e.FromVertexID,
+		ToVertexID:   e.ToVertexID,
+	}
+}

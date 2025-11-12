@@ -58,13 +58,6 @@ func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, 
 	}
 
 	// 验证 API 配置
-	if platformConfig.APIBaseURL == nil || *platformConfig.APIBaseURL == "" {
-		return nil, fmt.Errorf("平台配置缺少 API BaseURL")
-	}
-	if platformConfig.APIToken == nil || *platformConfig.APIToken == "" {
-		return nil, fmt.Errorf("平台配置缺少 API Token")
-	}
-
 	// 2. 调用 Skylark API 创建组织
 	req := &CreateOrganizationRequest{
 		Name:                name,
@@ -74,7 +67,7 @@ func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, 
 		ParentID:            nil, // 根组织无父组织
 	}
 
-	orgResp, err := m.httpClient.createOrganization(ctx, *platformConfig.APIBaseURL, *platformConfig.APIToken, req)
+	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
 	}
@@ -129,13 +122,6 @@ func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantI
 	}
 
 	// 验证 API 配置
-	if platformConfig.APIBaseURL == nil || *platformConfig.APIBaseURL == "" {
-		return nil, fmt.Errorf("平台配置缺少 API BaseURL")
-	}
-	if platformConfig.APIToken == nil || *platformConfig.APIToken == "" {
-		return nil, fmt.Errorf("平台配置缺少 API Token")
-	}
-
 	// 3. 调用 Skylark API 创建子组织
 	req := &CreateOrganizationRequest{
 		Name:                name,
@@ -145,7 +131,7 @@ func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantI
 		ParentID:            &parentRemoteOrgID, // 指定父组织ID
 	}
 
-	orgResp, err := m.httpClient.createOrganization(ctx, *platformConfig.APIBaseURL, *platformConfig.APIToken, req)
+	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
 	}
@@ -201,15 +187,8 @@ func (m *organizationManager) DeleteOrganization(ctx context.Context, tenantID, 
 	}
 
 	// 验证 API 配置
-	if platformConfig.APIBaseURL == nil || *platformConfig.APIBaseURL == "" {
-		return fmt.Errorf("平台配置缺少 API BaseURL")
-	}
-	if platformConfig.APIToken == nil || *platformConfig.APIToken == "" {
-		return fmt.Errorf("平台配置缺少 API Token")
-	}
-
 	// 3. 调用 Skylark API 删除组织
-	if err := m.httpClient.deleteOrganization(ctx, *platformConfig.APIBaseURL, *platformConfig.APIToken, remoteOrgID); err != nil {
+	if err := m.httpClient.deleteOrganization(ctx, platformConfig.App, platformConfig.Token, remoteOrgID); err != nil {
 		return fmt.Errorf("%w: %v", core.ErrOrgDeleteFailed, err)
 	}
 

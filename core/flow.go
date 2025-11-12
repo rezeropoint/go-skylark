@@ -26,30 +26,6 @@ func IsSystemField(fieldName string) bool {
 	return len(fieldName) >= 4 && fieldName[:4] == "slp_"
 }
 
-// StatusTranslationMap 流程状态映射
-var StatusTranslationMap = map[string]string{
-	"stashed":     "编写中",
-	"pending":     "待处理", // 虚拟状态：只有1个节点的未完成事件
-	"processing":  "处理中", // 虚拟状态：有多个节点的未完成事件
-	"approved":    "已通过",
-	"refused":     "已回退",
-	"transferred": "已转交",
-	"skipped":     "已跳过",
-	"cancelled":   "已撤销",
-	"receding":    "回退中",
-	"suspended":   "已暂停",
-	"finished":    "已完成",
-	"aborted":     "已终止",
-}
-
-// TranslateStatus 将流程状态翻译为中文，如果未知则返回原始状态
-func TranslateStatus(status string) string {
-	if translated, ok := StatusTranslationMap[status]; ok {
-		return translated
-	}
-	return status
-}
-
 // API 请求常量（调用 Skylark REST API 使用）
 
 // HTTP 协议常量
@@ -84,6 +60,13 @@ const (
 	EventJourneyStatus = "JourneyStatusEvent" // 旅程状态事件
 )
 
+// 节点类型常量
+const (
+	VertexTypeInitial = "Initial" // 初始节点（流程开始）
+	VertexTypeNormal  = "Normal"  // 普通节点（审批节点）
+	VertexTypeFinal   = "Final"   // 最终节点（流程结束）
+)
+
 // 七牛云上传常量
 const (
 	QiniuXKeyValue        = "1593586993541" // 七牛云上传x:key字段的值
@@ -99,4 +82,37 @@ const (
 // 返回：完整的 API URL
 func BuildJourneyAPIURL(apiCtx SkylarkAPIContext, journeyID int64, action string) string {
 	return fmt.Sprintf("%s%s%s%d/%s", SchemeHTTPS, apiCtx.App, APIJourneysPath, journeyID, action)
+}
+
+// FlowDetail 流程详情（领域模型）
+// 说明：包含流程的完整结构信息，包括字段、节点、边
+// 用于 GetFlowDetail 接口返回流程的元数据
+type FlowDetail struct {
+	ID       int64         // 流程ID
+	Title    string        // 流程名称
+	Fields   []*FlowField  // 字段列表
+	Vertices []*FlowVertex // 节点列表
+	Edges    []*FlowEdge   // 边列表
+}
+
+// FlowField 流程字段（领域模型）
+// 说明：表示流程中的一个字段定义
+type FlowField struct {
+	ID    int64  // 字段ID
+	Title string // 字段标题
+}
+
+// FlowVertex 流程节点（领域模型）
+// 说明：表示流程中的一个节点（审批步骤）
+type FlowVertex struct {
+	ID   int64  // 节点ID
+	Name string // 节点名称
+	Type string // 节点类型（Initial/Normal/Final）
+}
+
+// FlowEdge 流程边（领域模型）
+// 说明：表示流程节点之间的连接关系
+type FlowEdge struct {
+	FromVertexID int64 // 起始节点ID
+	ToVertexID   int64 // 目标节点ID
 }

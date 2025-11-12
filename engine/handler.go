@@ -51,19 +51,19 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 2. 初始化组织ID映射管理器（依赖 Platform）
-	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.Get)
+	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// 3. 初始化用户ID映射管理器（依赖 Platform）
-	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.Get)
+	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.GetAPIConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// 4. 初始化流程和表单管理器（依赖 Platform + User）
-	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.Get, userMgr.GetRemoteUserIDs)
+	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +153,16 @@ func (e *skylarkEngine) GetFlowJourneyBySN(ctx context.Context, tenantID string,
 // GetFlowJourneyAssignments 获取流程节点处理信息列表
 func (e *skylarkEngine) GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error) {
 	return e.flows.GetJourneyAssignments(ctx, tenantID, journeyID)
+}
+
+// GetFlowJourneyDetail 获取流程记录详情（包含字段值和附件）
+func (e *skylarkEngine) GetFlowJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error) {
+	return e.flows.GetJourneyDetail(ctx, tenantID, flowID, journeyID)
+}
+
+// GetFlowDetail 获取流程详情（包含字段、节点、边信息）
+func (e *skylarkEngine) GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error) {
+	return e.flows.GetFlowDetail(ctx, tenantID, flowID)
 }
 
 // Close 关闭引擎，释放资源（尤其是 platform 管理的远程数据库连接池）

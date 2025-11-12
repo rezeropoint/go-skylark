@@ -29,21 +29,24 @@ import (
 //   - 连接失败时返回 ErrDatabaseConnection 或 ErrPlatformConfigNotFound
 type GetRemoteDBFunc func(ctx context.Context, tenantID string) (sqlx.SqlConn, error)
 
-// GetPlatformConfigFunc 获取平台配置的函数类型
-// 用途：供 flows、forms 等 Manager 获取租户配置（含 APIBaseURL 和 APIToken），实现 Manager 之间解耦
+// GetPlatformConfigFunc 获取Skylark API配置的函数类型
+// 用途：供 flows、forms 等 Manager 获取租户的API调用配置，实现 Manager 之间解耦
 // 参数：
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于查询平台配置）
 //
 // 返回：
-//   - *PlatformConfig: 平台配置（包含数据库连接信息、API 基础地址、认证 Token 等）
-//   - error: 错误信息（如平台配置不存在）
+//   - *SkylarkAPIConfig: API调用配置（只包含App和Token，不暴露敏感数据库信息）
+//   - error: 错误信息（如平台配置不存在、API未启用、配置不完整等）
 //
 // 说明：
 //   - 该函数会从 skylark_platform_configs 表读取配置
+//   - 会自动验证：EnableAPI是否开启、APIBaseURL和APIToken是否配置
 //   - 配置不存在时返回 ErrPlatformConfigNotFound
-//   - 用于 FlowManager 等需要调用 Skylark REST API 的场景
-type GetPlatformConfigFunc func(ctx context.Context, tenantID string) (*PlatformConfig, error)
+//   - API未启用时返回 ErrAPINotEnabled
+//   - 配置不完整时返回 ErrInvalidPlatformConfig
+//   - 只返回API调用必要的字段，不返回数据库连接信息
+type GetPlatformConfigFunc func(ctx context.Context, tenantID string) (*SkylarkAPIConfig, error)
 
 // PlatformConfig Skylark平台对接配置（纯领域模型）
 type PlatformConfig struct {
@@ -55,12 +58,20 @@ type PlatformConfig struct {
 	Username    string    // 用户名
 	Password    string    // 密码（加密存储）
 	NamespaceID int       // 命名空间ID（用于筛选flows）
+	EnableAPI   bool      // 是否启用API对接（true-启用，false-禁用）
 	APIBaseURL  *string   // Skylark API基础地址，纯域名（如：skylark.example.com，不含https://前缀）
 	APIToken    *string   // API认证Token
 	CreatedBy   *string   // 创建者用户ID
 	UpdatedBy   *string   // 最后修改者用户ID
 	CreatedAt   time.Time // 创建时间
 	UpdatedAt   time.Time // 更新时间
+}
+
+// SkylarkAPIConfig Skylark API调用配置（轻量级，用于API调用）
+// 说明：只包含API调用必要的字段，不暴露敏感的数据库连接信息
+type SkylarkAPIConfig struct {
+	App   string // API基础地址（纯域名，如：skylark.example.com）
+	Token string // API认证Token
 }
 
 // BuildDSN 构建数据库连接字符串

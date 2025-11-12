@@ -20,6 +20,18 @@ type Manager interface {
 	// 返回 ErrPlatformConfigNotFound 如果配置不存在
 	Get(ctx context.Context, tenantID string) (*core.PlatformConfig, error)
 
+	// GetAPIConfig 获取Skylark API调用配置（供flows、forms等Manager使用）
+	// 该方法实现了 core.GetPlatformConfigFunc 函数签名，用于依赖注入
+	// 流程：
+	//   1. 根据 tenantID 查询平台配置
+	//   2. 验证 EnableAPI 是否开启
+	//   3. 验证 APIBaseURL 和 APIToken 是否配置
+	//   4. 返回轻量级的 SkylarkAPIConfig（不包含敏感数据库信息）
+	// 返回：
+	//   - *core.SkylarkAPIConfig: API调用配置（只包含App和Token）
+	//   - error: ErrPlatformConfigNotFound / ErrAPINotEnabled / ErrInvalidPlatformConfig
+	GetAPIConfig(ctx context.Context, tenantID string) (*core.SkylarkAPIConfig, error)
+
 	// Update 更新平台配置
 	// 注意：更新前会验证连接是否可用，验证失败则更新失败
 	Update(ctx context.Context, cfg *core.PlatformConfig) error

@@ -59,6 +59,27 @@ type SkylarkFlowRegistry interface {
 	//   - []*core.Assignment: 任务列表
 	//   - error: 错误信息
 	GetJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error)
+
+	// GetJourneyDetail 获取流程记录详情
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - *core.JourneyDetail: 流程记录详情（包含字段值和附件）
+	//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
+	GetJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error)
+
+	// GetFlowDetail 获取流程详情
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	// 返回:
+	//   - *core.FlowDetail: 流程详情（包含字段、节点、边信息）
+	//   - error: 错误信息（如果不存在返回 core.ErrFlowNotFound）
+	GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error)
 }
 
 // NewSkylarkFlowRegistry 创建新的Skylark流程注册表实例

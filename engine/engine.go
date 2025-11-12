@@ -34,6 +34,10 @@ type SkylarkEngine interface {
 	GetFlowJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error)
 	// GetFlowJourneyAssignments 获取流程节点处理信息列表
 	GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error)
+	// GetFlowJourneyDetail 获取流程记录详情（包含字段值和附件）
+	GetFlowJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error)
+	// GetFlowDetail 获取流程详情（包含字段、节点、边信息）
+	GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error)
 
 	// 平台配置管理
 
