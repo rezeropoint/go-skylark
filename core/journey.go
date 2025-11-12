@@ -32,18 +32,18 @@ type FlowUser struct {
 // 设计参考 DetailResponse，但基于 Skylark API 返回的数据结构
 type JourneyDetail struct {
 	// 基础信息
-	ID              int64     // 流程记录ID
-	SN              string    // 流程编号
-	Status          string    // 流程状态（processing, completed, aborted, stashed）
-	CurrentVertexID int64     // 当前节点ID
-	FlowID          int64     // 流程ID
-	CreatedAt       string    // 创建时间（ISO 8601 格式）
-	UpdatedAt       string    // 更新时间（ISO 8601 格式）
-	JourneyURL      string    // 流程记录URL
+	ID              int64  // 流程记录ID
+	SN              string // 流程编号
+	Status          string // 流程状态（processing, completed, aborted, stashed）
+	CurrentVertexID int64  // 当前节点ID
+	FlowID          int64  // 流程ID
+	CreatedAt       string // 创建时间（ISO 8601 格式）
+	UpdatedAt       string // 更新时间（ISO 8601 格式）
+	JourneyURL      string // 流程记录URL
 
 	// 审核相关
-	ReviewerVertexIDs        []int64   // 审核节点ID列表
-	CurrentDurationThreshold *string   // 当前持续时间阈值
+	ReviewerVertexIDs        []int64 // 审核节点ID列表
+	CurrentDurationThreshold *string // 当前持续时间阈值
 
 	// 发起人信息
 	Initiator *FlowUser // 发起人信息

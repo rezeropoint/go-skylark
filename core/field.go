@@ -21,9 +21,9 @@ type TypedValue struct {
 type FieldType string
 
 const (
-	FieldString      FieldType = "string"       // 普通字符串
-	FieldImage       FieldType = "imageURL"     // 图片URL
-	FieldImageBase64 FieldType = "imageBase64"  // Base64编码的图片
+	FieldString      FieldType = "string"      // 普通字符串
+	FieldImage       FieldType = "imageURL"    // 图片URL
+	FieldImageBase64 FieldType = "imageBase64" // Base64编码的图片
 	// 以后还可以加更多类型
 )
 
@@ -95,6 +95,7 @@ const (
 // IsValidFieldType 验证字段类型是否有效（用于创建/更新字段配置时校验）
 // 参数:
 //   - fieldType: 字段类型字符串
+//
 // 返回:
 //   - bool: 是否为有效的字段类型
 func IsValidFieldType(fieldType string) bool {

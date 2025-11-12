@@ -16,7 +16,7 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	config            *Config                    // 配置
+	config            *Config // 配置
 	cache             core.CacheInterface
 	getPlatformConfig core.GetPlatformConfigFunc // 获取平台配置的函数（依赖注入）
 	getRemoteUserIDs  core.GetRemoteUserIDsFunc  // 获取远程用户ID的函数（依赖注入）
