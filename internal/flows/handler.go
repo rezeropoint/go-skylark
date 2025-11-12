@@ -46,7 +46,7 @@ func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatfo
 //   - data: 流程数据
 func (f *skylarkFlowRegistry) CreateFlow(ctx context.Context, app string, flowID int64, userID int64, authHeader string, data map[string]core.TypedValue) error {
 	// 构建流程地址信息
-	skylarkFlowAddress := core.BasicSkylarkAddress{
+	skylarkFlowAddress := core.SkylarkAPIContext{
 		App:        app,
 		UserID:     strconv.FormatInt(userID, 10),
 		AuthHeader: authHeader,
@@ -160,7 +160,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	options UpdateJourneyStatusOptions,
 ) error {
 	// 构建流程地址信息
-	skylarkFlowAddress := core.BasicSkylarkAddress{
+	skylarkFlowAddress := core.SkylarkAPIContext{
 		App:        app,
 		UserID:     strconv.FormatInt(userID, 10),
 		AuthHeader: authHeader,
@@ -279,7 +279,7 @@ func (f *skylarkFlowRegistry) GetJourneyBySN(
 	}
 
 	// 3. 从配置中构建 SkylarkAddress
-	skylarkAddress := core.BasicSkylarkAddress{
+	skylarkAddress := core.SkylarkAPIContext{
 		App:        *cfg.APIBaseURL, // 使用配置中的域名
 		UserID:     "",               // 查询操作不需要 UserID
 		AuthHeader: *cfg.APIToken,   // 使用配置中的 Token
@@ -341,7 +341,7 @@ func (f *skylarkFlowRegistry) GetJourneyAssignments(
 	}
 
 	// 3. 从配置中构建 SkylarkAddress
-	skylarkAddress := core.BasicSkylarkAddress{
+	skylarkAddress := core.SkylarkAPIContext{
 		App:        *cfg.APIBaseURL, // 使用配置中的域名
 		UserID:     "",               // 查询操作不需要 UserID
 		AuthHeader: *cfg.APIToken,   // 使用配置中的 Token

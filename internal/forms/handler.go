@@ -30,7 +30,7 @@ func newSkylarkFormRegistry(config *Config, cache core.CacheInterface) (*skylark
 
 func (f *skylarkFormRegistry) CreateFormRow(ctx context.Context, app string, formID int64, userID int64, authHeader string, data map[string]core.TypedValue) error {
 	// 构建流程地址信息
-	skylarkFormAddress := core.BasicSkylarkAddress{
+	skylarkFormAddress := core.SkylarkAPIContext{
 		App:        app,
 		UserID:     strconv.FormatInt(userID, 10),
 		AuthHeader: authHeader,

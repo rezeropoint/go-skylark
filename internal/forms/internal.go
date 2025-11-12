@@ -15,7 +15,7 @@ import (
 
 // getFormFieldMappings 获取表单字段映射
 // 先尝试从缓存获取，缓存未命中则从API获取
-func (f *skylarkFormRegistry) getFormFieldMappings(ctx context.Context, skylarkFormAddress core.BasicSkylarkAddress, formID int64) (map[string]core.FieldMapping, error) {
+func (f *skylarkFormRegistry) getFormFieldMappings(ctx context.Context, skylarkFormAddress core.SkylarkAPIContext, formID int64) (map[string]core.FieldMapping, error) {
 	// 生成缓存键
 	cacheKey := fmt.Sprintf("%s%s:%d", core.CacheFieldMappingKeyPrefix, skylarkFormAddress.App, formID)
 
@@ -59,7 +59,7 @@ func (f *skylarkFormRegistry) getFormFieldMappings(ctx context.Context, skylarkF
 
 // buildFormCreateRequest 构建表单创建请求
 // 根据原始数据和字段映射构建请求体
-func (f *skylarkFormRegistry) buildFormCreateRequest(ctx context.Context, skylarkFormAddress core.BasicSkylarkAddress, originalData map[string]core.TypedValue, fieldMappings map[string]core.FieldMapping) (FormCreateRequest, error) {
+func (f *skylarkFormRegistry) buildFormCreateRequest(ctx context.Context, skylarkFormAddress core.SkylarkAPIContext, originalData map[string]core.TypedValue, fieldMappings map[string]core.FieldMapping) (FormCreateRequest, error) {
 	entries := make([]map[string]any, 0, len(originalData))
 
 	for key, TypedValue := range originalData {

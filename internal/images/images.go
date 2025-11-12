@@ -17,7 +17,7 @@ import (
 
 // CreateImageEntryFromURL 创建图片条目（通过图片 URL）
 // 先获取上传令牌，然后下载图片并上传
-func CreateImageEntryFromURL(ctx context.Context, skylarkAddress core.BasicSkylarkAddress, imageURL string) (int, string, error) {
+func CreateImageEntryFromURL(ctx context.Context, skylarkAddress core.SkylarkAPIContext, imageURL string) (int, string, error) {
 	upToken, err := getUPToken(ctx, skylarkAddress)
 	if err != nil {
 		return 0, "", err
@@ -49,7 +49,7 @@ func CreateImageEntryFromURL(ctx context.Context, skylarkAddress core.BasicSkyla
 
 // CreateImageEntryFromBase64 创建图片条目（通过 base64 数据）
 // 先获取上传令牌，然后解码 base64 并上传
-func CreateImageEntryFromBase64(ctx context.Context, skylarkAddress core.BasicSkylarkAddress, base64Data string) (int, string, error) {
+func CreateImageEntryFromBase64(ctx context.Context, skylarkAddress core.SkylarkAPIContext, base64Data string) (int, string, error) {
 	upToken, err := getUPToken(ctx, skylarkAddress)
 	if err != nil {
 		return 0, "", err
@@ -64,7 +64,7 @@ func CreateImageEntryFromBase64(ctx context.Context, skylarkAddress core.BasicSk
 }
 
 // getUPToken 获取上传令牌
-func getUPToken(ctx context.Context, skylarkAddress core.BasicSkylarkAddress) (string, error) {
+func getUPToken(ctx context.Context, skylarkAddress core.SkylarkAPIContext) (string, error) {
 	// 获取Token
 	attachmentsURL := buildAttachmentsAPIURL(skylarkAddress)
 	resp, err := httpc.Do(ctx, http.MethodGet, attachmentsURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
@@ -84,7 +84,7 @@ func getUPToken(ctx context.Context, skylarkAddress core.BasicSkylarkAddress) (s
 }
 
 // uploadImageData 抽取上传二进制图片的公共逻辑
-func uploadImageData(ctx context.Context, skylarkAddress core.BasicSkylarkAddress, upToken string, imageData []byte) (int, string, error) {
+func uploadImageData(ctx context.Context, skylarkAddress core.SkylarkAPIContext, upToken string, imageData []byte) (int, string, error) {
 	// 创建一个新的buffer用于multipart/form-data请求
 	var b bytes.Buffer
 	w := multipart.NewWriter(&b)
@@ -147,7 +147,7 @@ func uploadImageData(ctx context.Context, skylarkAddress core.BasicSkylarkAddres
 // buildAttachmentsAPIURL 构建附件API URL
 // 参数:
 //   - address: 流程地址信息
-func buildAttachmentsAPIURL(address core.BasicSkylarkAddress) string {
+func buildAttachmentsAPIURL(address core.SkylarkAPIContext) string {
 	return core.BuildAPIURL(address.App, core.APIAttachmentsPath) +
 		fmt.Sprintf("?purpose=create_responses&user_id=%s", core.DefaultUserIDForToken)
 }

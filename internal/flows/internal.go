@@ -18,7 +18,7 @@ import (
 // 这是一个公共函数，用于处理字段映射、图片上传、选项字段等逻辑
 func (f *skylarkFlowRegistry) buildEntriesFromData(
 	ctx context.Context,
-	skylarkFlowAddress core.BasicSkylarkAddress,
+	skylarkFlowAddress core.SkylarkAPIContext,
 	originalData map[string]core.TypedValue,
 	fieldMappings map[string]core.FieldMapping,
 ) ([]map[string]any, error) {
@@ -116,7 +116,7 @@ func (f *skylarkFlowRegistry) buildEntriesFromData(
 
 // getFlowFieldMappings 获取流程字段映射
 // 先尝试从缓存获取，缓存未命中则从API获取
-func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkFlowAddress core.BasicSkylarkAddress, flowID int64) (map[string]core.FieldMapping, error) {
+func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkFlowAddress core.SkylarkAPIContext, flowID int64) (map[string]core.FieldMapping, error) {
 	// 生成缓存键
 	cacheKey := fmt.Sprintf("%s%s:%d", core.CacheFieldMappingKeyPrefix, skylarkFlowAddress.App, flowID)
 
@@ -160,7 +160,7 @@ func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkF
 
 // buildFlowRouteRequest 构建流程路由请求
 // 根据原始数据和字段映射构建请求体
-func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylarkFlowAddress core.BasicSkylarkAddress, flowID int64, originalData map[string]core.TypedValue, fieldMappings map[string]core.FieldMapping) (FlowRouteRequest, error) {
+func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylarkFlowAddress core.SkylarkAPIContext, flowID int64, originalData map[string]core.TypedValue, fieldMappings map[string]core.FieldMapping) (FlowRouteRequest, error) {
 	// 使用公共函数处理字段数据
 	entries, err := f.buildEntriesFromData(ctx, skylarkFlowAddress, originalData, fieldMappings)
 	if err != nil {
@@ -199,7 +199,7 @@ func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylark
 
 // buildFlowProposeRequest 构建流程提议请求
 // 根据路由流程响应构建提议请求
-func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.BasicSkylarkAddress, routeFlowBody []byte) (FlowProposeRequest, error) {
+func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.SkylarkAPIContext, routeFlowBody []byte) (FlowProposeRequest, error) {
 	// 解析JSON响应
 	var result FlowRouteResponse
 	if err := json.Unmarshal(routeFlowBody, &result); err != nil {
@@ -238,7 +238,7 @@ func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.Ba
 // 根据原始数据和字段映射构建请求体
 func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 	ctx context.Context,
-	skylarkFlowAddress core.BasicSkylarkAddress,
+	skylarkFlowAddress core.SkylarkAPIContext,
 	originalData map[string]core.TypedValue,
 	fieldMappings map[string]core.FieldMapping,
 ) (UpdateJourneyStatusRequest, error) {
@@ -263,7 +263,7 @@ func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 
 // buildOperationRequest 构建第二次请求：执行操作（approve/refuse/transfer/cancel）
 func (f *skylarkFlowRegistry) buildOperationRequest(
-	skylarkFlowAddress core.BasicSkylarkAddress,
+	skylarkFlowAddress core.SkylarkAPIContext,
 	operation string,
 	nextVertexID int,
 	comment string,
