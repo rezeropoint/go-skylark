@@ -19,9 +19,17 @@ const (
 	// 完整格式：skylark:flow_fields:{tenant_id}:{flow_id}
 	CacheFlowFieldsKeyPrefix = "skylark:flow_fields:"
 
-	// CacheFlowInfoKeyPrefix flow 信息缓存键前缀
+	// CacheFlowInfoKeyPrefix flow 信息缓存键前缀 (数据库数据)
 	// 完整格式：skylark:flow:{tenant_id}:{flow_id}
+	// 数据源: 远程数据库 (只读从库)
+	// 使用者: query 模块
 	CacheFlowInfoKeyPrefix = "skylark:flow:"
+
+	// CacheFlowInfoAPIKeyPrefix flow 信息缓存键前缀 (API 数据)
+	// 完整格式：skylark:flow:api:{tenant_id}:{flow_id}
+	// 数据源: Skylark REST API (实时数据)
+	// 使用者: flows 模块
+	CacheFlowInfoAPIKeyPrefix = "skylark:flow:api:"
 
 	// CacheUserNameKeyPrefix 用户名缓存键前缀
 	// 完整格式：skylark:users:{tenant_id}:{user_id}

@@ -777,8 +777,14 @@ func IsOptionField(fieldType string) bool {
 
 ## 📖 相关文档
 
+### 项目文档
 - [INTEGRATION_PLAN.md](./INTEGRATION_PLAN.md) - 整合计划与进度跟踪
 - [CLAUDE.md](./CLAUDE.md) - Claude Code 助手指引
+
+### 模块文档
+- [internal/cache/README.md](./internal/cache/README.md) - 缓存模块详细文档 (优化策略、监控指标、最佳实践)
+
+### 外部文档
 - [Go 官方文档](https://go.dev/doc/)
 - [go-zero 文档](https://go-zero.dev/)
 - [sqlx 文档](https://jmoiron.github.io/sqlx/)

@@ -4,7 +4,11 @@
 // 说明：统一的缓存抽象层，支持字段映射、分布式锁、查询结果等多种缓存场景
 package core
 
-import "context"
+import (
+	"context"
+
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
+)
 
 // CacheInterface 缓存操作接口
 type CacheInterface interface {
@@ -19,18 +23,22 @@ type CacheInterface interface {
 	ReleaseLock(ctx context.Context, key string, value string) error
 	ExtendLock(ctx context.Context, key string, value string, expiry int) error
 
-	// Flow 缓存（query 模块）
+	// Flow 缓存（query 模块 - 数据库数据）
 	GetFlowList(ctx context.Context, tenantID string, namespaceID int) ([]*FlowInfo, error)
 	SetFlowList(ctx context.Context, tenantID string, namespaceID int, flows []*FlowInfo, ttl int) error
 	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*FieldMetadata, error)
 	SetFlowFields(ctx context.Context, tenantID string, flowID int, fields []*FieldMetadata, ttl int) error
-	// Flow 信息缓存（flows 模块 - 性能优化）
 	GetFlowInfo(ctx context.Context, tenantID string, flowID int64) (*FlowInfo, error)
 	SetFlowInfo(ctx context.Context, tenantID string, flowInfo *FlowInfo, ttl int) error
+
+	// Flow 信息缓存（flows 模块 - API 数据）
+	GetFlowInfoAPI(ctx context.Context, tenantID string, flowID int64) (*FlowInfo, error)
+	SetFlowInfoAPI(ctx context.Context, tenantID string, flowInfo *FlowInfo, ttl int) error
 
 	// 用户名缓存（query/stats 模块）
 	GetUserName(ctx context.Context, tenantID string, userID string) (string, error)
 	SetUserName(ctx context.Context, tenantID string, userID string, name string, ttl int) error
+	BatchGetUserNames(ctx context.Context, remoteDB sqlx.SqlConn, tenantID string, userIDs []string, ttl int) (map[string]string, error)
 
 	// 组织映射缓存（mapping 模块 - 业务字段值映射）
 	GetOrgMapping(ctx context.Context, id string) (*OrgMapping, error)

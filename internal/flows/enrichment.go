@@ -152,9 +152,9 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 	result := make(map[int64]*core.FlowInfo, len(flowIDs))
 	missedFlowIDs := make([]int64, 0)
 
-	// Step 1: 批量查询 Redis 缓存
+	// Step 1: 批量查询 Redis 缓存 (使用 API 专用缓存)
 	for _, flowID := range flowIDs {
-		flowInfo, err := f.cache.GetFlowInfo(ctx, tenantID, flowID)
+		flowInfo, err := f.cache.GetFlowInfoAPI(ctx, tenantID, flowID)
 		if err == nil && flowInfo != nil {
 			// 缓存命中
 			result[flowID] = flowInfo
@@ -204,7 +204,7 @@ func (f *skylarkFlowRegistry) fetchFlowInfoFromAPI(
 	}, nil
 }
 
-// cacheFlowInfo 异步回写缓存
+// cacheFlowInfo 异步回写缓存 (使用 API 专用缓存)
 // 说明：使用独立的 context.Background()，避免主请求取消影响缓存写入
 func (f *skylarkFlowRegistry) cacheFlowInfo(
 	ctx context.Context,
@@ -214,7 +214,7 @@ func (f *skylarkFlowRegistry) cacheFlowInfo(
 	// 使用配置的缓存TTL（默认1小时）
 	ttl := f.config.FlowInfoCacheTTL
 
-	if err := f.cache.SetFlowInfo(ctx, tenantID, flowInfo, ttl); err != nil {
+	if err := f.cache.SetFlowInfoAPI(ctx, tenantID, flowInfo, ttl); err != nil {
 		logx.Errorf("[enrichment] 缓存 flow 信息失败: %v", err)
 	}
 }
