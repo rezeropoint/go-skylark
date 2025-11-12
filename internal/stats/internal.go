@@ -96,3 +96,508 @@ func (m *statsManager) calculateAllowedOrgValues(userOrgIDs []string, orgMapping
 
 	return result, nil
 }
+
+// ========== 单个事件统计内部方法 ==========
+
+// getSingleDurationStats 查询单个事件配置的处理时长统计（内部方法）
+func (m *statsManager) getSingleDurationStats(ctx context.Context, req *core.StatsCriteria) (*core.DurationStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	// 1. 尝试从缓存获取
+	cached, err := m.getCachedDurationStats(ctx, req)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 2. 加载事件配置（含字段）
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 3. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 4. 计算组织权限（UserOrgIDs → RemoteOrgValues）
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 构建SQL
+	query, args := buildDurationStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+
+	// 6. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 7. 执行查询
+	var stats core.DurationStats
+	err = remoteDB.QueryRowCtx(ctx, &stats, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询处理时长统计失败: %w", err)
+	}
+
+	// 8. 写入缓存
+	_ = m.setCachedDurationStats(ctx, req, &stats)
+
+	return &stats, nil
+}
+
+// getSingleStatusStats 查询单个事件配置的状态统计（内部方法）
+func (m *statsManager) getSingleStatusStats(ctx context.Context, req *core.StatsCriteria) (*core.StatusStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	// 1. 尝试从缓存获取
+	cached, err := m.getCachedStatusStats(ctx, req)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 2. 加载事件配置
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 3. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 4. 计算组织权限
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 构建SQL
+	query, args := buildStatusStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+
+	// 6. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 7. 执行查询
+	type statusRow struct {
+		Status string `db:"slp_status"`
+		Count  int64  `db:"count"`
+	}
+	var rows []*statusRow
+	err = remoteDB.QueryRowsCtx(ctx, &rows, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询状态统计失败: %w", err)
+	}
+
+	// 8. 处理结果（状态翻译 + 计算占比）
+	statusCounts := make([]*core.StatusCount, 0, len(rows))
+	var total int64 = 0
+	for _, row := range rows {
+		total += row.Count
+	}
+
+	for _, row := range rows {
+		percentage := float64(0)
+		if total > 0 {
+			percentage = float64(row.Count) / float64(total) * 100
+		}
+
+		statusCounts = append(statusCounts, &core.StatusCount{
+			Status:     core.TranslateStatus(row.Status), // 翻译为中文
+			StatusKey:  row.Status,                       // 保留英文key
+			Count:      row.Count,
+			Percentage: percentage,
+		})
+	}
+
+	stats := &core.StatusStats{
+		StatusCounts: statusCounts,
+		Total:        total,
+	}
+
+	// 9. 写入缓存
+	_ = m.setCachedStatusStats(ctx, req, stats)
+
+	return stats, nil
+}
+
+// getSingleTrendStats 查询单个事件配置的趋势统计（内部方法）
+func (m *statsManager) getSingleTrendStats(ctx context.Context, req *core.StatsCriteria) (*core.TrendStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	// 1. 尝试从缓存获取
+	cached, err := m.getCachedTrendStats(ctx, req)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 2. 加载事件配置
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 3. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 4. 计算组织权限
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 构建SQL
+	query, args := buildTrendStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+
+	// 6. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 7. 执行查询
+	type trendRow struct {
+		Date           sql.NullString `db:"date"` // 使用NullString防止NULL值
+		TotalCount     int64          `db:"total_count"`
+		CompletedCount int64          `db:"completed_count"`
+	}
+	var rows []*trendRow
+	err = remoteDB.QueryRowsCtx(ctx, &rows, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询趋势统计失败: %w", err)
+	}
+
+	// 8. 处理结果（计算完成率）
+	timePoints := make([]*core.TrendPoint, 0, len(rows))
+	for _, row := range rows {
+		completionRate := float64(0)
+		if row.TotalCount > 0 {
+			completionRate = float64(row.CompletedCount) / float64(row.TotalCount) * 100
+		}
+
+		timePoints = append(timePoints, &core.TrendPoint{
+			Date:           row.Date.String, // 如果为NULL则为空字符串
+			TotalCount:     row.TotalCount,
+			CompletedCount: row.CompletedCount,
+			CompletionRate: completionRate,
+		})
+	}
+
+	stats := &core.TrendStats{
+		TimePoints: timePoints,
+	}
+
+	// 9. 写入缓存
+	_ = m.setCachedTrendStats(ctx, req, stats)
+
+	return stats, nil
+}
+
+// getSingleNodeStats 查询单个事件配置的节点统计（内部方法）
+func (m *statsManager) getSingleNodeStats(ctx context.Context, req *core.StatsCriteria) (*core.NodeStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	// 1. 尝试从缓存获取
+	cached, err := m.getCachedNodeStats(ctx, req)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 2. 加载事件配置
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 3. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 4. 计算组织权限
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 构建SQL
+	query, args := buildNodeStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+
+	// 6. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 7. 执行查询
+	type nodeRow struct {
+		VertexID    int             `db:"slp_vertex_id"`
+		VertexName  sql.NullString  `db:"vertex_name"` // 使用NullString防止NULL值
+		Count       int64           `db:"count"`
+		AvgDuration sql.NullFloat64 `db:"avg_duration"` // 使用NullFloat64防止NULL值
+	}
+	var rows []*nodeRow
+	err = remoteDB.QueryRowsCtx(ctx, &rows, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询节点统计失败: %w", err)
+	}
+
+	// 8. 处理结果
+	nodeMetrics := make([]*core.NodeMetric, 0, len(rows))
+	for _, row := range rows {
+		nodeMetrics = append(nodeMetrics, &core.NodeMetric{
+			VertexID:    row.VertexID,
+			VertexName:  row.VertexName.String, // 如果为NULL则为空字符串
+			Count:       row.Count,
+			AvgDuration: row.AvgDuration.Float64, // 如果为NULL则为0.0
+		})
+	}
+
+	stats := &core.NodeStats{
+		NodeMetrics: nodeMetrics,
+	}
+
+	// 9. 写入缓存
+	_ = m.setCachedNodeStats(ctx, req, stats)
+
+	return stats, nil
+}
+
+// getSingleUserStats 查询单个事件配置的处理人统计（内部方法）
+func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCriteria) (*core.UserStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	// 1. 尝试从缓存获取
+	cached, err := m.getCachedUserStats(ctx, req)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 2. 加载事件配置
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 3. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 4. 计算组织权限
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 构建SQL
+	query, args := buildUserStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+
+	// 6. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 7. 执行查询
+	type userRow struct {
+		UserID string `db:"slp_user_id"`
+		Count  int64  `db:"count"`
+	}
+	var rows []*userRow
+	err = remoteDB.QueryRowsCtx(ctx, &rows, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询处理人统计失败: %w", err)
+	}
+
+	// 8. 提取用户ID列表
+	userIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		userIDs = append(userIDs, row.UserID)
+	}
+
+	// 9. 批量查询用户名（复用现有逻辑）
+	userNames, err := m.batchGetUserNames(ctx, remoteDB, req.TenantID, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("批量查询用户名失败: %w", err)
+	}
+
+	// 10. 处理结果（添加排名和用户名）
+	userMetrics := make([]*core.UserMetric, 0, len(rows))
+	for i, row := range rows {
+		userName := userNames[row.UserID]
+		if userName == "" {
+			userName = row.UserID // 如果查不到用户名，显示用户ID
+		}
+
+		userMetrics = append(userMetrics, &core.UserMetric{
+			UserID:   row.UserID,
+			UserName: userName,
+			Count:    row.Count,
+			Rank:     i + 1, // 排名从1开始
+		})
+	}
+
+	stats := &core.UserStats{
+		UserMetrics: userMetrics,
+		Total:       int64(len(userMetrics)),
+	}
+
+	// 11. 写入缓存
+	_ = m.setCachedUserStats(ctx, req, stats)
+
+	return stats, nil
+}
+
+// getSingleOrgStats 查询单个事件配置的组织统计（内部方法）
+func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsCriteria) (*core.OrgStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	// 1. 尝试从缓存获取
+	cached, err := m.getCachedOrgStats(ctx, req)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 2. 加载事件配置
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 3. 检查是否配置了组织字段
+	if eventConfigWithFields.EventConfig.OrgFieldName == nil {
+		return nil, fmt.Errorf("该事件未配置组织字段，无法进行组织统计")
+	}
+
+	// 4. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 5. 计算组织权限
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 6. 构建SQL
+	query, args := buildOrgStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+	if query == "" {
+		return nil, fmt.Errorf("构建组织统计SQL失败")
+	}
+
+	// 7. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 8. 执行查询
+	type orgRow struct {
+		OrgValue    string          `db:"org_value"`
+		Count       int64           `db:"count"`
+		AvgDuration sql.NullFloat64 `db:"avg_duration"` // 使用NullFloat64防止NULL值
+	}
+	var rows []*orgRow
+	err = remoteDB.QueryRowsCtx(ctx, &rows, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询组织统计失败: %w", err)
+	}
+
+	// 9. 处理结果
+	orgMetrics := make([]*core.OrgMetric, 0, len(rows))
+	for _, row := range rows {
+		orgMetrics = append(orgMetrics, &core.OrgMetric{
+			OrgValue:    row.OrgValue,
+			Count:       row.Count,
+			AvgDuration: row.AvgDuration.Float64, // 如果为NULL则为0.0
+		})
+	}
+
+	stats := &core.OrgStats{
+		OrgMetrics: orgMetrics,
+	}
+
+	// 10. 写入缓存
+	_ = m.setCachedOrgStats(ctx, req, stats)
+
+	return stats, nil
+}
+
+// getSinglePendingStats 查询单个事件配置的待处理统计（内部方法，实时查询）
+func (m *statsManager) getSinglePendingStats(ctx context.Context, req *core.StatsCriteria) (*core.PendingStats, error) {
+	// 注意：此时req.EventConfigIDs应该只有1个元素
+
+	eventConfigID := req.EventConfigIDs[0]
+
+	// 1. 加载事件配置
+	eventConfigWithFields, err := m.getEventConfig(ctx, eventConfigID, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载事件配置失败: %w", err)
+	}
+
+	// 2. 加载组织映射
+	orgMappings, err := m.listOrgMappings(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("加载组织映射失败: %w", err)
+	}
+
+	// 3. 计算组织权限
+	allowedOrgValues, err := m.calculateAllowedOrgValues(req.UserOrgIDs, orgMappings)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 构建SQL（现在返回包含事件信息的结果，支持日期范围筛选）
+	query, args := buildPendingStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
+
+	// 5. 获取远程数据库连接
+	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
+	}
+
+	// 6. 执行查询（返回单个事件的统计）
+	var eventStats core.EventPendingStats
+	err = remoteDB.QueryRowCtx(ctx, &eventStats, query, args...)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询待处理事件统计失败: %w", err)
+	}
+
+	// 7. 封装到PendingStats结构
+	stats := &core.PendingStats{
+		EventStats:      []*core.EventPendingStats{&eventStats},
+		TotalPending:    eventStats.PendingCount,
+		TotalProcessing: eventStats.ProcessingCount,
+		Total:           eventStats.Total,
+	}
+
+	return stats, nil
+}
