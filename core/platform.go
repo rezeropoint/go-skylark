@@ -13,6 +13,13 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
+const (
+	// CachePlatformConfigKeyPrefix 平台配置缓存键前缀
+	// key格式: skylark:platform_config:{tenant_id}
+	// TTL: 30分钟（配置极少变更）
+	CachePlatformConfigKeyPrefix = "skylark:platform_config:"
+)
+
 // GetRemoteDBFunc 获取远程 Skylark 数据库连接的函数类型
 // 用途：供 query、event 等 Manager 获取远程数据库连接，实现 Manager 之间解耦
 // 参数：

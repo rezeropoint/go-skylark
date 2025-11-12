@@ -55,6 +55,6 @@ type Manager interface {
 // 参数：
 //   - db: 本地数据库连接（sqlx.SqlConn）
 //   - cache: 缓存接口（用于缓存）
-func NewManager(db sqlx.SqlConn, cache core.CacheInterface) (Manager, error) {
-	return newMappingManager(db, cache)
+func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface) (Manager, error) {
+	return newMappingManager(config, db, cache)
 }

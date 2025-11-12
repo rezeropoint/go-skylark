@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	"github.com/rezeropoint/go-skylark/core"
 	"github.com/rezeropoint/go-skylark/internal/cache"
@@ -45,7 +46,15 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	cache := cache.NewSkylarkCache(redisClient, config.Cache)
 
 	// 1. 初始化平台管理器（核心依赖，最先初始化）
-	platformMgr, err := platform.NewManager(platform.Config{}, db)
+	platformConfig := platform.Config{}
+	if config.Platform != nil {
+		platformConfig = *config.Platform
+	}
+	// 设置默认值
+	if platformConfig.PlatformConfigCacheTTL == 0 {
+		platformConfig.PlatformConfigCacheTTL = 30 * time.Minute
+	}
+	platformMgr, err := platform.NewManager(platformConfig, db, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -74,13 +83,32 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 5. 初始化组织映射管理器（业务字段值映射）
-	mappingMgr, err := mapping.NewManager(db, cache)
+	mappingConfig := mapping.Config{}
+	if config.Mapping != nil {
+		mappingConfig = *config.Mapping
+	}
+	// 设置默认值
+	if mappingConfig.OrgMappingCacheTTL == 0 {
+		mappingConfig.OrgMappingCacheTTL = 7 * 24 * time.Hour
+	}
+	mappingMgr, err := mapping.NewManager(mappingConfig, db, cache)
 	if err != nil {
 		return nil, err
 	}
 
 	// 6. 初始化事件配置管理器（注入 platform.GetRemoteDB）
-	eventMgr, err := event.NewManager(db, platformMgr.GetRemoteDB)
+	eventConfig := event.Config{}
+	if config.Event != nil {
+		eventConfig = *config.Event
+	}
+	// 设置默认值
+	if eventConfig.EventConfigCacheTTL == 0 {
+		eventConfig.EventConfigCacheTTL = 10 * time.Minute
+	}
+	if eventConfig.EventConfigListCacheTTL == 0 {
+		eventConfig.EventConfigListCacheTTL = 5 * time.Minute
+	}
+	eventMgr, err := event.NewManager(eventConfig, db, cache, platformMgr.GetRemoteDB)
 	if err != nil {
 		return nil, err
 	}

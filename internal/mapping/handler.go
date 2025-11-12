@@ -15,13 +15,15 @@ import (
 
 // mappingManager 组织映射管理器实现
 type mappingManager struct {
+	config Config              // 配置参数
 	dbConn sqlx.SqlConn        // 本地数据库连接
 	cache  core.CacheInterface // 缓存接口（统一缓存管理）
 }
 
 // newMappingManager 创建组织映射管理器
-func newMappingManager(db sqlx.SqlConn, cache core.CacheInterface) (*mappingManager, error) {
+func newMappingManager(config Config, db sqlx.SqlConn, cache core.CacheInterface) (*mappingManager, error) {
 	manager := &mappingManager{
+		config: config,
 		dbConn: db,
 		cache:  cache,
 	}
@@ -104,7 +106,8 @@ func (m *mappingManager) CreateOrgMapping(ctx context.Context, mapping *core.Org
 
 		// 更新缓存（单个映射）
 		if m.cache != nil {
-			if err := m.cache.SetOrgMapping(ctx, &createdMapping, int(30*24*60*60)); err != nil {
+			ttl := int(m.config.OrgMappingCacheTTL.Seconds())
+			if err := m.cache.SetOrgMapping(ctx, &createdMapping, ttl); err != nil {
 				logx.WithContext(ctx).Error("缓存组织映射失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载
@@ -168,7 +171,8 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 
 	// 3. 更新缓存
 	if m.cache != nil {
-		if err := m.cache.SetOrgMapping(ctx, &mapping, int(30*24*60*60)); err != nil {
+		ttl := int(m.config.OrgMappingCacheTTL.Seconds())
+		if err := m.cache.SetOrgMapping(ctx, &mapping, ttl); err != nil {
 			logx.WithContext(ctx).Error("缓存组织映射失败（非致命错误）:", err)
 		}
 	}
@@ -216,7 +220,8 @@ func (m *mappingManager) ListOrgMappings(ctx context.Context, tenantID string) (
 
 	// 3. 更新缓存
 	if m.cache != nil {
-		if err := m.cache.SetOrgMappingList(ctx, tenantID, mappings, int(30*24*60*60)); err != nil {
+		ttl := int(m.config.OrgMappingCacheTTL.Seconds())
+		if err := m.cache.SetOrgMappingList(ctx, tenantID, mappings, ttl); err != nil {
 			logx.WithContext(ctx).Error("缓存组织映射列表失败（非致命错误）:", err)
 		}
 	}
@@ -315,7 +320,8 @@ func (m *mappingManager) UpdateOrgMapping(ctx context.Context, mapping *core.Org
 		// 更新缓存
 		if m.cache != nil {
 			// 更新单个映射缓存
-			if err := m.cache.SetOrgMapping(ctx, &updatedMapping, int(30*24*60*60)); err != nil {
+			ttl := int(m.config.OrgMappingCacheTTL.Seconds())
+			if err := m.cache.SetOrgMapping(ctx, &updatedMapping, ttl); err != nil {
 				logx.WithContext(ctx).Error("更新组织映射缓存失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载

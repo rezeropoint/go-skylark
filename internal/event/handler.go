@@ -14,18 +14,22 @@ import (
 
 // eventManager 事件+字段配置管理器
 type eventManager struct {
+	config      Config               // 配置参数
 	dbConn      sqlx.SqlConn         // 本地数据库连接
+	cache       core.CacheInterface  // 缓存接口（可选）
 	getRemoteDB core.GetRemoteDBFunc // 获取远程数据库连接的函数（用于验证flow_id、字段名等）
 }
 
 // newEventManager 创建事件+字段配置管理器
-func newEventManager(db sqlx.SqlConn, getRemoteDB core.GetRemoteDBFunc) (*eventManager, error) {
+func newEventManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getRemoteDB core.GetRemoteDBFunc) (*eventManager, error) {
 	if getRemoteDB == nil {
 		return nil, fmt.Errorf("getRemoteDB 函数不能为空")
 	}
 
 	manager := &eventManager{
+		config:      config,
 		dbConn:      db,
+		cache:       cache,
 		getRemoteDB: getRemoteDB,
 	}
 
@@ -205,6 +209,19 @@ func (m *eventManager) UpdateWithFields(ctx context.Context, update *core.EventU
 		return err
 	}
 
+	// 清除缓存
+	if m.cache != nil {
+		// 清除单个事件配置缓存
+		_ = m.cache.DeleteEventConfig(ctx, update.EventConfig.TenantID, update.EventConfig.ID)
+
+		// 清除所有相关的列表缓存
+		trueVal := true
+		falseVal := false
+		_ = m.cache.DeleteEventConfigList(ctx, update.EventConfig.TenantID, &trueVal)  // enabled=true
+		_ = m.cache.DeleteEventConfigList(ctx, update.EventConfig.TenantID, &falseVal) // enabled=false
+		_ = m.cache.DeleteEventConfigList(ctx, update.EventConfig.TenantID, nil)       // enabled=all
+	}
+
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "event_manager"),
 		logx.Field("operation", "update_with_fields"),
@@ -218,28 +235,65 @@ func (m *eventManager) UpdateWithFields(ctx context.Context, update *core.EventU
 
 // GetWithFields 查询事件配置（包含字段）
 func (m *eventManager) GetWithFields(ctx context.Context, id, tenantID string) (*core.EventAggregate, error) {
-	// 1. 查询事件配置
+	// 1. 尝试从缓存获取
+	if m.cache != nil {
+		cached, err := m.cache.GetEventConfig(ctx, tenantID, id)
+		if err == nil {
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "event_manager"),
+				logx.Field("operation", "get_with_fields"),
+				logx.Field("event_id", id),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("cache_hit", true),
+			).Info("事件配置缓存命中")
+			return cached, nil
+		}
+	}
+
+	// 2. 缓存未命中，查询事件配置
 	event, err := m.get(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 查询字段配置列表
+	// 3. 查询字段配置列表
 	fields, err := m.listFieldsByEventID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 组装返回
-	return &core.EventAggregate{
+	// 4. 组装返回
+	result := &core.EventAggregate{
 		EventConfig: *event,
 		Fields:      fields,
-	}, nil
+	}
+
+	// 5. 写入缓存
+	if m.cache != nil {
+		ttl := int(m.config.EventConfigCacheTTL.Seconds())
+		_ = m.cache.SetEventConfig(ctx, result, ttl)
+	}
+
+	return result, nil
 }
 
 // ListWithFields 查询事件配置列表（包含字段）
 func (m *eventManager) ListWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventAggregate, error) {
-	// 1. 查询事件配置列表
+	// 1. 尝试从缓存获取
+	if m.cache != nil {
+		cached, err := m.cache.GetEventConfigList(ctx, tenantID, enabled)
+		if err == nil {
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "event_manager"),
+				logx.Field("operation", "list_with_fields"),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("cache_hit", true),
+			).Info("事件配置列表缓存命中")
+			return cached, nil
+		}
+	}
+
+	// 2. 缓存未命中，查询事件配置列表
 	events, err := m.list(ctx, tenantID, enabled)
 	if err != nil {
 		return nil, err
@@ -249,19 +303,19 @@ func (m *eventManager) ListWithFields(ctx context.Context, tenantID string, enab
 		return []*core.EventAggregate{}, nil
 	}
 
-	// 2. 提取所有event_config_id
+	// 3. 提取所有event_config_id
 	eventIDs := make([]string, len(events))
 	for i, event := range events {
 		eventIDs[i] = event.ID
 	}
 
-	// 3. 批量查询所有字段配置（一次SQL查询，性能优化）
+	// 4. 批量查询所有字段配置（一次SQL查询，性能优化）
 	fieldsMap, err := m.listFieldsByEventIDs(ctx, eventIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. 组装返回结果
+	// 5. 组装返回结果
 	result := make([]*core.EventAggregate, len(events))
 	for i, event := range events {
 		fields, exists := fieldsMap[event.ID]
@@ -272,6 +326,12 @@ func (m *eventManager) ListWithFields(ctx context.Context, tenantID string, enab
 			EventConfig: *event,
 			Fields:      fields,
 		}
+	}
+
+	// 6. 写入缓存
+	if m.cache != nil {
+		ttl := int(m.config.EventConfigListCacheTTL.Seconds())
+		_ = m.cache.SetEventConfigList(ctx, tenantID, enabled, result, ttl)
 	}
 
 	return result, nil
@@ -299,6 +359,19 @@ func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
 	}
 
 	// 注意：字段配置会通过数据库外键级联删除（ON DELETE CASCADE）
+
+	// 清除缓存
+	if m.cache != nil {
+		// 清除单个事件配置缓存
+		_ = m.cache.DeleteEventConfig(ctx, tenantID, id)
+
+		// 清除所有相关的列表缓存
+		trueVal := true
+		falseVal := false
+		_ = m.cache.DeleteEventConfigList(ctx, tenantID, &trueVal)  // enabled=true
+		_ = m.cache.DeleteEventConfigList(ctx, tenantID, &falseVal) // enabled=false
+		_ = m.cache.DeleteEventConfigList(ctx, tenantID, nil)       // enabled=all
+	}
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "event_manager"),

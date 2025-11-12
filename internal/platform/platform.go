@@ -61,7 +61,9 @@ type Manager interface {
 
 // NewManager 创建平台配置管理器
 // 参数：
+//   - config: 配置参数
 //   - db: 本地数据库连接（sqlx.SqlConn）
-func NewManager(config Config, db sqlx.SqlConn) (Manager, error) {
-	return newPlatformManager(config, db)
+//   - cache: 缓存接口（可选，nil则不使用缓存）
+func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface) (Manager, error) {
+	return newPlatformManager(config, db, cache)
 }

@@ -1,7 +1,11 @@
 package platform
 
-// 注意：平台配置管理器不需要独立的 Config 结构
-// 数据库连接由引擎层统一管理并通过 NewManager 传入
+import "time"
 
+// Config 平台配置管理器配置
 type Config struct {
+	// PlatformConfigCacheTTL 平台配置缓存时间
+	// key格式: skylark:platform_config:{tenant_id}
+	// 默认值: 30分钟
+	PlatformConfigCacheTTL time.Duration
 }

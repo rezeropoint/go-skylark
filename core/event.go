@@ -22,6 +22,16 @@ const (
 	RemoteUserIDField     = "slp_user_id"       // 处理人ID字段
 	RemoteCreatedAtField  = "slp_created_at"    // 创建时间字段
 	RemoteUpdatedAtField  = "slp_updated_at"    // 更新时间字段
+
+	// CacheEventConfigKeyPrefix 事件配置缓存键前缀
+	// key格式: skylark:event_config:{tenant_id}:{id}
+	// TTL: 10分钟（配置偶尔变更）
+	CacheEventConfigKeyPrefix = "skylark:event_config:"
+
+	// CacheEventConfigListKeyPrefix 事件配置列表缓存键前缀
+	// key格式: skylark:event_list:{tenant_id}:enabled={true|false|all}
+	// TTL: 5分钟（列表实时性要求较高）
+	CacheEventConfigListKeyPrefix = "skylark:event_list:"
 )
 
 // EventConfig 事件配置领域模型（纯领域模型）

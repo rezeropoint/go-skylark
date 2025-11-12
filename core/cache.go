@@ -56,4 +56,17 @@ type CacheInterface interface {
 	// 统计结果缓存（stats 模块）
 	GetStats(ctx context.Context, key string) (string, error)
 	SetStats(ctx context.Context, key string, jsonData string, ttl int) error
+
+	// 平台配置缓存（platform 模块）
+	GetPlatformConfig(ctx context.Context, tenantID string) (*PlatformConfig, error)
+	SetPlatformConfig(ctx context.Context, config *PlatformConfig, ttl int) error
+	DeletePlatformConfig(ctx context.Context, tenantID string) error
+
+	// 事件配置缓存（event 模块）
+	GetEventConfig(ctx context.Context, tenantID, id string) (*EventAggregate, error)
+	SetEventConfig(ctx context.Context, config *EventAggregate, ttl int) error
+	DeleteEventConfig(ctx context.Context, tenantID, id string) error
+	GetEventConfigList(ctx context.Context, tenantID string, enabled *bool) ([]*EventAggregate, error)
+	SetEventConfigList(ctx context.Context, tenantID string, enabled *bool, configs []*EventAggregate, ttl int) error
+	DeleteEventConfigList(ctx context.Context, tenantID string, enabled *bool) error
 }

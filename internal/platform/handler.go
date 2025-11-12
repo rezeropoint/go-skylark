@@ -17,15 +17,17 @@ import (
 type platformManager struct {
 	config   Config
 	dbConn   sqlx.SqlConn            // 本地数据库连接
+	cache    core.CacheInterface     // 缓存接口（可选）
 	connPool map[string]sqlx.SqlConn // 远程数据库连接池（key: tenantID）
 	mu       sync.RWMutex            // 连接池并发保护
 }
 
 // newPlatformManager 创建平台配置管理器
-func newPlatformManager(config Config, db sqlx.SqlConn) (*platformManager, error) {
+func newPlatformManager(config Config, db sqlx.SqlConn, cache core.CacheInterface) (*platformManager, error) {
 	manager := &platformManager{
 		config: config,
 		dbConn: db,
+		cache:  cache,
 	}
 
 	// 初始化连接池
@@ -103,6 +105,21 @@ func (m *platformManager) Create(ctx context.Context, cfg *core.PlatformConfig) 
 
 // Get 获取平台配置（根据租户ID查询）
 func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.PlatformConfig, error) {
+	// 1. 尝试从缓存获取
+	if m.cache != nil {
+		cached, err := m.cache.GetPlatformConfig(ctx, tenantID)
+		if err == nil {
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "platform_manager"),
+				logx.Field("operation", "get"),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("cache_hit", true),
+			).Info("平台配置缓存命中")
+			return cached, nil
+		}
+	}
+
+	// 2. 缓存未命中，查询数据库
 	query := `
 		SELECT id, tenant_id, host, port, database, username, password, namespace_id,
 		       api_base_url, api_token, created_by, updated_by, created_at, updated_at
@@ -119,7 +136,15 @@ func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.Platf
 		return nil, fmt.Errorf("查询平台配置失败: %w", err)
 	}
 
-	return model.ToDomain(), nil
+	config := model.ToDomain()
+
+	// 3. 写入缓存
+	if m.cache != nil {
+		ttl := int(m.config.PlatformConfigCacheTTL.Seconds())
+		_ = m.cache.SetPlatformConfig(ctx, config, ttl)
+	}
+
+	return config, nil
 }
 
 // GetAPIConfig 获取Skylark API调用配置
@@ -215,6 +240,11 @@ func (m *platformManager) Update(ctx context.Context, cfg *core.PlatformConfig) 
 	delete(m.connPool, cfg.TenantID)
 	m.mu.Unlock()
 
+	// 8. 清除平台配置缓存
+	if m.cache != nil {
+		_ = m.cache.DeletePlatformConfig(ctx, cfg.TenantID)
+	}
+
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "platform_manager"),
 		logx.Field("operation", "update"),
@@ -276,6 +306,11 @@ func (m *platformManager) Delete(ctx context.Context, tenantID string) error {
 	m.mu.Lock()
 	delete(m.connPool, tenantID)
 	m.mu.Unlock()
+
+	// 6. 清除平台配置缓存
+	if m.cache != nil {
+		_ = m.cache.DeletePlatformConfig(ctx, tenantID)
+	}
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "platform_manager"),

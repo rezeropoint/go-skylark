@@ -50,8 +50,10 @@ type Manager interface {
 
 // NewManager 创建事件+字段配置管理器
 // 参数：
+//   - config: 配置参数（包含缓存TTL等）
 //   - db: 本地数据库连接（sqlx.SqlConn）
+//   - cache: 缓存接口（可选，nil则不使用缓存）
 //   - getRemoteDB: 获取远程数据库连接的函数（用于验证flow_id、字段名等）
-func NewManager(db sqlx.SqlConn, getRemoteDB core.GetRemoteDBFunc) (Manager, error) {
-	return newEventManager(db, getRemoteDB)
+func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getRemoteDB core.GetRemoteDBFunc) (Manager, error) {
+	return newEventManager(config, db, cache, getRemoteDB)
 }
