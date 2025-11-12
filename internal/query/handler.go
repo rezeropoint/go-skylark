@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/rezeropoint/go-skylark/core"
-
-	"github.com/lib/pq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
@@ -398,44 +396,7 @@ func (m *queryManager) GetEventDetail(ctx context.Context, req *core.DetailReque
 
 // batchGetUserNames 批量查询用户名（优先从缓存获取）
 func (m *queryManager) batchGetUserNames(ctx context.Context, remoteDB sqlx.SqlConn, tenantID string, userIDs []string) (map[string]string, error) {
-	if len(userIDs) == 0 {
-		return make(map[string]string), nil
-	}
-
-	userNames := make(map[string]string, len(userIDs))
-	uncachedIDs := []string{}
-
-	// 1. 尝试从缓存获取
-	for _, userID := range userIDs {
-		val, err := m.cache.GetUserName(ctx, tenantID, userID)
-		if err == nil && val != "" {
-			userNames[userID] = val
-		} else {
-			uncachedIDs = append(uncachedIDs, userID)
-		}
-	}
-
-	// 2. 查询未命中的用户名（从远程 users 表）
-	if len(uncachedIDs) > 0 {
-		type userRow struct {
-			ID   string `db:"id"`
-			Name string `db:"name"`
-		}
-
-		query := "SELECT id, name FROM users WHERE id = ANY($1)"
-		var users []*userRow
-		err := remoteDB.QueryRowsCtx(ctx, &users, query, pq.Array(uncachedIDs))
-		if err != nil && err != sql.ErrNoRows {
-			return nil, fmt.Errorf("批量查询用户名失败: %w", err)
-		}
-
-		for _, user := range users {
-			userNames[user.ID] = user.Name
-
-			// 3. 写入缓存
-			_ = m.cache.SetUserName(ctx, tenantID, user.ID, user.Name, int(m.config.UserNameCacheTTL.Seconds()))
-		}
-	}
-
-	return userNames, nil
+	// 使用公共方法（internal/cache/users.go）
+	ttl := int(m.config.UserNameCacheTTL.Seconds())
+	return m.cache.BatchGetUserNames(ctx, remoteDB, tenantID, userIDs, ttl)
 }

@@ -2,10 +2,13 @@ package cache
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strconv"
 
+	"github.com/lib/pq"
 	"github.com/rezeropoint/go-skylark/core"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 // GetUserName 从缓存获取用户名
@@ -76,4 +79,74 @@ func (c *SkylarkCache) DeleteUserIDMappingReverse(ctx context.Context, tenantID 
 	key := fmt.Sprintf("%s:%s:%d", core.CacheUserIDMappingReverseKeyPrefix, tenantID, remoteUserID)
 	_, err := c.redisClient.DelCtx(ctx, key)
 	return err
+}
+
+// BatchGetUserNames 批量查询用户名（优先从缓存获取）
+// 说明：
+//   - 先从 Redis 缓存获取
+//   - 缓存未命中时查询远程数据库 users 表
+//   - 自动回写缓存
+//
+// 参数：
+//   - ctx: 上下文
+//   - remoteDB: 远程数据库连接（Skylark PostgreSQL）
+//   - tenantID: 租户ID
+//   - userIDs: 用户ID列表
+//   - ttl: 缓存TTL（秒）
+//
+// 返回：
+//   - map[userID]userName: 用户名映射表
+//   - error: 错误信息
+func (f *SkylarkCache) BatchGetUserNames(
+	ctx context.Context,
+	remoteDB sqlx.SqlConn,
+	tenantID string,
+	userIDs []string,
+	ttl int,
+) (map[string]string, error) {
+	if len(userIDs) == 0 {
+		return make(map[string]string), nil
+	}
+
+	userNames := make(map[string]string, len(userIDs))
+	uncachedIDs := []string{}
+
+	// 1. 尝试从缓存获取
+	for _, userID := range userIDs {
+		val, err := f.GetUserName(ctx, tenantID, userID)
+		if err == nil && val != "" {
+			userNames[userID] = val
+			f.metrics.UserNameHit.Add(1) // 缓存命中
+		} else {
+			uncachedIDs = append(uncachedIDs, userID)
+			f.metrics.UserNameMiss.Add(1) // 缓存未命中
+		}
+	}
+
+	// 2. 查询未命中的用户名（从远程 users 表）
+	if len(uncachedIDs) > 0 {
+		type userRow struct {
+			ID   string `db:"id"`
+			Name string `db:"name"`
+		}
+
+		query := "SELECT id, name FROM users WHERE id = ANY($1)"
+		var users []*userRow
+		err := remoteDB.QueryRowsCtx(ctx, &users, query, pq.Array(uncachedIDs))
+		if err != nil && err != sql.ErrNoRows {
+			return nil, fmt.Errorf("批量查询用户名失败: %w", err)
+		}
+
+		// 添加随机偏移防止缓存雪崩
+		ttlWithJitter := addJitter(ttl)
+
+		for _, user := range users {
+			userNames[user.ID] = user.Name
+
+			// 3. 写入缓存
+			_ = f.SetUserName(ctx, tenantID, user.ID, user.Name, ttlWithJitter)
+		}
+	}
+
+	return userNames, nil
 }
