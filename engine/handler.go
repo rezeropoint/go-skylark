@@ -72,7 +72,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 4. 初始化流程和表单管理器（依赖 Platform + User）
-	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs)
+	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, platformMgr.GetRemoteDB)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +191,47 @@ func (e *skylarkEngine) GetFlowJourneyDetail(ctx context.Context, tenantID strin
 // GetFlowDetail 获取流程详情（包含字段、节点、边信息）
 func (e *skylarkEngine) GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error) {
 	return e.flows.GetFlowDetail(ctx, tenantID, flowID)
+}
+
+// GetUserAssignments 获取用户处理的任务列表
+func (e *skylarkEngine) GetUserAssignments(
+	ctx context.Context,
+	tenantID string,
+	localUserID string,
+	category string,
+	page, pageSize int,
+) ([]*core.Assignment, int, error) {
+	// 1. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := e.user.GetRemoteUserIDs(ctx, tenantID, []string{localUserID})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(remoteUserIDs) == 0 {
+		return nil, 0, core.ErrUserMappingNotFound
+	}
+
+	// 2. 调用 flows manager 获取任务列表
+	return e.flows.GetUserAssignments(ctx, tenantID, remoteUserIDs[0], category, page, pageSize)
+}
+
+// GetProposedJourneys 获取用户发起的流程列表
+func (e *skylarkEngine) GetProposedJourneys(
+	ctx context.Context,
+	tenantID string,
+	localUserID string,
+	page, pageSize int,
+) ([]*core.Journey, int, error) {
+	// 1. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := e.user.GetRemoteUserIDs(ctx, tenantID, []string{localUserID})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(remoteUserIDs) == 0 {
+		return nil, 0, core.ErrUserMappingNotFound
+	}
+
+	// 2. 调用 flows manager 获取流程列表
+	return e.flows.GetProposedJourneys(ctx, tenantID, remoteUserIDs[0], page, pageSize)
 }
 
 // Close 关闭引擎，释放资源（尤其是 platform 管理的远程数据库连接池）

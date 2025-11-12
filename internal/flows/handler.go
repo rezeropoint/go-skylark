@@ -16,13 +16,15 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
+	config            *Config                    // 配置
 	cache             core.CacheInterface
 	getPlatformConfig core.GetPlatformConfigFunc // 获取平台配置的函数（依赖注入）
 	getRemoteUserIDs  core.GetRemoteUserIDsFunc  // 获取远程用户ID的函数（依赖注入）
+	getRemoteDB       core.GetRemoteDBFunc       // 获取远程数据库连接的函数（依赖注入，用于性能优化）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (*skylarkFlowRegistry, error) {
+func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, getRemoteDB core.GetRemoteDBFunc) (*skylarkFlowRegistry, error) {
 	if config == nil {
 		return nil, core.ErrConfigNil
 	}
@@ -35,10 +37,21 @@ func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatfo
 		return nil, fmt.Errorf("getRemoteUserIDs 不能为 nil")
 	}
 
+	if getRemoteDB == nil {
+		return nil, fmt.Errorf("getRemoteDB 不能为 nil")
+	}
+
+	// 设置缓存配置的默认值
+	if config.FlowInfoCacheTTL <= 0 {
+		config.FlowInfoCacheTTL = 3600 // 默认1小时
+	}
+
 	return &skylarkFlowRegistry{
+		config:            config,
 		cache:             cache,
 		getPlatformConfig: getPlatformConfig,
 		getRemoteUserIDs:  getRemoteUserIDs,
+		getRemoteDB:       getRemoteDB,
 	}, nil
 }
 
@@ -476,4 +489,151 @@ func (f *skylarkFlowRegistry) GetFlowDetail(
 
 	// 6. 转换为领域模型并返回
 	return flowDetailResp.ToDomain(), nil
+}
+
+// GetUserAssignments 获取用户处理的任务列表
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - remoteUserID: 远程用户ID（Skylark用户ID）
+//   - category: 任务类别（使用 core.AssignmentCategoryXXX 常量）
+//   - page: 页码（从1开始）
+//   - pageSize: 每页数量
+//
+// 返回:
+//   - []*core.Assignment: 任务列表（已补充 flow_id 和 flow_title）
+//   - int: 总数
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) GetUserAssignments(
+	ctx context.Context,
+	tenantID string,
+	remoteUserID int,
+	category string,
+	page, pageSize int,
+) ([]*core.Assignment, int, error) {
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 2. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/flows/user_assignments.json
+	apiURL := core.BuildUserAssignmentsURL(skylarkAddress)
+
+	// 4. 构建查询参数
+	apiURL = fmt.Sprintf("%s?user_id=%d&category=%s&page=%d&per_page=%d",
+		apiURL, remoteUserID, category, page, pageSize)
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 解析响应
+	var assignmentsResp UserAssignmentsResponse
+	if err := httputils.ReadJSONResponse(resp, &assignmentsResp); err != nil {
+		return nil, 0, err
+	}
+
+	// 7. 转换为领域模型
+	assignments := make([]*core.Assignment, len(assignmentsResp.Assignments))
+	for i, assignmentResp := range assignmentsResp.Assignments {
+		assignments[i] = assignmentResp.ToDomain()
+	}
+
+	// 8. 从响应头获取总数（X-SLP-Total-Count）
+	totalCount := 0
+	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
+		if count, err := strconv.Atoi(totalStr); err == nil {
+			totalCount = count
+		}
+	}
+
+	// 9. 性能优化：自动补充 flow_id 和 flow_title
+	if err := f.enrichAssignmentsWithFlowInfo(ctx, tenantID, assignments); err != nil {
+		// 容错处理：enrichment 失败不影响主流程，只记录错误
+		// 用户仍可获得完整的 assignment 列表，只是缺少 flow 信息
+		// （前端可降级显示或额外查询）
+	}
+
+	// 10. 返回结果（已补充 flow_id 和 flow_title）
+	return assignments, totalCount, nil
+}
+
+// GetProposedJourneys 获取用户发起的流程列表
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - remoteUserID: 远程用户ID（Skylark用户ID）
+//   - page: 页码（从1开始）
+//   - pageSize: 每页数量
+//
+// 返回:
+//   - []*core.Journey: 流程列表
+//   - int: 总数
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) GetProposedJourneys(
+	ctx context.Context,
+	tenantID string,
+	remoteUserID int,
+	page, pageSize int,
+) ([]*core.Journey, int, error) {
+	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 2. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/flows/proposed_journeys.json
+	apiURL := core.BuildProposedJourneysURL(skylarkAddress)
+
+	// 4. 构建查询参数
+	apiURL = fmt.Sprintf("%s?user_id=%d&page=%d&per_page=%d",
+		apiURL, remoteUserID, page, pageSize)
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 解析响应
+	var journeysResp ProposedJourneysResponse
+	if err := httputils.ReadJSONResponse(resp, &journeysResp); err != nil {
+		return nil, 0, err
+	}
+
+	// 7. 转换为领域模型
+	journeys := make([]*core.Journey, len(journeysResp.Journeys))
+	for i, journeyResp := range journeysResp.Journeys {
+		journeys[i] = journeyResp.ToDomain()
+	}
+
+	// 8. 从响应头获取总数（X-SLP-Total-Count）
+	totalCount := 0
+	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
+		if count, err := strconv.Atoi(totalStr); err == nil {
+			totalCount = count
+		}
+	}
+
+	// 9. 返回结果
+	return journeys, totalCount, nil
 }

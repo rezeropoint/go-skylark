@@ -329,3 +329,15 @@ func (e *FlowEdgeResponse) ToDomain() *core.FlowEdge {
 		ToVertexID:   e.ToVertexID,
 	}
 }
+
+// UserAssignmentsResponse Skylark API 返回的用户任务列表结构体
+// 职责：处理 GET /api/v4/yaw/flows/user_assignments.json 响应的 JSON 反序列化
+type UserAssignmentsResponse struct {
+	Assignments []AssignmentResponse `json:"assignments"` // 任务列表（复用已有类型）
+}
+
+// ProposedJourneysResponse Skylark API 返回的用户发起的流程列表结构体
+// 职责：处理 GET /api/v4/yaw/flows/proposed_journeys.json 响应的 JSON 反序列化
+type ProposedJourneysResponse struct {
+	Journeys []JourneyResponse `json:"journeys"` // 流程列表（复用已有类型）
+}

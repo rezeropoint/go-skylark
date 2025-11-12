@@ -19,6 +19,10 @@ const (
 	// 完整格式：skylark:flow_fields:{tenant_id}:{flow_id}
 	CacheFlowFieldsKeyPrefix = "skylark:flow_fields:"
 
+	// CacheFlowInfoKeyPrefix flow 信息缓存键前缀
+	// 完整格式：skylark:flow:{tenant_id}:{flow_id}
+	CacheFlowInfoKeyPrefix = "skylark:flow:"
+
 	// CacheUserNameKeyPrefix 用户名缓存键前缀
 	// 完整格式：skylark:users:{tenant_id}:{user_id}
 	CacheUserNameKeyPrefix = "skylark:users:"

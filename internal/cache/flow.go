@@ -61,3 +61,30 @@ func (f *SkylarkCache) SetFlowFields(ctx context.Context, tenantID string, flowI
 
 	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
 }
+
+// GetFlowInfo 从缓存获取单个 flow 信息
+func (f *SkylarkCache) GetFlowInfo(ctx context.Context, tenantID string, flowID int64) (*core.FlowInfo, error) {
+	key := fmt.Sprintf("%s%s:%d", core.CacheFlowInfoKeyPrefix, tenantID, flowID)
+	val, err := f.redisClient.GetCtx(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	var flowInfo core.FlowInfo
+	if err := json.Unmarshal([]byte(val), &flowInfo); err != nil {
+		return nil, fmt.Errorf("反序列化 flow info 缓存失败: %w", err)
+	}
+
+	return &flowInfo, nil
+}
+
+// SetFlowInfo 缓存单个 flow 信息
+func (f *SkylarkCache) SetFlowInfo(ctx context.Context, tenantID string, flowInfo *core.FlowInfo, ttl int) error {
+	key := fmt.Sprintf("%s%s:%d", core.CacheFlowInfoKeyPrefix, tenantID, flowInfo.ID)
+	data, err := json.Marshal(flowInfo)
+	if err != nil {
+		return fmt.Errorf("序列化 flow info 失败: %w", err)
+	}
+
+	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
+}

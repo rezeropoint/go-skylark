@@ -80,6 +80,33 @@ type SkylarkFlowRegistry interface {
 	//   - *core.FlowDetail: 流程详情（包含字段、节点、边信息）
 	//   - error: 错误信息（如果不存在返回 core.ErrFlowNotFound）
 	GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error)
+
+	// GetUserAssignments 获取用户处理的任务列表
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - remoteUserID: 远程用户ID（Skylark用户ID，由Engine层转换后传入）
+	//   - category: 任务类别（使用 core.AssignmentCategoryXXX 常量）
+	//   - page: 页码（从1开始）
+	//   - pageSize: 每页数量
+	// 返回:
+	//   - []*core.Assignment: 任务列表（已补充 flow_id 和 flow_title）
+	//   - int: 总数
+	//   - error: 错误信息
+	GetUserAssignments(ctx context.Context, tenantID string, remoteUserID int, category string, page, pageSize int) ([]*core.Assignment, int, error)
+
+	// GetProposedJourneys 获取用户发起的流程列表
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - remoteUserID: 远程用户ID（Skylark用户ID，由Engine层转换后传入）
+	//   - page: 页码（从1开始）
+	//   - pageSize: 每页数量
+	// 返回:
+	//   - []*core.Journey: 流程列表
+	//   - int: 总数
+	//   - error: 错误信息
+	GetProposedJourneys(ctx context.Context, tenantID string, remoteUserID int, page, pageSize int) ([]*core.Journey, int, error)
 }
 
 // NewSkylarkFlowRegistry 创建新的Skylark流程注册表实例
@@ -88,6 +115,7 @@ type SkylarkFlowRegistry interface {
 //   - cache: 缓存接口
 //   - getPlatformConfig: 获取平台配置的函数（通过依赖注入）
 //   - getRemoteUserIDs: 获取远程用户ID的函数（通过依赖注入，仅用于 UpdateJourneyStatus）
-func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (SkylarkFlowRegistry, error) {
-	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs)
+//   - getRemoteDB: 获取远程数据库连接的函数（通过依赖注入，用于性能优化）
+func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, getRemoteDB core.GetRemoteDBFunc) (SkylarkFlowRegistry, error) {
+	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs, getRemoteDB)
 }

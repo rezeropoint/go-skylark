@@ -7,12 +7,21 @@ package core
 // Assignment 任务信息（领域模型）
 // 说明：表示流程中的一个任务节点处理信息（从 Skylark API 返回）
 type Assignment struct {
-	ID         int64  // 任务ID
-	AssigneeID int64  // 处理人ID
-	Status     string // 任务状态（processing, completed）
-	Category   string // 任务类型（proposed, processed, cc）
-	VertexID   int64  // 节点ID
-	JourneyID  int64  // 流程记录ID
-	CreatedAt  string // 创建时间（ISO 8601 格式）
-	UpdatedAt  string // 更新时间（ISO 8601 格式）
+	ID         int64   // 任务ID
+	AssigneeID int64   // 处理人ID
+	Status     string  // 任务状态（processing, completed）
+	Category   string  // 任务类型（proposed, processed, cc）
+	VertexID   int64   // 节点ID
+	JourneyID  int64   // 流程记录ID
+	CreatedAt  string  // 创建时间（ISO 8601 格式）
+	UpdatedAt  string  // 更新时间（ISO 8601 格式）
+	FlowID     *int64  // 流程ID（可选，性能优化时自动补充）
+	FlowTitle  *string // 流程名称（可选，性能优化时自动补充）
 }
+
+// Assignment 类别常量
+const (
+	AssignmentCategoryProposed  = "proposed"  // 我发起的任务
+	AssignmentCategoryProcessed = "processed" // 由我处理的任务
+	AssignmentCategoryCC        = "cc"        // 抄送我的任务
+)

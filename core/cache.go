@@ -24,6 +24,9 @@ type CacheInterface interface {
 	SetFlowList(ctx context.Context, tenantID string, namespaceID int, flows []*FlowInfo, ttl int) error
 	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*FieldMetadata, error)
 	SetFlowFields(ctx context.Context, tenantID string, flowID int, fields []*FieldMetadata, ttl int) error
+	// Flow 信息缓存（flows 模块 - 性能优化）
+	GetFlowInfo(ctx context.Context, tenantID string, flowID int64) (*FlowInfo, error)
+	SetFlowInfo(ctx context.Context, tenantID string, flowInfo *FlowInfo, ttl int) error
 
 	// 用户名缓存（query/stats 模块）
 	GetUserName(ctx context.Context, tenantID string, userID string) (string, error)

@@ -38,6 +38,31 @@ type SkylarkEngine interface {
 	GetFlowJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error)
 	// GetFlowDetail 获取流程详情（包含字段、节点、边信息）
 	GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error)
+	// GetUserAssignments 获取用户处理的任务列表
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - localUserID: 本地用户ID（SDK自动转换为远程用户ID）
+	//   - category: 任务类别（使用 core.AssignmentCategoryXXX 常量）
+	//   - page: 页码（从1开始）
+	//   - pageSize: 每页数量
+	// 返回:
+	//   - []*core.Assignment: 任务列表（已补充 flow_id 和 flow_title）
+	//   - int: 总数
+	//   - error: 错误信息
+	GetUserAssignments(ctx context.Context, tenantID string, localUserID string, category string, page, pageSize int) ([]*core.Assignment, int, error)
+	// GetProposedJourneys 获取用户发起的流程列表
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - localUserID: 本地用户ID（SDK自动转换为远程用户ID）
+	//   - page: 页码（从1开始）
+	//   - pageSize: 每页数量
+	// 返回:
+	//   - []*core.Journey: 流程列表
+	//   - int: 总数
+	//   - error: 错误信息
+	GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error)
 
 	// 平台配置管理
 
