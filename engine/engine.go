@@ -22,6 +22,10 @@ type SkylarkEngine interface {
 	// UpdateFlowJourneyStatus 更新流程任务状态
 	// operation 支持: approve/refuse/transfer/cancel
 	UpdateFlowJourneyStatus(ctx context.Context, app string, flowID int64, journeyID int64, assignmentID int64, userID int64, authHeader string, operation string, options flows.UpdateJourneyStatusOptions) error
+	// GetFlowJourneyBySN 根据流程编号查询流程记录
+	GetFlowJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error)
+	// GetFlowJourneyAssignments 获取流程节点处理信息列表
+	GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error)
 
 	// 平台配置管理
 
@@ -39,14 +43,14 @@ type SkylarkEngine interface {
 	// 事件配置管理
 
 	// CreateEventWithFields 创建事件配置（包含字段，事务保证原子性）
-	CreateEventWithFields(ctx context.Context, req *core.CreateEventRequest) (string, error)
+	CreateEventWithFields(ctx context.Context, creation *core.EventCreation) (string, error)
 	// UpdateEventWithFields 更新事件配置（包含字段，完整替换策略）
-	UpdateEventWithFields(ctx context.Context, req *core.UpdateEventRequest) error
+	UpdateEventWithFields(ctx context.Context, update *core.EventUpdate) error
 	// GetEventWithFields 查询事件配置（包含字段）
-	GetEventWithFields(ctx context.Context, id, tenantID string) (*core.EventConfigWithFields, error)
+	GetEventWithFields(ctx context.Context, id, tenantID string) (*core.EventAggregate, error)
 	// ListEventWithFields 查询事件配置列表（包含字段）
 	// enabled 参数：nil-全部，true-已启用，false-已禁用
-	ListEventWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventConfigWithFields, error)
+	ListEventWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventAggregate, error)
 	// DeleteEvent 删除事件配置（软删除，字段级联删除）
 	DeleteEvent(ctx context.Context, id, tenantID string) error
 
@@ -99,19 +103,19 @@ type SkylarkEngine interface {
 	// 统计分析
 
 	// GetDurationStats 获取事件处理时长统计（平均/最短/最长）
-	GetDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error)
+	GetDurationStats(ctx context.Context, criteria *core.StatsCriteria) (*core.DurationStats, error)
 	// GetStatusStats 获取事件状态统计（各状态数量和占比）
-	GetStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error)
+	GetStatusStats(ctx context.Context, criteria *core.StatsCriteria) (*core.StatusStats, error)
 	// GetTrendStats 获取事件趋势统计（按日/周/月聚合）
-	GetTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error)
+	GetTrendStats(ctx context.Context, criteria *core.StatsCriteria) (*core.TrendStats, error)
 	// GetNodeStats 获取节点统计（各节点事件数和平均时长）
-	GetNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error)
+	GetNodeStats(ctx context.Context, criteria *core.StatsCriteria) (*core.NodeStats, error)
 	// GetUserStats 获取处理人统计（Top N处理人排名）
-	GetUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error)
+	GetUserStats(ctx context.Context, criteria *core.StatsCriteria) (*core.UserStats, error)
 	// GetOrgStats 获取组织统计（各组织事件数和平均时长）
-	GetOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error)
+	GetOrgStats(ctx context.Context, criteria *core.StatsCriteria) (*core.OrgStats, error)
 	// GetPendingStats 获取待处理事件统计（实时查询，无缓存）
-	GetPendingStats(ctx context.Context, req *core.StatsRequest) (*core.PendingStats, error)
+	GetPendingStats(ctx context.Context, criteria *core.StatsCriteria) (*core.PendingStats, error)
 
 	// 资源管理
 

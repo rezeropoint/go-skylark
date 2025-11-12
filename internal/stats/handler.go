@@ -69,7 +69,7 @@ func newStatsManager(
 // 处理时长统计
 
 // GetDurationStats 获取事件处理时长统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
-func (m *statsManager) GetDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {
+func (m *statsManager) GetDurationStats(ctx context.Context, req *core.StatsCriteria) (*core.DurationStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -151,7 +151,7 @@ func (m *statsManager) GetDurationStats(ctx context.Context, req *core.StatsRequ
 }
 
 // getSingleDurationStats 查询单个事件配置的处理时长统计（内部方法）
-func (m *statsManager) getSingleDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {
+func (m *statsManager) getSingleDurationStats(ctx context.Context, req *core.StatsCriteria) (*core.DurationStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	// 1. 尝试从缓存获取
@@ -205,7 +205,7 @@ func (m *statsManager) getSingleDurationStats(ctx context.Context, req *core.Sta
 // ========== 2. 状态统计 ==========
 
 // GetStatusStats 获取事件状态统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
-func (m *statsManager) GetStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error) {
+func (m *statsManager) GetStatusStats(ctx context.Context, req *core.StatsCriteria) (*core.StatusStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -284,7 +284,7 @@ func (m *statsManager) GetStatusStats(ctx context.Context, req *core.StatsReques
 }
 
 // getSingleStatusStats 查询单个事件配置的状态统计（内部方法）
-func (m *statsManager) getSingleStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error) {
+func (m *statsManager) getSingleStatusStats(ctx context.Context, req *core.StatsCriteria) (*core.StatusStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	// 1. 尝试从缓存获取
@@ -368,7 +368,7 @@ func (m *statsManager) getSingleStatusStats(ctx context.Context, req *core.Stats
 // ========== 3. 趋势统计 ==========
 
 // GetTrendStats 获取事件趋势统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
-func (m *statsManager) GetTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error) {
+func (m *statsManager) GetTrendStats(ctx context.Context, req *core.StatsCriteria) (*core.TrendStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -451,7 +451,7 @@ func (m *statsManager) GetTrendStats(ctx context.Context, req *core.StatsRequest
 }
 
 // getSingleTrendStats 查询单个事件配置的趋势统计（内部方法）
-func (m *statsManager) getSingleTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error) {
+func (m *statsManager) getSingleTrendStats(ctx context.Context, req *core.StatsCriteria) (*core.TrendStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	// 1. 尝试从缓存获取
@@ -530,7 +530,7 @@ func (m *statsManager) getSingleTrendStats(ctx context.Context, req *core.StatsR
 // ========== 4. 节点统计 ==========
 
 // GetNodeStats 获取节点统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
-func (m *statsManager) GetNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error) {
+func (m *statsManager) GetNodeStats(ctx context.Context, req *core.StatsCriteria) (*core.NodeStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -607,7 +607,7 @@ func (m *statsManager) GetNodeStats(ctx context.Context, req *core.StatsRequest)
 }
 
 // getSingleNodeStats 查询单个事件配置的节点统计（内部方法）
-func (m *statsManager) getSingleNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error) {
+func (m *statsManager) getSingleNodeStats(ctx context.Context, req *core.StatsCriteria) (*core.NodeStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	// 1. 尝试从缓存获取
@@ -682,7 +682,7 @@ func (m *statsManager) getSingleNodeStats(ctx context.Context, req *core.StatsRe
 // ========== 5. 处理人统计 ==========
 
 // GetUserStats 获取处理人统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
-func (m *statsManager) GetUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error) {
+func (m *statsManager) GetUserStats(ctx context.Context, req *core.StatsCriteria) (*core.UserStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -765,7 +765,7 @@ func (m *statsManager) GetUserStats(ctx context.Context, req *core.StatsRequest)
 }
 
 // getSingleUserStats 查询单个事件配置的处理人统计（内部方法）
-func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error) {
+func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCriteria) (*core.UserStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	// 1. 尝试从缓存获取
@@ -856,7 +856,7 @@ func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsRe
 // ========== 6. 组织统计 ==========
 
 // GetOrgStats 获取组织统计（支持单个或多个事件配置ID，支持空ID查询所有事件）
-func (m *statsManager) GetOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error) {
+func (m *statsManager) GetOrgStats(ctx context.Context, req *core.StatsCriteria) (*core.OrgStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -933,7 +933,7 @@ func (m *statsManager) GetOrgStats(ctx context.Context, req *core.StatsRequest) 
 }
 
 // getSingleOrgStats 查询单个事件配置的组织统计（内部方法）
-func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error) {
+func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsCriteria) (*core.OrgStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	// 1. 尝试从缓存获取
@@ -1016,7 +1016,7 @@ func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsReq
 // GetPendingStats 获取待处理事件统计（实时查询，不使用缓存，支持单个或多个事件配置ID，支持空ID查询所有事件）
 // 说明：用于大屏实时提醒，统计未开始的事件数量
 // 未开始定义：Journey只有1个不同的vertex_id（即只有发起节点的记录）
-func (m *statsManager) GetPendingStats(ctx context.Context, req *core.StatsRequest) (*core.PendingStats, error) {
+func (m *statsManager) GetPendingStats(ctx context.Context, req *core.StatsCriteria) (*core.PendingStats, error) {
 	// 1. 如果 EventConfigIDs 为空，查询租户下所有事件配置
 	if len(req.EventConfigIDs) == 0 {
 		allIDs, err := m.getAllEventConfigIDs(ctx, req.TenantID)
@@ -1086,7 +1086,7 @@ func (m *statsManager) GetPendingStats(ctx context.Context, req *core.StatsReque
 }
 
 // getSinglePendingStats 查询单个事件配置的待处理统计（内部方法，实时查询）
-func (m *statsManager) getSinglePendingStats(ctx context.Context, req *core.StatsRequest) (*core.PendingStats, error) {
+func (m *statsManager) getSinglePendingStats(ctx context.Context, req *core.StatsCriteria) (*core.PendingStats, error) {
 	// 注意：此时req.EventConfigIDs应该只有1个元素
 
 	eventConfigID := req.EventConfigIDs[0]

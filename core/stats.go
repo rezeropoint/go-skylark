@@ -8,36 +8,35 @@ import (
 	"time"
 )
 
+// 统计缓存键常量（格式：skylark:stats:{type}:{tenant_id}:{event_config_id}:{params_hash}）
 const (
-	// CacheDurationStatsKeyPrefix 处理时长统计缓存键前缀
-	// 完整格式：skylark:stats:duration:{tenant_id}:{event_config_id}:{params_hash}
-	CacheDurationStatsKeyPrefix = "skylark:stats:duration:"
-
-	// CacheStatusStatsKeyPrefix 状态统计缓存键前缀
-	// 完整格式：skylark:stats:status:{tenant_id}:{event_config_id}:{params_hash}
-	CacheStatusStatsKeyPrefix = "skylark:stats:status:"
-
-	// CacheTrendStatsKeyPrefix 趋势统计缓存键前缀
-	// 完整格式：skylark:stats:trend:{tenant_id}:{event_config_id}:{params_hash}
-	CacheTrendStatsKeyPrefix = "skylark:stats:trend:"
-
-	// CacheNodeStatsKeyPrefix 节点统计缓存键前缀
-	// 完整格式：skylark:stats:node:{tenant_id}:{event_config_id}:{params_hash}
-	CacheNodeStatsKeyPrefix = "skylark:stats:node:"
-
-	// CacheUserStatsKeyPrefix 处理人统计缓存键前缀
-	// 完整格式：skylark:stats:user:{tenant_id}:{event_config_id}:{params_hash}
-	CacheUserStatsKeyPrefix = "skylark:stats:user:"
-
-	// CacheOrgStatsKeyPrefix 组织统计缓存键前缀
-	// 完整格式：skylark:stats:org:{tenant_id}:{event_config_id}:{params_hash}
-	CacheOrgStatsKeyPrefix = "skylark:stats:org:"
+	CacheDurationStatsKeyPrefix = "skylark:stats:duration:" // 处理时长统计缓存键前缀
+	CacheStatusStatsKeyPrefix   = "skylark:stats:status:"   // 状态统计缓存键前缀
+	CacheTrendStatsKeyPrefix    = "skylark:stats:trend:"    // 趋势统计缓存键前缀
+	CacheNodeStatsKeyPrefix     = "skylark:stats:node:"     // 节点统计缓存键前缀
+	CacheUserStatsKeyPrefix     = "skylark:stats:user:"     // 处理人统计缓存键前缀
+	CacheOrgStatsKeyPrefix      = "skylark:stats:org:"      // 组织统计缓存键前缀
 )
 
-// StatsRequest 统计请求（通用请求结构）
-// 说明：所有统计接口共享此请求结构，通过不同字段组合实现不同统计功能
+// 统计分组维度常量
+const (
+	GroupByDay   = "day"   // 按天分组
+	GroupByWeek  = "week"  // 按周分组
+	GroupByMonth = "month" // 按月分组
+)
+
+// 事件状态常量
+const (
+	StatusCompleted  = "completed"  // 已完成状态
+	StatusRejected   = "rejected"   // 已拒绝状态
+	StatusProcessing = "processing" // 处理中状态（虚拟状态）
+	StatusPending    = "pending"    // 未开始状态（虚拟状态）
+)
+
+// StatsCriteria 统计条件（DDD值对象）
+// 说明：所有统计接口共享此结构，通过不同字段组合实现不同统计功能
 // 支持单个或多个事件配置ID的统计（多ID时会合并结果）
-type StatsRequest struct {
+type StatsCriteria struct {
 	// 事件配置ID列表（引擎内部加载）
 	EventConfigIDs []string // 事件配置ID列表（必填，支持单个或多个ID）
 

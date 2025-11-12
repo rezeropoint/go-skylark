@@ -21,7 +21,7 @@ type Manager interface {
 	//   4. 批量插入字段配置
 	//   5. 可选：验证字段名是否在远程表存在
 	// 返回：创建后的事件配置（包含生成的ID）
-	CreateWithFields(ctx context.Context, req *core.CreateEventRequest) (string, error)
+	CreateWithFields(ctx context.Context, creation *core.EventCreation) (string, error)
 
 	// UpdateWithFields 更新事件配置（包含字段）
 	// 采用完整替换策略：先删除所有旧字段，再插入新字段（避免复杂的diff逻辑）
@@ -31,17 +31,17 @@ type Manager interface {
 	//   2. 更新事件配置基本信息
 	//   3. 删除所有旧字段配置
 	//   4. 批量插入新字段配置
-	UpdateWithFields(ctx context.Context, req *core.UpdateEventRequest) error
+	UpdateWithFields(ctx context.Context, update *core.EventUpdate) error
 
 	// GetWithFields 查询事件配置（包含字段）
 	// 返回事件配置和关联的所有字段（按display_order排序）
-	GetWithFields(ctx context.Context, id, tenantID string) (*core.EventConfigWithFields, error)
+	GetWithFields(ctx context.Context, id, tenantID string) (*core.EventAggregate, error)
 
 	// ListWithFields 查询事件配置列表（包含字段）
 	// 返回所有匹配的事件配置和关联的字段
 	// enabled参数：nil-全部，true-已启用，false-已禁用
 	// 优化：使用批量查询，一次SQL查询所有字段
-	ListWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventConfigWithFields, error)
+	ListWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventAggregate, error)
 
 	// Delete 删除事件配置（软删除）
 	// 字段配置会通过数据库外键级联删除（ON DELETE CASCADE）

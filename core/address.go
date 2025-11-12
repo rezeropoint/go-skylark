@@ -4,19 +4,10 @@
 // 说明：本文件定义的类型用于调用 Skylark REST API（写操作：创建流程、创建表单、更新任务）
 package core
 
-type SkylarkAddress interface {
-	GetApp() string
-	GetUserID() string
-	GetAuthHeader() string
-}
-
-// BasicSkylarkAddress 流程地址信息
+// BasicSkylarkAddress Skylark API 认证上下文（DDD值对象）
+// 说明：包含调用 Skylark REST API 所需的认证信息
 type BasicSkylarkAddress struct {
-	App        string // 应用名称
-	UserID     string // 用户ID
-	AuthHeader string // 认证头信息
+	App        string // 应用域名（如 "app.skylark.com"）
+	UserID     string // 用户ID（调用者身份）
+	AuthHeader string // 认证头信息（用于 HTTP Authorization）
 }
-
-func (s *BasicSkylarkAddress) GetApp() string        { return s.App }
-func (s *BasicSkylarkAddress) GetUserID() string     { return s.UserID }
-func (s *BasicSkylarkAddress) GetAuthHeader() string { return s.AuthHeader }

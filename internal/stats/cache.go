@@ -70,7 +70,7 @@ func (m *statsManager) batchGetUserNames(ctx context.Context, remoteDB sqlx.SqlC
 // 返回：完整的缓存键
 //   - 单ID格式：prefix + tenantID + ":" + eventConfigID + ":" + params_hash（向后兼容）
 //   - 多ID格式：prefix + tenantID + ":multi:" + sorted_ids_hash + ":" + params_hash
-func (m *statsManager) buildStatsCacheKey(prefix, tenantID string, eventConfigIDs []string, req *core.StatsRequest) string {
+func (m *statsManager) buildStatsCacheKey(prefix, tenantID string, eventConfigIDs []string, req *core.StatsCriteria) string {
 	// 构建参数字符串（用于hash）
 	paramsStr := fmt.Sprintf("%v|%v|%s|%s|%d",
 		req.DateFrom,
@@ -109,7 +109,7 @@ func (m *statsManager) buildStatsCacheKey(prefix, tenantID string, eventConfigID
 // ========== 处理时长统计缓存 ==========
 
 // getCachedDurationStats 从缓存获取处理时长统计
-func (m *statsManager) getCachedDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {
+func (m *statsManager) getCachedDurationStats(ctx context.Context, req *core.StatsCriteria) (*core.DurationStats, error) {
 	key := m.buildStatsCacheKey(core.CacheDurationStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
@@ -125,7 +125,7 @@ func (m *statsManager) getCachedDurationStats(ctx context.Context, req *core.Sta
 }
 
 // setCachedDurationStats 缓存处理时长统计
-func (m *statsManager) setCachedDurationStats(ctx context.Context, req *core.StatsRequest, stats *core.DurationStats) error {
+func (m *statsManager) setCachedDurationStats(ctx context.Context, req *core.StatsCriteria, stats *core.DurationStats) error {
 	key := m.buildStatsCacheKey(core.CacheDurationStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	data, err := json.Marshal(stats)
 	if err != nil {
@@ -138,7 +138,7 @@ func (m *statsManager) setCachedDurationStats(ctx context.Context, req *core.Sta
 // ========== 状态统计缓存 ==========
 
 // getCachedStatusStats 从缓存获取状态统计
-func (m *statsManager) getCachedStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error) {
+func (m *statsManager) getCachedStatusStats(ctx context.Context, req *core.StatsCriteria) (*core.StatusStats, error) {
 	key := m.buildStatsCacheKey(core.CacheStatusStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
@@ -154,7 +154,7 @@ func (m *statsManager) getCachedStatusStats(ctx context.Context, req *core.Stats
 }
 
 // setCachedStatusStats 缓存状态统计
-func (m *statsManager) setCachedStatusStats(ctx context.Context, req *core.StatsRequest, stats *core.StatusStats) error {
+func (m *statsManager) setCachedStatusStats(ctx context.Context, req *core.StatsCriteria, stats *core.StatusStats) error {
 	key := m.buildStatsCacheKey(core.CacheStatusStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	data, err := json.Marshal(stats)
 	if err != nil {
@@ -167,7 +167,7 @@ func (m *statsManager) setCachedStatusStats(ctx context.Context, req *core.Stats
 // ========== 趋势统计缓存 ==========
 
 // getCachedTrendStats 从缓存获取趋势统计
-func (m *statsManager) getCachedTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error) {
+func (m *statsManager) getCachedTrendStats(ctx context.Context, req *core.StatsCriteria) (*core.TrendStats, error) {
 	key := m.buildStatsCacheKey(core.CacheTrendStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
@@ -183,7 +183,7 @@ func (m *statsManager) getCachedTrendStats(ctx context.Context, req *core.StatsR
 }
 
 // setCachedTrendStats 缓存趋势统计
-func (m *statsManager) setCachedTrendStats(ctx context.Context, req *core.StatsRequest, stats *core.TrendStats) error {
+func (m *statsManager) setCachedTrendStats(ctx context.Context, req *core.StatsCriteria, stats *core.TrendStats) error {
 	key := m.buildStatsCacheKey(core.CacheTrendStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	data, err := json.Marshal(stats)
 	if err != nil {
@@ -206,7 +206,7 @@ func (m *statsManager) setCachedTrendStats(ctx context.Context, req *core.StatsR
 // ========== 节点统计缓存 ==========
 
 // getCachedNodeStats 从缓存获取节点统计
-func (m *statsManager) getCachedNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error) {
+func (m *statsManager) getCachedNodeStats(ctx context.Context, req *core.StatsCriteria) (*core.NodeStats, error) {
 	key := m.buildStatsCacheKey(core.CacheNodeStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
@@ -222,7 +222,7 @@ func (m *statsManager) getCachedNodeStats(ctx context.Context, req *core.StatsRe
 }
 
 // setCachedNodeStats 缓存节点统计
-func (m *statsManager) setCachedNodeStats(ctx context.Context, req *core.StatsRequest, stats *core.NodeStats) error {
+func (m *statsManager) setCachedNodeStats(ctx context.Context, req *core.StatsCriteria, stats *core.NodeStats) error {
 	key := m.buildStatsCacheKey(core.CacheNodeStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	data, err := json.Marshal(stats)
 	if err != nil {
@@ -237,7 +237,7 @@ func (m *statsManager) setCachedNodeStats(ctx context.Context, req *core.StatsRe
 // ========== 处理人统计缓存 ==========
 
 // getCachedUserStats 从缓存获取处理人统计
-func (m *statsManager) getCachedUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error) {
+func (m *statsManager) getCachedUserStats(ctx context.Context, req *core.StatsCriteria) (*core.UserStats, error) {
 	key := m.buildStatsCacheKey(core.CacheUserStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
@@ -253,7 +253,7 @@ func (m *statsManager) getCachedUserStats(ctx context.Context, req *core.StatsRe
 }
 
 // setCachedUserStats 缓存处理人统计
-func (m *statsManager) setCachedUserStats(ctx context.Context, req *core.StatsRequest, stats *core.UserStats) error {
+func (m *statsManager) setCachedUserStats(ctx context.Context, req *core.StatsCriteria, stats *core.UserStats) error {
 	key := m.buildStatsCacheKey(core.CacheUserStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	data, err := json.Marshal(stats)
 	if err != nil {
@@ -268,7 +268,7 @@ func (m *statsManager) setCachedUserStats(ctx context.Context, req *core.StatsRe
 // ========== 组织统计缓存 ==========
 
 // getCachedOrgStats 从缓存获取组织统计
-func (m *statsManager) getCachedOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error) {
+func (m *statsManager) getCachedOrgStats(ctx context.Context, req *core.StatsCriteria) (*core.OrgStats, error) {
 	key := m.buildStatsCacheKey(core.CacheOrgStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	val, err := m.cache.GetStats(ctx, key)
 	if err != nil {
@@ -284,7 +284,7 @@ func (m *statsManager) getCachedOrgStats(ctx context.Context, req *core.StatsReq
 }
 
 // setCachedOrgStats 缓存组织统计
-func (m *statsManager) setCachedOrgStats(ctx context.Context, req *core.StatsRequest, stats *core.OrgStats) error {
+func (m *statsManager) setCachedOrgStats(ctx context.Context, req *core.StatsCriteria, stats *core.OrgStats) error {
 	key := m.buildStatsCacheKey(core.CacheOrgStatsKeyPrefix, req.TenantID, req.EventConfigIDs, req)
 	data, err := json.Marshal(stats)
 	if err != nil {

@@ -77,9 +77,9 @@ func extractUserIDs(assignments []*assignmentRow) []string {
 func buildColumnInfo(fieldConfigs []*core.FieldConfig) []*core.ColumnInfo {
 	// 系统字段（只返回3个核心字段）
 	columns := []*core.ColumnInfo{
-		{Field: "slp_journey_id", DisplayName: "Journey ID", Type: "number"},
-		{Field: "slp_status", DisplayName: "状态", Type: "string"},
-		{Field: "vertex_name", DisplayName: "当前节点", Type: "string"},
+		{Field: core.RemoteJourneyIDField, DisplayName: "Journey ID", Type: "number"},
+		{Field: core.RemoteStatusField, DisplayName: "状态", Type: "string"},
+		{Field: core.VertexNameColumn, DisplayName: "当前节点", Type: "string"},
 	}
 
 	// 业务字段（只包含可见字段）

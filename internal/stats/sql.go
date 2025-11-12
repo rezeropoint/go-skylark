@@ -11,7 +11,7 @@ import (
 // buildDurationStatsSQL 构建处理时长统计SQL
 // 说明：统计Journey维度的处理时长（从第一个Assignment创建到最后一个Assignment更新）
 // 返回：SQL语句、参数列表
-func buildDurationStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildDurationStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1
@@ -78,7 +78,7 @@ func buildDurationStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []str
 //   - processing（处理中）：有多个节点的未完成事件
 //
 // 返回：SQL语句、参数列表
-func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1
@@ -155,7 +155,7 @@ func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []strin
 // buildTrendStatsSQL 构建趋势统计SQL
 // 说明：按日/周/月统计Journey数量和完成率
 // 返回：SQL语句、参数列表
-func buildTrendStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildTrendStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1
@@ -235,7 +235,7 @@ func buildTrendStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string
 // buildNodeStatsSQL 构建节点统计SQL
 // 说明：统计各节点的Journey数量和平均处理时长
 // 返回：SQL语句、参数列表
-func buildNodeStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildNodeStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1
@@ -291,7 +291,7 @@ func buildNodeStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string,
 // buildUserStatsSQL 构建处理人统计SQL
 // 说明：统计处理人的Journey数量（Top N）
 // 返回：SQL语句、参数列表
-func buildUserStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildUserStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1
@@ -352,7 +352,7 @@ func buildUserStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string,
 // buildOrgStatsSQL 构建组织统计SQL
 // 说明：统计各组织的Journey数量和平均处理时长
 // 返回：SQL语句、参数列表
-func buildOrgStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildOrgStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1
@@ -423,7 +423,7 @@ func buildOrgStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, 
 // 说明：按Journey聚合，统计只有1个节点的事件（未开始）和多个节点的事件（处理中）
 // 未开始定义：Journey只有1个不同的vertex_id（即只有发起节点）
 // 返回：SQL语句、参数列表
-func buildPendingStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsRequest) (string, []interface{}) {
+func buildPendingStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
 	args := []interface{}{}
 	argIndex := 1

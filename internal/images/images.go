@@ -67,7 +67,7 @@ func CreateImageEntryFromBase64(ctx context.Context, skylarkAddress core.BasicSk
 func getUPToken(ctx context.Context, skylarkAddress core.BasicSkylarkAddress) (string, error) {
 	// 获取Token
 	attachmentsURL := buildAttachmentsAPIURL(skylarkAddress)
-	resp, err := httpc.Do(ctx, http.MethodGet, attachmentsURL, core.AuthHeader{Token: skylarkAddress.GetAuthHeader()})
+	resp, err := httpc.Do(ctx, http.MethodGet, attachmentsURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -125,7 +125,7 @@ func uploadImageData(ctx context.Context, skylarkAddress core.BasicSkylarkAddres
 
 	// 设置请求头
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	req.Header.Set("Authorization", skylarkAddress.GetAuthHeader())
+	req.Header.Set("Authorization", skylarkAddress.AuthHeader)
 
 	// 使用httpc.DoRequest发送请求
 	resp, err := httpc.DoRequest(req)

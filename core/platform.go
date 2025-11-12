@@ -29,6 +29,22 @@ import (
 //   - 连接失败时返回 ErrDatabaseConnection 或 ErrPlatformConfigNotFound
 type GetRemoteDBFunc func(ctx context.Context, tenantID string) (sqlx.SqlConn, error)
 
+// GetPlatformConfigFunc 获取平台配置的函数类型
+// 用途：供 flows、forms 等 Manager 获取租户配置（含 APIBaseURL 和 APIToken），实现 Manager 之间解耦
+// 参数：
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于查询平台配置）
+//
+// 返回：
+//   - *PlatformConfig: 平台配置（包含数据库连接信息、API 基础地址、认证 Token 等）
+//   - error: 错误信息（如平台配置不存在）
+//
+// 说明：
+//   - 该函数会从 skylark_platform_configs 表读取配置
+//   - 配置不存在时返回 ErrPlatformConfigNotFound
+//   - 用于 FlowManager 等需要调用 Skylark REST API 的场景
+type GetPlatformConfigFunc func(ctx context.Context, tenantID string) (*PlatformConfig, error)
+
 // PlatformConfig Skylark平台对接配置（纯领域模型）
 type PlatformConfig struct {
 	ID          string    // 配置UUID

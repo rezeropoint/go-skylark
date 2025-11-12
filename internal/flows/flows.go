@@ -39,12 +39,34 @@ type SkylarkFlowRegistry interface {
 	//   - operation: 操作类型 (approve/refuse/transfer/cancel)
 	//   - options: 可选参数（评论、下一个节点ID、抄送者、时限、字段数据等）
 	UpdateJourneyStatus(ctx context.Context, app string, flowID int64, journeyID int64, assignmentID int64, userID int64, authHeader string, operation string, options UpdateJourneyStatusOptions) error
+
+	// GetJourneyBySN 根据流程编号查询流程记录
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - sn: 流程编号
+	// 返回:
+	//   - *core.Journey: 流程记录信息
+	//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
+	GetJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error)
+
+	// GetJourneyAssignments 获取流程节点处理信息列表
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - []*core.Assignment: 任务列表
+	//   - error: 错误信息
+	GetJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error)
 }
 
 // NewSkylarkFlowRegistry 创建新的Skylark流程注册表实例
 // 参数:
 //   - config: 配置信息
 //   - cache: 缓存接口
-func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface) (SkylarkFlowRegistry, error) {
-	return newSkylarkFlowRegistry(config, cache)
+//   - getPlatformConfig: 获取平台配置的函数（通过依赖注入）
+func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc) (SkylarkFlowRegistry, error) {
+	return newSkylarkFlowRegistry(config, cache, getPlatformConfig)
 }

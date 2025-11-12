@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+// Skylark 远程数据库表名和字段名常量
+const (
+	// 远程表名前缀（动态表名格式：assignments_{flow_id}）
+	RemoteTableNamePrefix = "assignments_"
+
+	// 远程表固定字段名（assignments_{flow_id} 表）
+	RemotePrimaryKeyField = "slp_assignment_id" // Assignment主键
+	RemoteJourneyIDField  = "slp_journey_id"    // Journey ID（用于聚合查询）
+	RemoteStatusField     = "slp_status"        // 状态字段
+	RemoteVertexIDField   = "slp_vertex_id"     // 节点ID字段
+	RemoteUserIDField     = "slp_user_id"       // 处理人ID字段
+	RemoteCreatedAtField  = "slp_created_at"    // 创建时间字段
+	RemoteUpdatedAtField  = "slp_updated_at"    // 更新时间字段
+)
+
 // EventConfig 事件配置领域模型（纯领域模型）
 type EventConfig struct {
 	ID           string    // 配置UUID
@@ -28,44 +43,44 @@ type EventConfig struct {
 // GetRemoteTableName 获取远程表名
 // 远程表名由FlowID动态生成：assignments_{flow_id}
 func (e *EventConfig) GetRemoteTableName() string {
-	return fmt.Sprintf("assignments_%d", e.FlowID)
+	return fmt.Sprintf("%s%d", RemoteTableNamePrefix, e.FlowID)
 }
 
 // GetRemotePrimaryKey 获取远程表主键字段名
 // 固定为 slp_assignment_id（Assignment是真正的主键）
 func (e *EventConfig) GetRemotePrimaryKey() string {
-	return "slp_assignment_id"
+	return RemotePrimaryKeyField
 }
 
 // GetJourneyIDField 获取Journey ID字段名
 // Journey ID用于聚合查询（多个Assignment共享同一个Journey）
 func (e *EventConfig) GetJourneyIDField() string {
-	return "slp_journey_id"
+	return RemoteJourneyIDField
 }
 
 // 聚合数据结构（用于事件+字段统一管理）
 
-// CreateEventRequest 创建事件配置请求（包含字段）
-// 用途：前端一次提交事件配置和字段配置，引擎使用事务保证原子性
+// EventCreation 事件创建聚合（包含事件配置+字段配置）
+// DDD聚合根：事件配置和字段配置作为一个事务单元创建
 // 说明：EventConfig.ID 和 Fields[].ID 不需要填写，由数据库自动生成
-type CreateEventRequest struct {
+type EventCreation struct {
 	EventConfig EventConfig   // 事件基本配置（不需要填ID）
 	Fields      []FieldConfig // 字段列表（不需要填ID和EventConfigID）
 }
 
-// UpdateEventRequest 更新事件配置请求（包含字段，完整替换）
-// 用途：前端一次提交更新事件配置和字段配置
+// EventUpdate 事件更新聚合（包含事件配置+字段配置）
+// DDD聚合根：事件配置和字段配置作为一个事务单元更新
 // 策略：采用完整替换策略，先删除所有旧字段，再插入新字段（避免复杂的diff逻辑）
 // 说明：EventConfig.ID 必须填写，Fields[].EventConfigID 会自动填充
-type UpdateEventRequest struct {
+type EventUpdate struct {
 	EventConfig EventConfig   // 事件基本配置（必须包含ID）
 	Fields      []FieldConfig // 字段列表（完整替换，旧字段全部删除）
 }
 
-// EventConfigWithFields 事件配置完整信息（包含字段）
-// 用途：查询事件配置时，同时返回关联的字段配置
+// EventAggregate 事件聚合根（查询结果）
+// DDD聚合根：包含事件配置及其所有关联的字段配置
 // 说明：Fields 按 display_order 排序
-type EventConfigWithFields struct {
+type EventAggregate struct {
 	EventConfig EventConfig    // 事件基本配置
 	Fields      []*FieldConfig // 字段列表（按DisplayOrder排序）
 }

@@ -61,6 +61,7 @@
 1. **不是数据传输对象 (DTO)**
    - 不包含 JSON 序列化逻辑
    - 不为 API 响应格式设计
+   - ❌ **禁止定义 Request/Response 结构**（例外：跨多层传递的 DTO，如协议层→Engine→Internal）
 
 2. **不是 ORM 模型**
    - **禁止出现**：`db:"field_name"` 标签
@@ -70,6 +71,18 @@
 3. **不是数据库查询结果**
    - 不为数据库扫描而设计
    - 不包含 `sql.NullString`、`sql.NullTime` 等框架类型
+
+#### 🎯 **Core 层组织原则**
+
+**API 层按领域组织**（而非技术分类）：
+- ✅ `flow.go` - 流程领域（API路径、操作常量）
+- ✅ `form.go` - 表单领域
+- ✅ `image.go` - 图片上传领域
+- ❌ ~~`constants.go`~~ - 避免技术分类文件
+
+**Manager 接口设计原则**（Internal 层）：
+- ✅ **直接使用领域模型**作为参数（如 `eventConfig *query.EventConfig, fields []query.FieldConfig`）
+- ❌ **禁止定义 Request 结构体**（REST 层有 go-zero 生成的结构体，无需在包内重复定义）
 
 ---
 
@@ -759,117 +772,6 @@ func IsOptionField(fieldType string) bool {
 | `internal/event/` | `event.go`, `handler.go` | `SkylarkEventRegistry` |
 | `internal/mapping/` | `mapping.go`, `handler.go` | `SkylarkMappingRegistry` |
 | `internal/images/` | `images.go` | 图片处理 |
-
----
-
-## 🚀 常用开发命令
-
-### 构建与测试
-
-```bash
-# 构建所有模块
-go build ./...
-
-# 构建特定包
-go build ./core
-go build ./engine
-go build ./internal/flows
-
-# 运行所有测试
-go test ./...
-
-# 运行特定包的测试
-go test ./core
-go test ./internal/query -v
-
-# 运行测试并显示覆盖率
-go test -cover ./...
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
-
-# 基准测试
-go test -bench=. ./internal/query
-```
-
-### 代码质量
-
-```bash
-# 格式化代码
-go fmt ./...
-
-# 静态分析
-go vet ./...
-
-# 使用 golangci-lint（推荐）
-golangci-lint run ./...
-
-# 检查循环依赖
-go mod graph | grep 'go-skylark'
-```
-
-### 模块管理
-
-```bash
-# 整理依赖
-go mod tidy
-
-# 验证依赖
-go mod verify
-
-# 查看依赖图
-go mod graph
-
-# 更新依赖
-go get -u ./...
-go get -u github.com/zeromicro/go-zero@latest
-
-# 查看过时的依赖
-go list -u -m all
-```
-
-### 查找与搜索
-
-```bash
-# 查找包含 db 标签的文件
-grep -r 'db:"' ./core
-
-# 查找使用 sql.Null 的地方
-grep -r 'sql\.Null' ./core
-
-# 查找 TODO 注释
-grep -r 'TODO' ./internal
-
-# 统计代码行数
-find . -name '*.go' | xargs wc -l
-```
-
-### 依赖分析
-
-```bash
-# 查看某个包的依赖
-go list -f '{{.Deps}}' ./internal/flows
-
-# 查看谁依赖了某个包
-go list -f '{{.ImportPath}} {{.Imports}}' ./... | grep 'core'
-
-# 检查未使用的依赖
-go mod tidy
-git diff go.mod
-```
-
-### 开发调试
-
-```bash
-# 查看编译后的文件大小
-go build -o skylark ./cmd/example && ls -lh skylark
-
-# 查看编译优化信息
-go build -gcflags="-m" ./internal/flows
-
-# 生成文档
-godoc -http=:6060
-# 访问 http://localhost:6060/pkg/github.com/your-org/go-skylark/
-```
 
 ---
 

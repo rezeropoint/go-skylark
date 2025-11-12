@@ -44,19 +44,19 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	// 初始化缓存
 	cache := cache.NewSkylarkCache(redisClient, config.Cache)
 
-	// 初始化流程和表单管理器
-	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache)
+	// 1. 初始化平台管理器（核心依赖，最先初始化）
+	platformMgr, err := platform.NewManager(platform.Config{}, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 初始化流程和表单管理器（依赖 Platform）
+	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.Get)
 	if err != nil {
 		return nil, err
 	}
 
 	forms, err := forms.NewSkylarkFormRegistry(&forms.Config{}, cache)
-	if err != nil {
-		return nil, err
-	}
-
-	// 1. 初始化平台管理器（核心依赖，最先初始化）
-	platformMgr, err := platform.NewManager(platform.Config{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +145,16 @@ func (e *skylarkEngine) UpdateFlowJourneyStatus(ctx context.Context, app string,
 	return e.flows.UpdateJourneyStatus(ctx, app, flowID, journeyID, assignmentID, userID, authHeader, operation, options)
 }
 
+// GetFlowJourneyBySN 根据流程编号查询流程记录
+func (e *skylarkEngine) GetFlowJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error) {
+	return e.flows.GetJourneyBySN(ctx, tenantID, flowID, sn)
+}
+
+// GetFlowJourneyAssignments 获取流程节点处理信息列表
+func (e *skylarkEngine) GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error) {
+	return e.flows.GetJourneyAssignments(ctx, tenantID, journeyID)
+}
+
 // Close 关闭引擎，释放资源（尤其是 platform 管理的远程数据库连接池）
 func (e *skylarkEngine) Close() error {
 	if e.platform != nil {
@@ -177,19 +187,19 @@ func (e *skylarkEngine) ValidatePlatformConfig(ctx context.Context, cfg *core.Pl
 
 // 事件配置管理方法
 
-func (e *skylarkEngine) CreateEventWithFields(ctx context.Context, req *core.CreateEventRequest) (string, error) {
-	return e.event.CreateWithFields(ctx, req)
+func (e *skylarkEngine) CreateEventWithFields(ctx context.Context, creation *core.EventCreation) (string, error) {
+	return e.event.CreateWithFields(ctx, creation)
 }
 
-func (e *skylarkEngine) UpdateEventWithFields(ctx context.Context, req *core.UpdateEventRequest) error {
-	return e.event.UpdateWithFields(ctx, req)
+func (e *skylarkEngine) UpdateEventWithFields(ctx context.Context, update *core.EventUpdate) error {
+	return e.event.UpdateWithFields(ctx, update)
 }
 
-func (e *skylarkEngine) GetEventWithFields(ctx context.Context, id, tenantID string) (*core.EventConfigWithFields, error) {
+func (e *skylarkEngine) GetEventWithFields(ctx context.Context, id, tenantID string) (*core.EventAggregate, error) {
 	return e.event.GetWithFields(ctx, id, tenantID)
 }
 
-func (e *skylarkEngine) ListEventWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventConfigWithFields, error) {
+func (e *skylarkEngine) ListEventWithFields(ctx context.Context, tenantID string, enabled *bool) ([]*core.EventAggregate, error) {
 	return e.event.ListWithFields(ctx, tenantID, enabled)
 }
 
@@ -239,32 +249,32 @@ func (e *skylarkEngine) GetFlowFields(ctx context.Context, tenantID string, flow
 
 // 统计分析方法
 
-func (e *skylarkEngine) GetDurationStats(ctx context.Context, req *core.StatsRequest) (*core.DurationStats, error) {
-	return e.stats.GetDurationStats(ctx, req)
+func (e *skylarkEngine) GetDurationStats(ctx context.Context, criteria *core.StatsCriteria) (*core.DurationStats, error) {
+	return e.stats.GetDurationStats(ctx, criteria)
 }
 
-func (e *skylarkEngine) GetStatusStats(ctx context.Context, req *core.StatsRequest) (*core.StatusStats, error) {
-	return e.stats.GetStatusStats(ctx, req)
+func (e *skylarkEngine) GetStatusStats(ctx context.Context, criteria *core.StatsCriteria) (*core.StatusStats, error) {
+	return e.stats.GetStatusStats(ctx, criteria)
 }
 
-func (e *skylarkEngine) GetTrendStats(ctx context.Context, req *core.StatsRequest) (*core.TrendStats, error) {
-	return e.stats.GetTrendStats(ctx, req)
+func (e *skylarkEngine) GetTrendStats(ctx context.Context, criteria *core.StatsCriteria) (*core.TrendStats, error) {
+	return e.stats.GetTrendStats(ctx, criteria)
 }
 
-func (e *skylarkEngine) GetNodeStats(ctx context.Context, req *core.StatsRequest) (*core.NodeStats, error) {
-	return e.stats.GetNodeStats(ctx, req)
+func (e *skylarkEngine) GetNodeStats(ctx context.Context, criteria *core.StatsCriteria) (*core.NodeStats, error) {
+	return e.stats.GetNodeStats(ctx, criteria)
 }
 
-func (e *skylarkEngine) GetUserStats(ctx context.Context, req *core.StatsRequest) (*core.UserStats, error) {
-	return e.stats.GetUserStats(ctx, req)
+func (e *skylarkEngine) GetUserStats(ctx context.Context, criteria *core.StatsCriteria) (*core.UserStats, error) {
+	return e.stats.GetUserStats(ctx, criteria)
 }
 
-func (e *skylarkEngine) GetOrgStats(ctx context.Context, req *core.StatsRequest) (*core.OrgStats, error) {
-	return e.stats.GetOrgStats(ctx, req)
+func (e *skylarkEngine) GetOrgStats(ctx context.Context, criteria *core.StatsCriteria) (*core.OrgStats, error) {
+	return e.stats.GetOrgStats(ctx, criteria)
 }
 
-func (e *skylarkEngine) GetPendingStats(ctx context.Context, req *core.StatsRequest) (*core.PendingStats, error) {
-	return e.stats.GetPendingStats(ctx, req)
+func (e *skylarkEngine) GetPendingStats(ctx context.Context, criteria *core.StatsCriteria) (*core.PendingStats, error) {
+	return e.stats.GetPendingStats(ctx, criteria)
 }
 
 // 组织管理方法

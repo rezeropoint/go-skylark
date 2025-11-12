@@ -44,21 +44,6 @@ type OrgIDMapping struct {
 	UpdatedAt   time.Time // 更新时间
 }
 
-// GetPlatformConfigFunc 获取平台配置的函数类型
-// 用途：供 Organization/User Manager 获取 Skylark 平台配置，实现 Manager 之间解耦
-// 参数：
-//   - ctx: 上下文
-//   - tenantID: 租户ID
-//
-// 返回：
-//   - *PlatformConfig: 平台配置信息（包含 BaseURL、Authorization、NamespaceID 等）
-//   - error: 错误信息（如平台配置不存在）
-//
-// 说明：
-//   - 该函数会从 skylark_platform_configs 表读取配置
-//   - 由 Platform Manager 的 Get 方法实现
-type GetPlatformConfigFunc func(ctx context.Context, tenantID string) (*PlatformConfig, error)
-
 // GetRemoteOrgIDsFunc 批量查询远程组织ID的函数类型
 // 用途：供 Query/Stats Manager 根据本地组织ID批量查询 Skylark 组织ID
 // 参数：

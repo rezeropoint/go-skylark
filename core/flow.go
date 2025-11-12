@@ -4,6 +4,8 @@
 // 说明：本文件定义的类型用于查询 Skylark PostgreSQL 数据库（读操作：Flow 信息查询、字段元数据）
 package core
 
+import "fmt"
+
 // FlowInfo 远程流程信息（纯领域模型）
 type FlowInfo struct {
 	ID          int    // 流程ID
@@ -84,3 +86,14 @@ const (
 	QiniuXKeyValue        = "1593586993541" // 七牛云上传x:key字段的值
 	DefaultUserIDForToken = "1"             // 获取上传令牌时使用的默认用户ID
 )
+
+// BuildJourneyAPIURL 构建 Journey 相关 API URL
+// 格式：https://{app}/api/v4/yaw/journeys/{journey_id}/{action}
+// 参数：
+//   - addr: Skylark 地址信息
+//   - journeyID: 流程记录ID
+//   - action: 操作路径（如 "assignments"）
+// 返回：完整的 API URL
+func BuildJourneyAPIURL(addr BasicSkylarkAddress, journeyID int64, action string) string {
+	return fmt.Sprintf("%s%s%s%d/%s", SchemeHTTPS, addr.App, APIJourneysPath, journeyID, action)
+}

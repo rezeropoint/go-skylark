@@ -2,6 +2,7 @@ package flows
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -15,17 +16,23 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	cache core.CacheInterface
+	cache             core.CacheInterface
+	getPlatformConfig core.GetPlatformConfigFunc // 获取平台配置的函数（依赖注入）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface) (*skylarkFlowRegistry, error) {
+func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc) (*skylarkFlowRegistry, error) {
 	if config == nil {
 		return nil, core.ErrConfigNil
 	}
 
+	if getPlatformConfig == nil {
+		return nil, fmt.Errorf("getPlatformConfig 不能为 nil")
+	}
+
 	return &skylarkFlowRegistry{
-		cache: cache,
+		cache:             cache,
+		getPlatformConfig: getPlatformConfig,
 	}, nil
 }
 
@@ -239,4 +246,128 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 
 	return nil
+}
+
+// GetJourneyBySN 根据流程编号查询流程记录
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//   - sn: 流程编号
+//
+// 返回:
+//   - *core.Journey: 流程记录信息
+//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
+func (f *skylarkFlowRegistry) GetJourneyBySN(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	sn string,
+) (*core.Journey, error) {
+	// 1. 通过 PlatformManager 获取租户配置
+	cfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取租户配置失败: %w", err)
+	}
+
+	// 2. 验证 APIBaseURL 和 APIToken 是否配置
+	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
+		return nil, fmt.Errorf("租户 %s 的 APIBaseURL 未配置", tenantID)
+	}
+	if cfg.APIToken == nil || *cfg.APIToken == "" {
+		return nil, fmt.Errorf("租户 %s 的 APIToken 未配置", tenantID)
+	}
+
+	// 3. 从配置中构建 SkylarkAddress
+	skylarkAddress := core.BasicSkylarkAddress{
+		App:        *cfg.APIBaseURL, // 使用配置中的域名
+		UserID:     "",               // 查询操作不需要 UserID
+		AuthHeader: *cfg.APIToken,   // 使用配置中的 Token
+	}
+
+	// 4. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/find_by_sn
+	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "journeys", "find_by_sn")
+
+	// 5. 添加查询参数: ?sn=xxx
+	apiURL = fmt.Sprintf("%s?sn=%s", apiURL, sn)
+
+	// 6. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 7. 解析响应
+	var journeyResp JourneyResponse
+	if err := httputils.ReadJSONResponse(resp, &journeyResp); err != nil {
+		// 如果是 404 错误，转换为 ErrJourneyNotFound
+		if errors.Is(err, core.ErrSkylarkAPINotFound) {
+			return nil, core.ErrJourneyNotFound
+		}
+		return nil, err
+	}
+
+	// 8. 转换为领域模型并返回
+	return journeyResp.ToDomain(), nil
+}
+
+// GetJourneyAssignments 获取流程节点处理信息列表
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - []*core.Assignment: 任务列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) GetJourneyAssignments(
+	ctx context.Context,
+	tenantID string,
+	journeyID int64,
+) ([]*core.Assignment, error) {
+	// 1. 通过 PlatformManager 获取租户配置
+	cfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取租户配置失败: %w", err)
+	}
+
+	// 2. 验证 APIBaseURL 和 APIToken 是否配置
+	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
+		return nil, fmt.Errorf("租户 %s 的 APIBaseURL 未配置", tenantID)
+	}
+	if cfg.APIToken == nil || *cfg.APIToken == "" {
+		return nil, fmt.Errorf("租户 %s 的 APIToken 未配置", tenantID)
+	}
+
+	// 3. 从配置中构建 SkylarkAddress
+	skylarkAddress := core.BasicSkylarkAddress{
+		App:        *cfg.APIBaseURL, // 使用配置中的域名
+		UserID:     "",               // 查询操作不需要 UserID
+		AuthHeader: *cfg.APIToken,   // 使用配置中的 Token
+	}
+
+	// 4. 构建 API URL: /api/v4/yaw/journeys/:journey_id/assignments
+	apiURL := core.BuildJourneyAPIURL(skylarkAddress, journeyID, "assignments")
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 解析响应
+	var assignmentResponses []AssignmentResponse
+	if err := httputils.ReadJSONResponse(resp, &assignmentResponses); err != nil {
+		return nil, err
+	}
+
+	// 7. 转换为领域模型
+	assignments := make([]*core.Assignment, len(assignmentResponses))
+	for i, ar := range assignmentResponses {
+		assignments[i] = ar.ToDomain()
+	}
+
+	return assignments, nil
 }
