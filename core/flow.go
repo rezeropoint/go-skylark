@@ -79,9 +79,21 @@ const (
 //   - apiCtx: API 调用上下文
 //   - journeyID: 流程记录ID
 //   - action: 操作路径（如 "assignments"）
+//
 // 返回：完整的 API URL
 func BuildJourneyAPIURL(apiCtx SkylarkAPIContext, journeyID int64, action string) string {
 	return fmt.Sprintf("%s%s%s%d/%s", SchemeHTTPS, apiCtx.App, APIJourneysPath, journeyID, action)
+}
+
+// BuildJourneyMomentsAPIURL 构建流程审批历史 API URL
+// 格式：https://{app}/api/v4/yaw/journeys/{journey_id}/moments
+// 参数：
+//   - apiCtx: API 调用上下文
+//   - journeyID: 流程记录ID
+//
+// 返回：完整的 API URL
+func BuildJourneyMomentsAPIURL(apiCtx SkylarkAPIContext, journeyID int64) string {
+	return BuildJourneyAPIURL(apiCtx, journeyID, "moments")
 }
 
 // FlowDetail 流程详情（领域模型）

@@ -96,3 +96,12 @@ func BuildUserAssignmentsURL(apiCtx SkylarkAPIContext) string {
 func BuildProposedJourneysURL(apiCtx SkylarkAPIContext) string {
 	return BuildAPIURL(apiCtx.App, APIFlowsPath, "proposed_journeys.json")
 }
+
+// BuildJourneySearchURL 构建流程记录搜索 API URL
+// 示例：https://app.skylark.com/api/v4/yaw/flows/123/journeys/search
+// 参数:
+//   - apiCtx: API 调用上下文
+//   - flowID: 流程ID
+func BuildJourneySearchURL(apiCtx SkylarkAPIContext, flowID int64) string {
+	return BuildFlowAPIURL(apiCtx, flowID, "journeys", "search")
+}

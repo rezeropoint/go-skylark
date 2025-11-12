@@ -637,3 +637,167 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(
 	// 9. 返回结果
 	return journeys, totalCount, nil
 }
+
+// SearchJourneys 搜索流程记录
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - req: 搜索请求
+//
+// 返回:
+//   - []*core.Journey: 流程列表
+//   - int: 总数
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) SearchJourneys(
+	ctx context.Context,
+	tenantID string,
+	req *core.JourneySearchRequest,
+) ([]*core.Journey, int, error) {
+	// 1. 参数校验
+	if req.Page < 1 {
+		return nil, 0, fmt.Errorf("page 必须大于等于 1")
+	}
+	if req.PageSize < 1 || req.PageSize > 100 {
+		return nil, 0, fmt.Errorf("pageSize 必须在 1-100 之间")
+	}
+	if req.FlowID <= 0 {
+		return nil, 0, fmt.Errorf("flowID 必须大于 0")
+	}
+
+	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 3. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 4. 构建 API URL: POST /api/v4/yaw/flows/:id/journeys/search
+	apiURL := core.BuildJourneySearchURL(skylarkAddress, req.FlowID)
+
+	// 5. 构建请求体
+	searchBody := map[string]interface{}{
+		"page":     req.Page,
+		"per_page": req.PageSize,
+	}
+
+	// 添加可选过滤条件
+	if req.Status != nil {
+		searchBody["status"] = *req.Status
+	}
+	if req.Keyword != nil {
+		searchBody["keyword"] = *req.Keyword
+	}
+	if req.InitiatorID != nil {
+		searchBody["initiator_id"] = *req.InitiatorID
+	}
+	if req.CreatedFrom != nil {
+		searchBody["created_from"] = *req.CreatedFrom
+	}
+	if req.CreatedTo != nil {
+		searchBody["created_to"] = *req.CreatedTo
+	}
+
+	// 6. 发送 HTTP POST 请求
+	resp, err := httpc.Do(ctx, http.MethodPost, apiURL, searchBody)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 7. 处理 404 错误（流程不存在）
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, 0, core.ErrFlowNotFound
+	}
+
+	// 8. 解析响应
+	var searchResp JourneySearchAPIResponse
+	if err := httputils.ReadJSONResponse(resp, &searchResp); err != nil {
+		return nil, 0, err
+	}
+
+	// 9. 转换为领域模型
+	journeys := make([]*core.Journey, len(searchResp.Journeys))
+	for i, journeyResp := range searchResp.Journeys {
+		journeys[i] = journeyResp.ToDomain()
+	}
+
+	// 10. 从响应头获取总数（X-SLP-Total-Count）
+	totalCount := 0
+	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
+		if count, err := strconv.Atoi(totalStr); err == nil {
+			totalCount = count
+		}
+	}
+
+	// 11. 返回结果
+	return journeys, totalCount, nil
+}
+
+// GetJourneyMoments 获取流程审批历史
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - []*core.Moment: 审批历史列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) GetJourneyMoments(
+	ctx context.Context,
+	tenantID string,
+	journeyID int64,
+) ([]*core.Moment, error) {
+	// 1. 参数校验
+	if journeyID <= 0 {
+		return nil, fmt.Errorf("journeyID 必须大于 0")
+	}
+
+	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 4. 构建 API URL: GET /api/v4/yaw/journeys/:journey_id/moments
+	apiURL := core.BuildJourneyMomentsAPIURL(skylarkAddress, journeyID)
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 处理 404 错误（流程记录不存在）
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, core.ErrJourneyNotFound
+	}
+
+	// 7. 解析响应
+	var momentResponses []MomentResponse
+	if err := httputils.ReadJSONResponse(resp, &momentResponses); err != nil {
+		return nil, err
+	}
+
+	// 8. 转换为领域模型
+	moments := make([]*core.Moment, len(momentResponses))
+	for i, mr := range momentResponses {
+		moments[i] = mr.ToDomain()
+	}
+
+	// 9. 返回结果
+	return moments, nil
+}

@@ -107,6 +107,27 @@ type SkylarkFlowRegistry interface {
 	//   - int: 总数
 	//   - error: 错误信息
 	GetProposedJourneys(ctx context.Context, tenantID string, remoteUserID int, page, pageSize int) ([]*core.Journey, int, error)
+
+	// SearchJourneys 搜索流程记录
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - req: 搜索请求
+	// 返回:
+	//   - []*core.Journey: 流程列表
+	//   - int: 总数
+	//   - error: 错误信息
+	SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
+
+	// GetJourneyMoments 获取流程审批历史
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - []*core.Moment: 审批历史列表
+	//   - error: 错误信息
+	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
 }
 
 // NewSkylarkFlowRegistry 创建新的Skylark流程注册表实例

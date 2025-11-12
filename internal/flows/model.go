@@ -341,3 +341,69 @@ type UserAssignmentsResponse struct {
 type ProposedJourneysResponse struct {
 	Journeys []JourneyResponse `json:"journeys"` // 流程列表（复用已有类型）
 }
+
+// JourneySearchAPIResponse Skylark API 返回的搜索响应结构体
+// 职责：处理 POST /api/v4/yaw/flows/:id/journeys/search 响应的 JSON 反序列化
+// 说明：总数从响应头 X-SLP-Total-Count 获取
+type JourneySearchAPIResponse struct {
+	Journeys []JourneyResponse `json:"journeys"` // 流程列表（复用已有类型）
+}
+
+// MomentResponse Skylark API 返回的审批历史记录结构体
+// 职责：处理 GET /api/v4/yaw/journeys/:id/moments 响应的 JSON 反序列化
+type MomentResponse struct {
+	ID           int64         `json:"id"`            // 记录ID
+	AssignmentID int64         `json:"assignment_id"` // 任务ID
+	JourneyID    int64         `json:"journey_id"`    // 流程记录ID
+	VertexID     int64         `json:"vertex_id"`     // 节点ID
+	Status       string        `json:"status"`        // 操作状态（approved/refused/transferred/cancelled等）
+	OperatorID   int64         `json:"operator_id"`   // 操作人ID
+	Comment      *string       `json:"comment"`       // 处理意见（可为空）
+	CreatedAt    string        `json:"created_at"`    // 创建时间（ISO 8601格式）
+	UpdatedAt    string        `json:"updated_at"`    // 更新时间（ISO 8601格式）
+	Duration     *int          `json:"duration"`      // 处理时长（秒，可为空）
+	Vertex       *VertexInfo   `json:"vertex"`        // 节点信息（可为空）
+	Operator     *OperatorInfo `json:"operator"`      // 操作人信息（可为空）
+}
+
+// VertexInfo API 返回的节点信息结构体
+// 说明：用于 MomentResponse 的嵌套对象
+type VertexInfo struct {
+	ID   int64  `json:"id"`   // 节点ID
+	Name string `json:"name"` // 节点名称
+}
+
+// OperatorInfo API 返回的操作人信息结构体
+// 说明：用于 MomentResponse 的嵌套对象
+type OperatorInfo struct {
+	ID   int64  `json:"id"`   // 操作人ID
+	Name string `json:"name"` // 操作人姓名
+}
+
+// ToDomain 将 API 响应转换为领域模型
+func (m *MomentResponse) ToDomain() *core.Moment {
+	moment := &core.Moment{
+		ID:           m.ID,
+		AssignmentID: m.AssignmentID,
+		JourneyID:    m.JourneyID,
+		VertexID:     m.VertexID,
+		Status:       m.Status,
+		OperatorID:   m.OperatorID,
+		Comment:      m.Comment,
+		CreatedAt:    m.CreatedAt,
+		UpdatedAt:    m.UpdatedAt,
+		Duration:     m.Duration,
+	}
+
+	// 转换节点信息
+	if m.Vertex != nil {
+		moment.VertexName = &m.Vertex.Name
+	}
+
+	// 转换操作人信息
+	if m.Operator != nil {
+		moment.OperatorName = &m.Operator.Name
+	}
+
+	return moment
+}

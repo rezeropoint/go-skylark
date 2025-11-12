@@ -122,3 +122,60 @@ func TranslateStatus(status string) string {
 	}
 	return status
 }
+
+// JourneySearchRequest 流程记录搜索请求（领域模型）
+// 说明：用于搜索流程记录，支持多种过滤条件
+// 用途：调用 POST /api/v4/yaw/flows/:id/journeys/search 接口
+// 示例：
+//
+//	status := core.StatusProcessing
+//	req := &core.JourneySearchRequest{
+//	    FlowID:   123,
+//	    Status:   &status, // 使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed
+//	    Page:     1,
+//	    PageSize: 20,
+//	}
+type JourneySearchRequest struct {
+	FlowID int64 // 流程ID（必填）
+
+	// 搜索条件（可选）
+	Status      *string // 流程状态（使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed）
+	Keyword     *string // 关键词搜索（搜索SN或字段值）
+	InitiatorID *int64  // 发起人ID（远程用户ID）
+
+	// 时间范围（可选）
+	CreatedFrom *string // 创建时间开始（ISO 8601格式，如 "2025-01-01T00:00:00Z"）
+	CreatedTo   *string // 创建时间结束（ISO 8601格式）
+
+	// 分页参数
+	Page     int // 页码（从1开始）
+	PageSize int // 每页数量
+}
+
+// JourneySearchResponse 流程记录搜索响应（领域模型）
+// 说明：搜索接口返回的结果，包含流程列表和总数
+type JourneySearchResponse struct {
+	Journeys   []*Journey // 流程记录列表
+	TotalCount int        // 总数
+}
+
+// Moment 流程审批历史记录（领域模型）
+// 说明：表示流程中的一次节点处理记录（审批、回退、转交等操作）
+// 用途：GetJourneyMoments 接口返回流程的审批时间线
+// 注意：与 Assignment 的区别：
+//   - Assignment 表示任务（可能有多个待处理人）
+//   - Moment 表示历史记录（某个人在某个时间点执行的操作）
+type Moment struct {
+	ID           int64   // 记录ID
+	AssignmentID int64   // 任务ID
+	JourneyID    int64   // 流程记录ID
+	VertexID     int64   // 节点ID
+	VertexName   *string // 节点名称（可为空）
+	Status       string  // 操作状态（approved/refused/transferred/cancelled等）
+	OperatorID   int64   // 操作人ID
+	OperatorName *string // 操作人姓名（可为空）
+	Comment      *string // 处理意见（可为空）
+	CreatedAt    string  // 创建时间（ISO 8601格式）
+	UpdatedAt    string  // 更新时间（ISO 8601格式）
+	Duration     *int    // 处理时长（秒，可为空）
+}

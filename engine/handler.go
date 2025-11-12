@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rezeropoint/go-skylark/core"
@@ -232,6 +233,41 @@ func (e *skylarkEngine) GetProposedJourneys(
 
 	// 2. 调用 flows manager 获取流程列表
 	return e.flows.GetProposedJourneys(ctx, tenantID, remoteUserIDs[0], page, pageSize)
+}
+
+// SearchJourneys 搜索流程记录
+func (e *skylarkEngine) SearchJourneys(
+	ctx context.Context,
+	tenantID string,
+	localUserID *string,
+	req *core.JourneySearchRequest,
+) ([]*core.Journey, int, error) {
+	// 1. 如果提供了 localUserID，转换为远程用户ID并覆盖请求中的 InitiatorID
+	if localUserID != nil && *localUserID != "" {
+		remoteUserIDs, err := e.user.GetRemoteUserIDs(ctx, tenantID, []string{*localUserID})
+		if err != nil {
+			return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+		}
+		if len(remoteUserIDs) == 0 {
+			return nil, 0, fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", *localUserID)
+		}
+		// 覆盖请求中的 InitiatorID
+		remoteUserID := int64(remoteUserIDs[0])
+		req.InitiatorID = &remoteUserID
+	}
+
+	// 2. 调用 Internal 层接口
+	return e.flows.SearchJourneys(ctx, tenantID, req)
+}
+
+// GetJourneyMoments 获取流程审批历史
+func (e *skylarkEngine) GetJourneyMoments(
+	ctx context.Context,
+	tenantID string,
+	journeyID int64,
+) ([]*core.Moment, error) {
+	// 直接调用 Internal 层接口（无需用户ID转换）
+	return e.flows.GetJourneyMoments(ctx, tenantID, journeyID)
 }
 
 // Close 关闭引擎，释放资源（尤其是 platform 管理的远程数据库连接池）
