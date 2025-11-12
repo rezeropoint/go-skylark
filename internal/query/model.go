@@ -1,9 +1,21 @@
 package query
 
-// query 模块不需要 model.go
-//
-// 原因：
-// - core/query.go 中的结构体（QueryRequest、QueryResponse 等）都是 API 请求/响应类型
-// - 这些结构体不包含 db 标签，不需要 ORM 映射
-// - query 模块直接使用动态 SQL 查询，返回 map[string]interface{} 类型
-// - 不需要额外的数据库模型转换
+import (
+	"database/sql"
+	"time"
+)
+
+// assignmentRow 用于扫描 Assignment 查询结果（数据库模型）
+// 对应 Skylark 远程表：assignments_{flow_id}
+type assignmentRow struct {
+	AssignmentID int            `db:"slp_assignment_id"` // Assignment ID
+	JourneyID    int            `db:"slp_journey_id"`    // Journey ID（流程实例）
+	Status       string         `db:"slp_status"`        // 状态
+	VertexID     int            `db:"slp_vertex_id"`     // 节点ID
+	VertexName   sql.NullString `db:"vertex_name"`       // 节点名称（JOIN vertices表）
+	VertexAlias  sql.NullString `db:"vertex_alias"`      // 节点别名（JOIN vertices表）
+	UserID       sql.NullString `db:"slp_user_id"`       // 处理人ID
+	CreatedAt    time.Time      `db:"slp_created_at"`    // 创建时间
+	UpdatedAt    time.Time      `db:"slp_updated_at"`    // 更新时间
+	BusinessData string         `db:"business_data"`     // 业务数据（JSON字符串）
+}
