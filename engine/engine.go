@@ -20,8 +20,16 @@ type SkylarkEngine interface {
 	// CreateFormRow 创建表单行
 	CreateFormRow(ctx context.Context, app string, formID int64, userID int64, authHeader string, data map[string]core.TypedValue) error
 	// UpdateFlowJourneyStatus 更新流程任务状态
-	// operation 支持: approve/refuse/transfer/cancel
-	UpdateFlowJourneyStatus(ctx context.Context, app string, flowID int64, journeyID int64, assignmentID int64, userID int64, authHeader string, operation string, options flows.UpdateJourneyStatusOptions) error
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	//   - assignmentID: 任务ID
+	//   - localUserID: 本地用户ID（操作人，SDK自动转换为远程用户ID）
+	//   - operation: 操作类型（使用 core.OperationApprove 等常量）
+	//   - options: 可选参数（评论、下一个节点ID、抄送者、字段数据等）
+	UpdateFlowJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options flows.UpdateJourneyStatusOptions) error
 	// GetFlowJourneyBySN 根据流程编号查询流程记录
 	GetFlowJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error)
 	// GetFlowJourneyAssignments 获取流程节点处理信息列表

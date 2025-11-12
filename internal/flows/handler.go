@@ -18,10 +18,11 @@ import (
 type skylarkFlowRegistry struct {
 	cache             core.CacheInterface
 	getPlatformConfig core.GetPlatformConfigFunc // 获取平台配置的函数（依赖注入）
+	getRemoteUserIDs  core.GetRemoteUserIDsFunc  // 获取远程用户ID的函数（依赖注入）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc) (*skylarkFlowRegistry, error) {
+func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (*skylarkFlowRegistry, error) {
 	if config == nil {
 		return nil, core.ErrConfigNil
 	}
@@ -30,9 +31,14 @@ func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatfo
 		return nil, fmt.Errorf("getPlatformConfig 不能为 nil")
 	}
 
+	if getRemoteUserIDs == nil {
+		return nil, fmt.Errorf("getRemoteUserIDs 不能为 nil")
+	}
+
 	return &skylarkFlowRegistry{
 		cache:             cache,
 		getPlatformConfig: getPlatformConfig,
+		getRemoteUserIDs:  getRemoteUserIDs,
 	}, nil
 }
 
@@ -110,7 +116,7 @@ func (f *skylarkFlowRegistry) CreateFlow(ctx context.Context, app string, flowID
 	}
 	flowProposeRequest := FlowProposeRequest{
 		Assignment: ProposeAssignment{
-			Operation:          core.OperationPropose,
+			Operation:          string(core.OperationPropose),
 			NextVertexID:       routeResp.NextVertices[0].NextVerticesID,
 			DurationThresholds: []map[string]string{},
 		},
@@ -140,37 +146,59 @@ func (f *skylarkFlowRegistry) CreateFlow(ctx context.Context, app string, flowID
 // UpdateJourneyStatus 更新流程任务状态
 // 参数:
 //   - ctx: 上下文
-//   - app: 应用名称
+//   - tenantID: 租户ID（用于获取平台配置）
 //   - flowID: 流程ID（用于获取字段映射）
 //   - journeyID: 流程记录ID
 //   - assignmentID: 任务ID
-//   - userID: 用户ID
-//   - authHeader: 认证头信息
-//   - operation: 操作类型 (approve/refuse/transfer/cancel)
+//   - localUserID: 本地用户ID（操作人，SDK自动转换为远程用户ID）
+//   - operation: 操作类型（使用 core.OperationApprove 等常量）
 //   - options: 可选参数
 func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	ctx context.Context,
-	app string,
+	tenantID string,
 	flowID int64,
 	journeyID int64,
 	assignmentID int64,
-	userID int64,
-	authHeader string,
-	operation string,
+	localUserID string,
+	operation core.JourneyOperation,
 	options UpdateJourneyStatusOptions,
 ) error {
-	// 构建流程地址信息
+	// 1. 通过 PlatformManager 获取租户配置
+	cfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("获取租户配置失败: %w", err)
+	}
+
+	// 2. 验证 APIBaseURL 和 APIToken 是否配置
+	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
+		return fmt.Errorf("租户 %s 的 APIBaseURL 未配置", tenantID)
+	}
+	if cfg.APIToken == nil || *cfg.APIToken == "" {
+		return fmt.Errorf("租户 %s 的 APIToken 未配置", tenantID)
+	}
+
+	// 3. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
+	if err != nil {
+		return fmt.Errorf("转换用户ID失败: %w", err)
+	}
+	if len(remoteUserIDs) == 0 {
+		return fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", localUserID)
+	}
+	remoteUserID := remoteUserIDs[0]
+
+	// 4. 从配置中构建 SkylarkAddress
 	skylarkFlowAddress := core.SkylarkAPIContext{
-		App:        app,
-		UserID:     strconv.FormatInt(userID, 10),
-		AuthHeader: authHeader,
+		App:        *cfg.APIBaseURL,
+		UserID:     strconv.Itoa(remoteUserID), // 操作人ID（远程）
+		AuthHeader: *cfg.APIToken,
 	}
 
 	// 构建API请求URL
 	apiURL := core.BuildJourneyAssignmentAPIURL(skylarkFlowAddress, journeyID, assignmentID)
 
 	// 准备工作完成，现在获取分布式锁
-	lockKey := fmt.Sprintf("journey:lock:%s:%d:%d:%d", app, journeyID, assignmentID, userID)
+	lockKey := fmt.Sprintf("journey:lock:%s:%d:%d:%d", tenantID, journeyID, assignmentID, remoteUserID)
 	lockValue := uuid.New().String()
 	lockExpiry := 30 // 默认30秒过期时间
 
@@ -224,7 +252,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	// 第二次请求：执行操作（approve/refuse/transfer/cancel）
 	operationRequest, err := f.buildOperationRequest(
 		skylarkFlowAddress,
-		operation,
+		string(operation), // 转换为字符串
 		options.NextVertexID,
 		options.Comment,
 		options.CarbonCopyUserIDs,

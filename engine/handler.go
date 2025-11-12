@@ -50,17 +50,6 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 2. 初始化流程和表单管理器（依赖 Platform）
-	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.Get)
-	if err != nil {
-		return nil, err
-	}
-
-	forms, err := forms.NewSkylarkFormRegistry(&forms.Config{}, cache)
-	if err != nil {
-		return nil, err
-	}
-
 	// 2. 初始化组织ID映射管理器（依赖 Platform）
 	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.Get)
 	if err != nil {
@@ -73,19 +62,30 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 4. 初始化组织映射管理器（业务字段值映射）
+	// 4. 初始化流程和表单管理器（依赖 Platform + User）
+	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.Get, userMgr.GetRemoteUserIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	forms, err := forms.NewSkylarkFormRegistry(&forms.Config{}, cache)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 初始化组织映射管理器（业务字段值映射）
 	mappingMgr, err := mapping.NewManager(db, cache)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. 初始化事件配置管理器（注入 platform.GetRemoteDB）
+	// 6. 初始化事件配置管理器（注入 platform.GetRemoteDB）
 	eventMgr, err := event.NewManager(db, platformMgr.GetRemoteDB)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. 初始化查询管理器（注入多个依赖函数）
+	// 7. 初始化查询管理器（注入多个依赖函数）
 	queryConfig := config.Query
 	if queryConfig == nil {
 		queryConfig = &query.Config{} // 使用默认配置
@@ -102,7 +102,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 6. 初始化统计管理器（注入多个依赖函数）
+	// 8. 初始化统计管理器（注入多个依赖函数）
 	statsConfig := config.Stats
 	if statsConfig == nil {
 		statsConfig = &stats.Config{} // 使用默认配置
@@ -141,8 +141,8 @@ func (e *skylarkEngine) CreateFormRow(ctx context.Context, app string, formID in
 	return e.forms.CreateFormRow(ctx, app, formID, userID, authHeader, data)
 }
 
-func (e *skylarkEngine) UpdateFlowJourneyStatus(ctx context.Context, app string, flowID int64, journeyID int64, assignmentID int64, userID int64, authHeader string, operation string, options flows.UpdateJourneyStatusOptions) error {
-	return e.flows.UpdateJourneyStatus(ctx, app, flowID, journeyID, assignmentID, userID, authHeader, operation, options)
+func (e *skylarkEngine) UpdateFlowJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options flows.UpdateJourneyStatusOptions) error {
+	return e.flows.UpdateJourneyStatus(ctx, tenantID, flowID, journeyID, assignmentID, localUserID, operation, options)
 }
 
 // GetFlowJourneyBySN 根据流程编号查询流程记录

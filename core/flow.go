@@ -66,14 +66,17 @@ const (
 	APIUploadPath      = "https://up.qbox.me/"         // 七牛云上传API路径
 )
 
+// JourneyOperation 流程操作类型
+type JourneyOperation string
+
 // 操作类型常量
 const (
-	OperationRoute    = "route"    // 路由操作（修改数据）
-	OperationPropose  = "propose"  // 提议操作（创建流程）
-	OperationApprove  = "approve"  // 通过操作
-	OperationRefuse   = "refuse"   // 回退操作
-	OperationTransfer = "transfer" // 转交操作
-	OperationCancel   = "cancel"   // 撤销操作
+	OperationRoute    JourneyOperation = "route"    // 路由操作（修改数据）
+	OperationPropose  JourneyOperation = "propose"  // 提议操作（创建流程）
+	OperationApprove  JourneyOperation = "approve"  // 通过操作
+	OperationRefuse   JourneyOperation = "refuse"   // 回退操作
+	OperationTransfer JourneyOperation = "transfer" // 转交操作
+	OperationCancel   JourneyOperation = "cancel"   // 撤销操作
 )
 
 // 事件类型常量

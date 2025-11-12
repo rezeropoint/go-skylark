@@ -22,7 +22,7 @@ type SkylarkFlowRegistry interface {
 	//   - ctx: 上下文
 	//   - app: 应用名称
 	//   - flowID: 流程ID
-	//   - userID: 用户ID
+	//   - userID: 用户ID（远程用户ID）
 	//   - authHeader: 认证头信息
 	//   - data: 流程数据
 	CreateFlow(ctx context.Context, app string, flowID int64, userID int64, authHeader string, data map[string]core.TypedValue) error
@@ -30,15 +30,14 @@ type SkylarkFlowRegistry interface {
 	// UpdateJourneyStatus 更新流程任务状态
 	// 参数:
 	//   - ctx: 上下文
-	//   - app: 应用名称
+	//   - tenantID: 租户ID（用于获取平台配置）
 	//   - flowID: 流程ID（用于获取字段映射）
 	//   - journeyID: 流程记录ID
 	//   - assignmentID: 任务ID
-	//   - userID: 用户ID
-	//   - authHeader: 认证头信息
-	//   - operation: 操作类型 (approve/refuse/transfer/cancel)
-	//   - options: 可选参数（评论、下一个节点ID、抄送者、时限、字段数据等）
-	UpdateJourneyStatus(ctx context.Context, app string, flowID int64, journeyID int64, assignmentID int64, userID int64, authHeader string, operation string, options UpdateJourneyStatusOptions) error
+	//   - localUserID: 本地用户ID（操作人，SDK自动转换为远程用户ID）
+	//   - operation: 操作类型（使用 core.OperationApprove 等常量）
+	//   - options: 可选参数（评论、下一个节点ID、抄送者、字段数据等）
+	UpdateJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options UpdateJourneyStatusOptions) error
 
 	// GetJourneyBySN 根据流程编号查询流程记录
 	// 参数:
@@ -67,6 +66,7 @@ type SkylarkFlowRegistry interface {
 //   - config: 配置信息
 //   - cache: 缓存接口
 //   - getPlatformConfig: 获取平台配置的函数（通过依赖注入）
-func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc) (SkylarkFlowRegistry, error) {
-	return newSkylarkFlowRegistry(config, cache, getPlatformConfig)
+//   - getRemoteUserIDs: 获取远程用户ID的函数（通过依赖注入，仅用于 UpdateJourneyStatus）
+func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (SkylarkFlowRegistry, error) {
+	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs)
 }

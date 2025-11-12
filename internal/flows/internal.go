@@ -183,7 +183,7 @@ func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylark
 	// 创建符合 Request 结构体的数据
 	return FlowRouteRequest{
 		Assignment: RouteAssignment{
-			Operation: core.OperationRoute,
+			Operation: string(core.OperationRoute),
 			ResponseAttributes: map[string]any{
 				"entries_attributes": entries,
 			},
@@ -221,7 +221,7 @@ func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.Sk
 	}
 	return FlowProposeRequest{
 		Assignment: ProposeAssignment{
-			Operation:          core.OperationPropose,
+			Operation:          string(core.OperationPropose),
 			NextVertexID:       id,
 			DurationThresholds: []map[string]string{},
 		},
@@ -251,7 +251,7 @@ func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 	// 创建符合第一次请求的数据结构
 	return UpdateJourneyStatusRequest{
 		Assignment: UpdateAssignment{
-			Operation: core.OperationRoute,
+			Operation: string(core.OperationRoute),
 			ResponseAttributes: map[string]any{
 				"entries_attributes": entries,
 			},
