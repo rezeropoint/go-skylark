@@ -116,53 +116,24 @@
 #### model.go 的作用
 
 ```go
-// internal/platform/model.go
-package platform
-
-import (
-	"database/sql"
-	"time"
-)
-
-// PlatformConfigModel 是数据库查询专用结构体
-// ✅ 允许包含 db 标签
-// ✅ 允许使用 sql.Null* 类型
+// internal/platform/model.go - 数据库模型（允许框架类型）
 type PlatformConfigModel struct {
-	ID          string         `db:"id"`
-	TenantID    string         `db:"tenant_id"`
-	Host        string         `db:"host"`
-	Token       string         `db:"token"`
-	Description sql.NullString `db:"description"` // 可空字段
-	CreatedAt   time.Time      `db:"created_at"`
+    ID          string         `db:"id"`
+    Description sql.NullString `db:"description"` // ✅ 可空字段
+    // ...
 }
 
-// ToDomain 将数据库模型转换为领域模型
 func (m *PlatformConfigModel) ToDomain() *core.PlatformConfig {
-	return &core.PlatformConfig{
-		ID:          m.ID,
-		TenantID:    m.TenantID,
-		Host:        m.Host,
-		Token:       m.Token,
-		Description: convertNullString(m.Description), // string 或 nil
-		CreatedAt:   m.CreatedAt,
-	}
+    return &core.PlatformConfig{
+        Description: convertNullString(m.Description), // 转为 *string
+        // ...
+    }
 }
-```
 
-```go
-// core/platform.go (改进后)
-package core
-
-// PlatformConfig 是纯粹的领域模型
-// ❌ 不包含任何框架标签
-// ❌ 不使用 sql.Null* 类型
+// core/platform.go - 领域模型（纯 Go 类型）
 type PlatformConfig struct {
-	ID          string
-	TenantID    string
-	Host        string
-	Token       string
-	Description *string    // 使用指针表示可空
-	CreatedAt   time.Time
+    Description *string // ✅ 使用指针表示可空
+    // ...
 }
 ```
 
@@ -268,40 +239,79 @@ Skylark 是一个**低代码平台**，通过积木式搭建模式快速构建�
 | **Query** | - | 复杂条件查询 | - | ✅ |
 | **Stats** | - | - | 多维度统计 | ✅ |
 
-### 四大管理器
+### Manager 设计规范
 
-#### 1. PlatformManager
+所有 Internal 层的模块应遵循统一的 Manager 模式：
 
-**职责**：管理 Skylark 平台连接配置
+#### Manager 职责划分
 
-**核心方法**：
-- `GetPlatformConfig(tenantID string)` - 获取平台配置
-- `ListPlatformConfigs()` - 列出所有配置
+| Manager 类型 | 职责 | 依赖注入需求 | 示例 |
+|-------------|------|-------------|------|
+| **配置管理** | 管理本地配置、远程连接 | DB、Cache | Platform、Event、Mapping |
+| **API 代理** | 调用远程 API、数据转换 | Cache、GetPlatformConfig | Flows、Forms |
+| **查询引擎** | 构建查询、执行查询 | DB、Cache、GetRemoteDB | Query、Stats |
+| **映射转换** | ID 映射、数据转换 | DB、Cache、GetRemoteDB | Organization、User |
 
-#### 2. FlowManager
+#### Manager 必须实现的接口
 
-**职责**：流程生命周期管理
+每个 Manager 应该根据职责实现以下接口类型：
 
-**核心方法**：
-- `CreateFlow(auth, templateID, data)` - 创建流程实例
-- `UpdateFlowStatus(auth, flowID, status)` - 更新流程状态
-- `QueryFlows(tenantID, conditions)` - 查询流程
+**1. 配置管理接口**
+```go
+// 平台配置管理
+type Manager interface {
+    Create(ctx context.Context, config *Config) error
+    Get(ctx context.Context, id string) (*Config, error)
+    Update(ctx context.Context, config *Config) error
+    Delete(ctx context.Context, id string) error
+}
+```
 
-#### 3. FormManager
+**2. API 代理接口**
+```go
+// 远程 API 调用
+type Registry interface {
+    CreateResource(ctx context.Context, req *Request) error
+    GetResource(ctx context.Context, id string) (*Resource, error)
+    ListResources(ctx context.Context, params *ListParams) ([]*Resource, int, error)
+}
+```
 
-**职责**：表单数据管理
+**3. 查询引擎接口**
+```go
+// 数据查询
+type Manager interface {
+    Query(ctx context.Context, req *QueryRequest) (*QueryResult, error)
+    GetDetail(ctx context.Context, req *DetailRequest) (*DetailResult, error)
+}
+```
 
-**核心方法**：
-- `CreateFormRow(auth, formID, data)` - 创建表单行
-- `QueryForms(tenantID, conditions)` - 查询表单数据
+**4. 映射转换接口**
+```go
+// ID 映射
+type Manager interface {
+    GetRemoteIDs(ctx context.Context, tenantID string, localIDs []string) ([]int, error)
+    BatchGetInfo(ctx context.Context, tenantID string, ids []int) (map[int]*Info, error)
+}
+```
 
-#### 4. QueryManager
+#### 核心 Manager 示例
 
-**职责**：复杂查询构建
+**PlatformManager**：管理远程平台配置和数据库连接池
+- 提供 `GetRemoteDB()` 给其他 Manager 使用
+- 提供 `GetAPIConfig()` 给 API 代理 Manager 使用
 
-**核心方法**：
-- `BuildQuery(conditions, options)` - 构建查询
-- `ExecuteQuery(query)` - 执行查询
+**FlowManager**：流程生命周期管理（写+读）
+- 依赖：Platform（API 配置 + 远程 DB）、User（用户 ID 映射）
+- 性能优化：enrichment 自动补充关联数据
+
+**QueryManager**：复杂查询引擎（只读）
+- 依赖：Platform（远程 DB）、Event（事件配置）、Mapping（组织映射）
+- 特性：组织权限过滤、虚拟状态支持
+
+**OrganizationManager / UserManager**：ID 映射转换
+- 依赖：Platform（远程 DB）
+- 特性：批量查询、缓存优化
 
 ---
 
@@ -446,43 +456,22 @@ type QueryModel struct {
 
 #### 转换函数位置
 
-**方法 1：在 model.go 中定义（推荐）**
+**推荐方式：在 model.go 中定义**
 
 ```go
 // internal/platform/model.go
 func (m *PlatformConfigModel) ToDomain() *core.PlatformConfig {
-	return &core.PlatformConfig{
-		ID:          m.ID,
-		Description: convertNullString(m.Description),
-	}
+    return &core.PlatformConfig{
+        Description: convertNullString(m.Description),
+        // ...
+    }
 }
-```
 
-**方法 2：在 helpers.go 中定义**
-
-```go
-// internal/platform/helpers.go
-func convertModelToDomain(m *PlatformConfigModel) *core.PlatformConfig {
-	return &core.PlatformConfig{
-		ID:          m.ID,
-		Description: convertNullString(m.Description),
-	}
-}
-```
-
-#### 在 handler.go 中使用
-
-```go
-// internal/platform/handler.go
-func (h *handler) GetPlatformConfig(tenantID string) (*core.PlatformConfig, error) {
-	var model PlatformConfigModel
-	err := h.db.QueryRow(&model, query, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 转换为领域模型
-	return model.ToDomain(), nil
+// internal/platform/handler.go - 使用
+func (h *handler) Get(tenantID string) (*core.PlatformConfig, error) {
+    var model PlatformConfigModel
+    err := h.db.QueryRow(&model, query, tenantID)
+    return model.ToDomain(), err  // 直接转换
 }
 ```
 
@@ -509,23 +498,21 @@ go-skylark 将错误分为两大类（参考 `core/errors.go`）：
 #### 错误使用
 
 ```go
-// Internal 层
-func (h *handler) GetPlatformConfig(tenantID string) (*core.PlatformConfig, error) {
-	var model PlatformConfigModel
-	err := h.db.QueryRow(&model, query, tenantID)
-	if err != nil {
-		if errors.Is(err, sqlx.ErrNotFound) {
-			return nil, core.ErrNoPlatformConfig // 使用预定义错误
-		}
-		return nil, fmt.Errorf("查询平台配置失败: %w", err)
-	}
-	return model.ToDomain(), nil
+// Internal 层 - 使用预定义错误
+func (h *handler) Get(tenantID string) (*core.Config, error) {
+    var model ConfigModel
+    if err := h.db.QueryRow(&model, query, tenantID); err != nil {
+        if errors.Is(err, sqlx.ErrNotFound) {
+            return nil, core.ErrPlatformConfigNotFound // ✅ 预定义错误
+        }
+        return nil, fmt.Errorf("查询失败: %w", err)
+    }
+    return model.ToDomain(), nil
 }
 
-// 用户代码
-config, err := platformManager.GetPlatformConfig(tenantID)
-if errors.Is(err, core.ErrNoPlatformConfig) {
-	// 处理未找到配置的情况
+// 用户代码 - 判断错误类型
+if errors.Is(err, core.ErrPlatformConfigNotFound) {
+    // 处理未找到的情况
 }
 ```
 
@@ -612,24 +599,19 @@ type Config struct {
 
 #### 正确的依赖注入方式
 
-依赖应该通过 NewManager 函数参数传入：
-
 ```go
-// ✅ 正确：依赖作为函数参数传入
+// ✅ 正确：依赖通过 NewManager 参数传入
 func NewManager(
-	config Config,                        // 纯配置参数
-	db sqlx.SqlConn,                      // 依赖1：数据库连接
-	cache core.CacheInterface,            // 依赖2：缓存接口
-	getPlatformConfig core.GetPlatformConfigFunc, // 依赖3：函数注入
-) (Manager, error) {
-	// ...
-}
+    config Config,                   // 纯配置参数
+    db sqlx.SqlConn,                 // 依赖1
+    cache core.CacheInterface,       // 依赖2
+    getRemoteDB core.GetRemoteDBFunc // 依赖3（函数注入）
+) (Manager, error)
 
 // ❌ 错误：依赖放在 Config 中
 type Config struct {
-	DB                sqlx.SqlConn
-	Cache             core.CacheInterface
-	GetPlatformConfig core.GetPlatformConfigFunc
+    DB    sqlx.SqlConn              // ❌ 运行时实例
+    Cache core.CacheInterface       // ❌ 接口类型
 }
 ```
 
@@ -644,27 +626,134 @@ type Config struct {
 #### 解决方案：函数注入
 
 ```go
-// internal/query/config.go
-type GetRemoteDBFunc func(tenantID string) (sqlx.SqlConn, error)
+// core/platform.go - 定义函数类型
+type GetRemoteDBFunc func(ctx context.Context, tenantID string) (sqlx.SqlConn, error)
 
-type Config struct {
-	GetRemoteDB GetRemoteDBFunc
-}
-
-// internal/query/handler.go
-func (h *handler) QueryFlows(tenantID string) ([]core.FlowInfo, error) {
-	// 动态获取租户数据库连接
-	conn, err := h.getRemoteDB(tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 执行查询
-	var models []FlowInfoModel
-	err = conn.QueryRows(&models, query)
-	// ...
+// internal/query/handler.go - 使用
+func (h *handler) Query(tenantID string) ([]core.FlowInfo, error) {
+    conn, _ := h.getRemoteDB(ctx, tenantID)  // 动态获取租户数据库
+    var models []FlowInfoModel
+    conn.QueryRows(&models, query)
+    // ...
 }
 ```
+
+---
+
+## 🚀 性能优化设计模式
+
+### 批量查询优化模式
+
+**适用场景**：需要从远程数据库或 API 获取多个关联对象的信息
+
+**问题**：N+1 查询问题导致性能瓶颈
+
+**解决方案**：
+```go
+// ❌ 错误：N+1 查询
+for _, item := range items {
+    relatedData, _ := fetchRelatedData(item.ID)  // N 次查询
+}
+
+// ✅ 正确：批量查询（4 步法）
+ids := extractUniqueIDs(items)                              // 1. 提取唯一 ID
+results, _ := db.Query("... WHERE id = ANY($1)", pq.Array(ids))  // 2. 批量查询
+mapping := buildMapping(results)                            // 3. 构建映射
+fillData(items, mapping)                                    // 4. 填充数据
+```
+
+**关键原则**：
+- 使用 `pq.Array` 进行批量 SQL 查询（PostgreSQL）
+- 容错处理：部分失败不影响整体流程
+
+### 多级缓存策略
+
+**适用场景**：频繁访问的关联数据（如 Flow 信息、用户信息）
+
+**缓存层级**：
+```
+1. Redis 缓存（优先） → 2. 批量 API 调用 → 3. 异步回写缓存
+```
+
+**实现规范**：
+```go
+func batchGetData(ctx context.Context, ids []int64) (map[int64]*Data, error) {
+    result, missedIDs := make(map[int64]*Data), []int64{}
+
+    // Level 1: 批量查询 Redis
+    for _, id := range ids {
+        if data, err := cache.Get(ctx, id); err == nil {
+            result[id] = data
+        } else {
+            missedIDs = append(missedIDs, id)
+        }
+    }
+
+    // Level 2: 批量 API 调用（只查询未命中的）
+    for _, id := range missedIDs {
+        if data, err := fetchFromAPI(ctx, id); err == nil {
+            result[id] = data
+            go cache.Set(context.Background(), id, data, ttl) // Level 3: 异步回写
+        }
+    }
+
+    return result, nil
+}
+```
+
+**关键原则**：
+- TTL 通过 Config 配置（如 `FlowInfoCacheTTL`）
+- 异步回写使用 `context.Background()`（避免主请求取消影响缓存）
+
+### 数据补充（Enrichment）模式
+
+**适用场景**：API 返回的数据缺少关联信息，需要自动补充
+
+**解决方案**：
+```go
+func GetList(ctx context.Context, req *Request) ([]*Item, error) {
+    items, err := fetchItemsFromAPI(ctx, req)  // 1. 获取主数据
+    if err != nil {
+        return nil, err
+    }
+
+    // 2. 自动补充关联信息（失败不影响主流程）
+    if err := enrichItems(ctx, items); err != nil {
+        logx.Errorf("补充数据失败: %v", err)  // 只记录日志
+    }
+
+    return items, nil  // 3. 返回数据（可能包含补充字段）
+}
+
+func enrichItems(ctx context.Context, items []*Item) error {
+    ids := extractUniqueIDs(items)             // 提取唯一 ID
+    dataMap, _ := batchGetData(ctx, ids)       // 批量查询（应用多级缓存）
+    for _, item := range items {               // 填充可选字段（指针类型）
+        if data, ok := dataMap[item.ID]; ok {
+            item.RelatedData = data
+        }
+    }
+    return nil
+}
+```
+
+**关键原则**：
+- Enrichment 是**可选的**（失败不影响主流程）
+- 补充字段使用**指针类型**（如 `*string`）
+- 用户无需关心 enrichment 细节（SDK 内部自动处理）
+
+**示例参考**：`internal/flows/enrichment.go`
+
+### 性能优化清单
+
+添加新接口时，检查是否需要性能优化：
+
+- [ ] 是否存在 N+1 查询？→ 使用批量查询
+- [ ] 是否频繁访问相同数据？→ 添加缓存
+- [ ] 是否需要关联数据？→ 考虑 enrichment 模式
+- [ ] 缓存 TTL 是否可配置？→ 添加到 Config
+- [ ] 是否有容错机制？→ 优化失败不影响主流程
+- [ ] 是否记录性能指标？→ 添加日志（可选）
 
 ---
 
@@ -699,14 +788,8 @@ file := TypedValue{Type: "imageBase64", Value: "base64encodedstring..."}
 **示例**：
 ```go
 data := map[string]core.TypedValue{
-	"Avatar_Img": {
-		Type:  "imageURL",
-		Value: "https://cdn.example.com/avatar.jpg",
-	},
-	"IDCard_Base64Img": {
-		Type:  "imageBase64",
-		Value: "data:image/png;base64,iVBORw0KGgo...",
-	},
+    "Avatar_Img":       {Type: "imageURL", Value: "https://..."},
+    "IDCard_Base64Img": {Type: "imageBase64", Value: "data:image/png;base64,..."},
 }
 ```
 
@@ -782,7 +865,9 @@ func IsOptionField(fieldType string) bool {
 - [CLAUDE.md](./CLAUDE.md) - Claude Code 助手指引
 
 ### 模块文档
-- [internal/cache/README.md](./internal/cache/README.md) - 缓存模块详细文档 (优化策略、监控指标、最佳实践)
+- [internal/cache/README.md](./internal/cache/README.md) - 缓存模块详细文档（优化策略、监控指标、最佳实践）
+- [internal/flows/README.md](./internal/flows/README.md) - 流程模块详细文档（11个接口、性能优化、使用示例）
+- [internal/stats/MULTI_EVENT_STATS.md](./internal/stats/MULTI_EVENT_STATS.md) - 多事件统计设计文档
 
 ### 外部文档
 - [Go 官方文档](https://go.dev/doc/)
@@ -791,5 +876,18 @@ func IsOptionField(fieldType string) bool {
 
 ---
 
-**最后更新**：2025-11-07
+**最后更新**：2025-11-12
 **维护者**：go-skylark 开发团队
+
+---
+
+## 📝 更新日志
+
+### 2025-11-12
+- 添加"性能优化设计模式"章节（批量查询、多级缓存、Enrichment 模式）
+- 更新"四大管理器"为"Manager 设计规范"（更具指导性）
+- 补充 internal/flows 模块文档链接
+- 添加性能优化清单（供开发时参考）
+
+### 2025-11-07
+- 初始版本

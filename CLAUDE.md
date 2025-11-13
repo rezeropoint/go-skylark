@@ -24,9 +24,10 @@ go mod tidy                             # 整理依赖
 ### 常见陷阱
 - ❌ 在 Core 层使用 `sql.NullString`
 - ❌ Manager 之间直接相互引用
-- ❌ 在 Config 中包含具体实现类型(如 `*redis.Client`)
+- ❌ 在 Config 中包含具体实现类型(如 `*redis.Client`)或函数类型
 - ❌ 忘记在 model.go 使用 `sql.Null*` 处理可空字段
 - ❌ 不使用预定义错误(`core/var.go`)
+- ❌ Flows 模块依赖注入不完整（需要 getPlatformConfig、getRemoteUserIDs、getRemoteDB）
 
 ## 项目简介
 
@@ -105,25 +106,45 @@ type EventConfig struct {
 
 **职责**：对外统一接口，管理所有 Manager 生命周期
 
-**初始化顺序**（`engine/handler.go:32-115`）：
+**初始化顺序**（`engine/handler.go:36-140`）：
 ```
-1. Cache → 2. Flows/Forms → 3. Platform → 4. Mapping → 5. Event → 6. Query/Stats
+1. Cache → 2. Platform → 3. Organization → 4. User → 5. Flows/Forms → 6. Mapping → 7. Event → 8. Query/Stats
 ```
 
-**接口分类**（15个方法）：
-- 旧模块：CreateFlow、CreateFormRow、UpdateFlowJourneyStatus
-- 平台配置：Create/Get/Update/Delete/ValidatePlatformConfig
-- 事件配置：Create/Update/Get/List/DeleteEventWithFields
-- 组织映射：Create/Get/List/Update/DeleteOrgMapping
-- 远程查询：QueryEventData、GetEventDetail、GetFlowList、GetFlowFields
-- 统计分析：GetDurationStats、GetStatusStats、GetTrendStats、GetNodeStats、GetUserStats、GetOrgStats、GetPendingStats
+**依赖关系**：
+- Organization、User 依赖 Platform（获取 API 配置）
+- Flows 依赖 Platform（获取 API 配置 + 远程 DB 连接）和 User（获取远程用户 ID）
+- Event 依赖 Platform（获取远程 DB 连接，验证远程 flow_id）
+- Query、Stats 依赖 Platform（获取远程 DB 连接）、Event（获取事件配置）、Mapping（获取组织映射）
+
+**接口分类**（24个方法）：
+- 流程管理（11个）：CreateFlow、UpdateJourneyStatus、GetJourneyBySN、GetJourneyAssignments、GetJourneyDetail、GetFlowDetail、GetUserAssignments、GetProposedJourneys、SearchJourneys、GetJourneyMoments、GetCurrentProcessingUsers、AbortJourney
+- 表单管理（1个）：CreateFormRow
+- 平台配置（5个）：Create/Get/Update/Delete/ValidatePlatformConfig
+- 事件配置（5个）：Create/Update/Get/List/DeleteEventWithFields
+- 组织映射（5个）：Create/Get/List/Update/DeleteOrgMapping
+- 远程查询（2个）：QueryEventData、GetEventDetail
+- 统计分析（7个）：GetDurationStats、GetStatusStats、GetTrendStats、GetNodeStats、GetUserStats、GetOrgStats、GetPendingStats
 
 ### Internal 层关键模块
 
 #### internal/platform（平台管理）
 - 管理远程 Skylark 平台配置（PostgreSQL 存储）
 - **管理远程数据库连接池**（`map[tenantID]sqlx.SqlConn`，并发安全）
-- 提供 `GetRemoteDB()` 给 Query/Stats 使用
+- 提供 `GetRemoteDB()` 给 Query/Stats/Flows 使用
+- 提供 `GetAPIConfig()` 给 Organization/User/Flows 使用
+
+#### internal/organization（组织管理）
+- 管理本地组织 ID 与远程组织 ID 的映射关系
+- 查询远程 Skylark 数据库的 organizations 表
+- 支持批量转换：`[]localOrgID → []remoteOrgID`
+- 提供组织信息缓存（Redis，TTL 可配置）
+
+#### internal/user（用户管理）
+- 管理本地用户 ID 与远程用户 ID 的映射关系
+- 查询远程 Skylark 数据库的 users 表
+- **批量查询用户名**：Redis 缓存（TTL 24h）
+- 支持批量转换：`[]localUserID → []remoteUserID`
 
 #### internal/event（事件配置）
 - 聚合管理事件配置+字段配置（事务保证原子性）
@@ -148,10 +169,21 @@ type EventConfig struct {
 - **多事件ID聚合**：支持 `EventConfigIDs` 数组，合并多个事件的统计结果
 - 缓存统计结果（Redis，TTL 5分钟）
 
-#### internal/flows & internal/forms（旧模块，仍在使用）
+#### internal/flows（流程管理，已完成重构）
+- **完整的流程生命周期管理**（11个接口）
+  - 写操作：创建流程、更新状态（CreateFlow、UpdateJourneyStatus）
+  - 读操作：查询流程、获取详情、搜索、审批历史等（9个查询接口）
+- **性能优化机制**（enrichment.go）：
+  - 问题：GetUserAssignments 返回的 assignment 缺少 flow_id 和 flow_title
+  - 方案：映射库 + 批量查询 + Redis 缓存三层优化
+  - 效果：API 调用减少 95%+，耗时从 2.8 秒降至 60-360ms
+- **依赖注入**：getRemoteDB 函数（查询远程数据库 journeys 表）
+- **配置化支持**：FlowInfoCacheTTL（Flow 信息缓存 TTL，默认 3600 秒）
+- 详细文档：`internal/flows/README.md`
+
+#### internal/forms（表单管理）
 - 负责**写操作**（调用 Skylark REST API）
 - 处理字段类型转换（Base64 → 七牛云 URL）
-- 与新模块分工：旧模块写，新模块读
 
 ### Core 层（core/）
 
@@ -162,9 +194,10 @@ type EventConfig struct {
 - `TypedValue`：带类型的值（支持 string、imageURL、imageBase64）
 
 **函数类型**（用于依赖注入）：
-- `GetRemoteDBFunc`：获取远程数据库连接
+- `GetRemoteDBFunc`：获取远程数据库连接（query/stats/flows 使用）
 - `GetEventConfigWithFieldsFunc`：获取事件配置
 - `ListOrgMappingsFunc`：获取组织映射列表
+- `GetRemoteUserIDsFunc`：获取远程用户 ID（flows 使用）
 
 **错误定义**：36 个预定义错误（`core/var.go`）
 
@@ -293,17 +326,25 @@ type EventConfig struct {
 
 ✅ **正确**: Config 只包含配置参数，依赖通过 NewManager 参数传入
 ```go
+// 示例 1：Query Manager
 type Config struct {
     MaxPageSize int // ✅ 只有配置参数
 }
 func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface) (Manager, error)
+
+// 示例 2：Flows Manager（包含缓存配置）
+type Config struct {
+    FlowInfoCacheTTL int // ✅ 缓存 TTL 配置（秒）
+}
+func NewManager(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, getRemoteDB core.GetRemoteDBFunc) (Manager, error)
 ```
 
 ❌ **错误**: 在 Config 中包含依赖
 ```go
 type Config struct {
-    Cache core.CacheInterface // ❌ 接口
-    DB    sqlx.SqlConn        // ❌ 运行时实例
+    Cache       core.CacheInterface // ❌ 接口类型
+    GetRemoteDB core.GetRemoteDBFunc // ❌ 函数类型
+    DB          sqlx.SqlConn        // ❌ 运行时实例
 }
 ```
 
@@ -343,13 +384,16 @@ users
 
 ### 缓存键设计（所有键定义在 core/*.go）
 
-| 数据类型 | 缓存键 | TTL |
-|---------|--------|-----|
-| Flow列表 | `skylark:flows:{tenant}:{namespace}` | 1h |
-| Flow字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 1h |
-| 用户名 | `skylark:users:{tenant}:{user_id}` | 24h |
-| 组织映射 | `skylark:mapping:{id}` | 30天 |
-| 统计结果 | `skylark:stats:{type}:{tenant}:{event}:{hash}` | 5分钟 |
+| 数据类型 | 缓存键 | TTL | 说明 |
+|---------|--------|-----|------|
+| Flow 列表 | `skylark:flows:{tenant}:{namespace}` | 1h | Forms 模块使用 |
+| Flow 字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 1h | Flows/Forms 模块使用 |
+| **Flow 信息（API）** | `skylark:flow:api:{tenant}:{flow_id}` | **可配置**（默认 1h） | **Flows enrichment 使用** |
+| 用户名 | `skylark:users:{tenant}:{user_id}` | 24h | User 模块使用 |
+| 组织映射 | `skylark:mapping:{id}` | 30 天 | Mapping 模块使用 |
+| 统计结果 | `skylark:stats:{type}:{tenant}:{event}:{hash}` | 5 分钟 | Stats 模块使用 |
+
+**注意**：Flow 信息（API）的 TTL 通过 `flows.Config.FlowInfoCacheTTL` 配置（单位：秒）
 
 ## 开发技巧
 
@@ -363,6 +407,37 @@ grep -r "implements.*Interface" ./internal
 
 # 查找 TODO 标记
 grep -r "TODO\|FIXME" ./
+
+# 快速定位某个功能的实现
+grep -r "func.*QueryEventData" ./
+
+# 检查某个 Manager 的所有方法
+grep -r "^func.*Manager" ./internal/query/
+```
+
+### 性能优化技巧
+
+#### Flows 模块性能优化机制（enrichment）
+
+**问题**：GetUserAssignments 返回的 assignment 列表缺少 flow_id 和 flow_title
+
+**方案**（`internal/flows/enrichment.go`）：
+```
+1. 提取唯一的 journey_id → 批量查询 journey_id → flow_id 映射（远程数据库）
+2. 提取唯一的 flow_id → 批量查询 flow 信息（Redis 缓存优先）
+3. 合并数据，填充 assignment.FlowID 和 assignment.FlowTitle
+```
+
+**效果**：
+- API 调用：从 54 次降至 1-4 次（减少 95%+）
+- 总耗时：缓存命中时约 60ms，未命中时约 360ms（优化前 2.8 秒）
+
+**配置**：
+```go
+// internal/flows/config.go
+type Config struct {
+    FlowInfoCacheTTL int // 默认 3600 秒（1 小时）
+}
 ```
 
 ### 代码质量检查
@@ -403,6 +478,15 @@ go tool pprof mem.prof
 - Internal 层 model.go: 使用 `sql.NullString`
 - Core 层: 使用指针 `*string`
 - 转换函数: `helpers.go` 中的 `convertNullString()`
+
+### Q: Flows 模块的性能优化如何工作?
+- **触发时机**：调用 `GetUserAssignments` 或 `GetProposedJourneys` 时自动触发
+- **优化流程**：
+  1. 提取 journey_id → 批量查询远程数据库获取 flow_id
+  2. 提取 flow_id → 批量查询 Redis 缓存获取 flow 信息
+  3. 未命中缓存的 flow_id → 调用 API 获取并异步回写缓存
+- **配置项**：`FlowInfoCacheTTL`（默认 3600 秒）
+- **容错处理**：优化失败不影响主流程，只记录日志
 
 ## 参考文档
 
