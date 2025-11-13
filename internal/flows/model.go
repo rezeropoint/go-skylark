@@ -1,7 +1,7 @@
 package flows
 
 import (
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // FlowInfoModel 是数据库查询专用结构体（基础设施层）

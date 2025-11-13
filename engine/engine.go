@@ -3,8 +3,8 @@ package engine
 import (
 	"context"
 
-	"github.com/rezeropoint/go-skylark/core"
-	"github.com/rezeropoint/go-skylark/internal/flows"
+	"github.com/rezeropoint/go-skylark/v2/core"
+	"github.com/rezeropoint/go-skylark/v2/internal/flows"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"

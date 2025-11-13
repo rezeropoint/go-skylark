@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // validateFieldName 验证字段名（防SQL注入）

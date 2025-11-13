@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // ParseHTTPError 解析HTTP错误状态码并返回细粒度错误

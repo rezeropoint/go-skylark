@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )

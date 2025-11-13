@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )

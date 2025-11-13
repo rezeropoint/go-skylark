@@ -3,7 +3,7 @@ package forms
 import (
 	"context"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // SkylarkRegistry 定义流程注册表接口

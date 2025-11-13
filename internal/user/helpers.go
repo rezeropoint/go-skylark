@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rezeropoint/go-skylark/core"
-	"github.com/rezeropoint/go-skylark/internal/httputils"
+	"github.com/rezeropoint/go-skylark/v2/core"
+	"github.com/rezeropoint/go-skylark/v2/internal/httputils"
 )
 
 // skylarkHTTPClient Skylark用户API客户端

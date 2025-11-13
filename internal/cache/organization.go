@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // GetOrgIDMapping 从缓存获取组织ID映射（正向：local_org_id -> remote_org_id）

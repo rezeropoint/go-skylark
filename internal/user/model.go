@@ -3,7 +3,7 @@ package user
 import (
 	"time"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // UserIDMappingModel 数据库查询专用结构体

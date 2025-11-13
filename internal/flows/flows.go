@@ -3,7 +3,7 @@ package flows
 import (
 	"context"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // UpdateJourneyStatusOptions 更新流程任务状态的可选参数

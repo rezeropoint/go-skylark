@@ -3,7 +3,7 @@ package organization
 import (
 	"time"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // OrgIDMappingModel 是数据库查询专用结构体（基础设施层）

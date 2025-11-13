@@ -3,7 +3,7 @@ package stats
 import (
 	"fmt"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 
 	"github.com/lib/pq"
 )

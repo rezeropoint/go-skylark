@@ -3,7 +3,7 @@ package stats
 import (
 	"sort"
 
-	"github.com/rezeropoint/go-skylark/core"
+	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
 // 处理时长统计合并

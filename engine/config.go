@@ -1,12 +1,12 @@
 package engine
 
 import (
-	"github.com/rezeropoint/go-skylark/internal/cache"
-	"github.com/rezeropoint/go-skylark/internal/event"
-	"github.com/rezeropoint/go-skylark/internal/mapping"
-	"github.com/rezeropoint/go-skylark/internal/platform"
-	"github.com/rezeropoint/go-skylark/internal/query"
-	"github.com/rezeropoint/go-skylark/internal/stats"
+	"github.com/rezeropoint/go-skylark/v2/internal/cache"
+	"github.com/rezeropoint/go-skylark/v2/internal/event"
+	"github.com/rezeropoint/go-skylark/v2/internal/mapping"
+	"github.com/rezeropoint/go-skylark/v2/internal/platform"
+	"github.com/rezeropoint/go-skylark/v2/internal/query"
+	"github.com/rezeropoint/go-skylark/v2/internal/stats"
 )
 
 type Config struct {

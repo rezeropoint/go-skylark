@@ -9,8 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/rezeropoint/go-skylark/core"
-	"github.com/rezeropoint/go-skylark/internal/httputils"
+	"github.com/rezeropoint/go-skylark/v2/core"
+	"github.com/rezeropoint/go-skylark/v2/internal/httputils"
 
 	"github.com/zeromicro/go-zero/rest/httpc"
 )
