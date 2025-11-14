@@ -193,3 +193,13 @@ type ProcessingUser struct {
 	Headimgurl *string  // 头像URL（可为空）
 	Tags       []string // 标签列表
 }
+
+// UpdateJourneyStatusOptions 更新流程状态选项（领域模型）
+// 说明：用于更新流程任务状态时提供的可选参数
+// 用途：UpdateJourneyStatus 接口的参数，支持审批意见、下一节点、抄送等
+type UpdateJourneyStatusOptions struct {
+	Comment           string            // 处理意见
+	NextVertexID      int               // 下一个节点ID
+	CarbonCopyUserIDs []int             // 抄送者ID列表
+	Data              map[string]TypedValue // 字段数据
+}

@@ -6,14 +6,6 @@ import (
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
-// UpdateJourneyStatusOptions 更新流程任务状态的可选参数
-type UpdateJourneyStatusOptions struct {
-	Comment           string                     // 处理意见
-	NextVertexID      int                        // 下一个节点ID
-	CarbonCopyUserIDs []int                      // 抄送者ID列表
-	Data              map[string]core.TypedValue // 字段数据
-}
-
 // SkylarkRegistry 定义流程注册表接口
 // 提供创建流程的方法
 type SkylarkFlowRegistry interface {
@@ -37,7 +29,7 @@ type SkylarkFlowRegistry interface {
 	//   - localUserID: 本地用户ID（操作人，SDK自动转换为远程用户ID）
 	//   - operation: 操作类型（使用 core.OperationApprove 等常量）
 	//   - options: 可选参数（评论、下一个节点ID、抄送者、字段数据等）
-	UpdateJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options UpdateJourneyStatusOptions) error
+	UpdateJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options core.UpdateJourneyStatusOptions) error
 
 	// GetJourneyBySN 根据流程编号查询流程记录
 	// 参数:

@@ -174,7 +174,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	assignmentID int64,
 	localUserID string,
 	operation core.JourneyOperation,
-	options UpdateJourneyStatusOptions,
+	options core.UpdateJourneyStatusOptions,
 ) error {
 	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
