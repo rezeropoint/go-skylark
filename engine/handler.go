@@ -345,28 +345,4 @@ func (e *skylarkEngine) GetPendingStats(ctx context.Context, criteria *core.Stat
 	return e.stats.GetPendingStats(ctx, criteria)
 }
 
-// 组织管理方法
-
-func (e *skylarkEngine) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) (*core.Organization, error) {
-	return e.organization.CreateOrganization(ctx, tenantID, localOrgID, name, description, founderID)
-}
-
-func (e *skylarkEngine) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) (*core.Organization, error) {
-	return e.organization.CreateSubOrganization(ctx, tenantID, localOrgID, parentLocalOrgID, name, description, founderID)
-}
-
-func (e *skylarkEngine) DeleteOrganization(ctx context.Context, tenantID, localOrgID string) error {
-	return e.organization.DeleteOrganization(ctx, tenantID, localOrgID)
-}
-
-// 用户管理接口
-
-func (e *skylarkEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error) {
-	return e.user.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
-}
-
-func (e *skylarkEngine) GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error) {
-	return e.user.GetUser(ctx, tenantID, localUserID)
-}
-
 // 资源管理方法

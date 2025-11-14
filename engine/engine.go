@@ -180,28 +180,6 @@ type SkylarkEngine interface {
 	// GetFlowFields 获取远程flow字段列表（供前端配置）
 	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*core.FieldMetadata, error)
 
-	// 组织管理
-
-	// CreateOrganization 创建根组织（无父组织）
-	// 流程：调用 Skylark API 创建组织 → 保存映射 → 更新缓存
-	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) (*core.Organization, error)
-	// CreateSubOrganization 创建子组织
-	// 流程：查询父组织映射 → 调用 Skylark API → 保存映射 → 更新缓存
-	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) (*core.Organization, error)
-	// DeleteOrganization 删除组织
-	// 流程：查询组织映射 → 调用 Skylark API → 删除映射 → 清理缓存
-	DeleteOrganization(ctx context.Context, tenantID, localOrgID string) error
-
-	// 用户管理
-
-	// CreateUser 创建Skylark用户
-	// 流程：调用 Skylark API 创建用户 → 保存映射 → 更新缓存
-	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error)
-
-	// GetUser 查询用户（通过本地用户ID）
-	// 流程：查询映射关系（缓存优先 → 数据库）→ 返回User对象
-	GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error)
-
 	// 统计分析
 
 	// GetDurationStats 获取事件处理时长统计（平均/最短/最长）
