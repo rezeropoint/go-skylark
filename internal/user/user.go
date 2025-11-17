@@ -39,32 +39,16 @@ type Manager interface {
 	//   - openid: 微信OpenID（可选）
 	//
 	// 返回：
-	//   - *core.User: 用户对象（包含远程用户ID）
 	//   - error: 错误信息
 	//
 	// 错误：
 	//   - core.ErrUserCreateFailed: 调用Skylark API失败
 	//   - core.ErrUserMappingExists: 映射已存在
-	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error)
-
-	// GetUser 查询用户（通过本地用户ID）
 	//
-	// 流程：
-	//   1. 查询映射关系（缓存优先 → 数据库）
-	//   2. 返回User对象
-	//
-	// 参数：
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID
-	//   - localUserID: 本地用户ID
-	//
-	// 返回：
-	//   - *core.User: 用户对象
-	//   - error: 错误信息
-	//
-	// 错误：
-	//   - core.ErrUserMappingNotFound: 映射不存在
-	GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error)
+	// 说明：
+	//   - 成功后映射关系已保存，使用者无需关心远程用户ID
+	//   - 远程用户ID由SDK内部管理，对使用者透明
+	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error
 
 	// GetRemoteUserID 查询远程用户ID（单个，内部使用）
 	//

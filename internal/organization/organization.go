@@ -21,8 +21,11 @@ type Manager interface {
 	//   1. 调用 Skylark API: POST /api/v4/organizations
 	//   2. 保存映射关系到数据库
 	//   3. 更新缓存（正向 + 反向）
-	// 返回：创建成功的组织信息（包含 RemoteOrgID、ParentID、Ancestry）
-	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) (*core.Organization, error)
+	// 返回：错误信息
+	// 说明：
+	//   - 成功后映射关系已保存，使用者无需关心远程组织ID
+	//   - 远程组织ID由SDK内部管理，对使用者透明
+	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) error
 
 	// CreateSubOrganization 创建子组织
 	// 流程：
@@ -30,9 +33,12 @@ type Manager interface {
 	//   2. 调用 Skylark API: POST /api/v4/organizations（带 parent_id）
 	//   3. 保存映射关系到数据库
 	//   4. 更新缓存（正向 + 反向）
-	// 返回：创建成功的组织信息（包含 RemoteOrgID、ParentID、Ancestry）
+	// 返回：错误信息
 	// 错误：如果 parentLocalOrgID 不存在，返回 core.ErrParentOrgNotFound
-	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) (*core.Organization, error)
+	// 说明：
+	//   - 成功后映射关系已保存，使用者无需关心远程组织ID
+	//   - 远程组织ID由SDK内部管理，对使用者透明
+	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) error
 
 	// DeleteOrganization 删除组织
 	// 流程：

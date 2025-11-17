@@ -69,22 +69,22 @@ func newAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (
 }
 
 // CreateOrganization 创建根组织
-func (e *adminEngine) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description, founderID string) (*core.Organization, error) {
+func (e *adminEngine) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description, founderID string) error {
 	// 将本地用户 ID 转换为远程用户 ID
 	remoteFounderID, err := e.user.GetRemoteUserID(ctx, tenantID, founderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	return e.organization.CreateOrganization(ctx, tenantID, localOrgID, name, description, remoteFounderID)
 }
 
 // CreateSubOrganization 创建子组织
-func (e *adminEngine) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description, founderID string) (*core.Organization, error) {
+func (e *adminEngine) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description, founderID string) error {
 	// 将本地用户 ID 转换为远程用户 ID
 	remoteFounderID, err := e.user.GetRemoteUserID(ctx, tenantID, founderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	return e.organization.CreateSubOrganization(ctx, tenantID, localOrgID, parentLocalOrgID, name, description, remoteFounderID)
@@ -96,11 +96,6 @@ func (e *adminEngine) DeleteOrganization(ctx context.Context, tenantID, localOrg
 }
 
 // CreateUser 创建 Skylark 用户
-func (e *adminEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error) {
+func (e *adminEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error {
 	return e.user.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
-}
-
-// GetUser 查询用户
-func (e *adminEngine) GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error) {
-	return e.user.GetUser(ctx, tenantID, localUserID)
 }

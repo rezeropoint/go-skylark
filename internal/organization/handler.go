@@ -50,11 +50,11 @@ func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInte
 }
 
 // CreateOrganization 创建根组织
-func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) (*core.Organization, error) {
+func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) error {
 	// 1. 获取平台配置
 	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("获取平台配置失败: %w", err)
+		return fmt.Errorf("获取平台配置失败: %w", err)
 	}
 
 	// 验证 API 配置
@@ -69,7 +69,7 @@ func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, 
 
 	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
+		return fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
 	}
 
 	// 3. 保存映射关系
@@ -82,16 +82,13 @@ func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, 
 
 	if err := m.saveMapping(ctx, mapping); err != nil {
 		// TODO: 考虑是否需要回滚远程创建的组织（调用删除API）
-		return nil, fmt.Errorf("保存映射失败: %w", err)
+		return fmt.Errorf("保存映射失败: %w", err)
 	}
 
 	// 4. 更新缓存
 	if err := m.cacheMapping(ctx, mapping); err != nil {
 		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
 	}
-
-	// 5. 转换为领域模型
-	org := convertToOrganization(orgResp)
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "organization_manager"),
@@ -101,24 +98,24 @@ func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, 
 		logx.Field("remote_org_id", orgResp.ID),
 	).Info("创建组织成功")
 
-	return org, nil
+	return nil
 }
 
 // CreateSubOrganization 创建子组织
-func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) (*core.Organization, error) {
+func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) error {
 	// 1. 查询父组织的 remote_org_id
 	parentRemoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, parentLocalOrgID)
 	if err != nil {
 		if err == core.ErrOrgNotFound {
-			return nil, core.ErrParentOrgNotFound
+			return core.ErrParentOrgNotFound
 		}
-		return nil, fmt.Errorf("查询父组织映射失败: %w", err)
+		return fmt.Errorf("查询父组织映射失败: %w", err)
 	}
 
 	// 2. 获取平台配置
 	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("获取平台配置失败: %w", err)
+		return fmt.Errorf("获取平台配置失败: %w", err)
 	}
 
 	// 验证 API 配置
@@ -133,7 +130,7 @@ func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantI
 
 	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
+		return fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
 	}
 
 	// 4. 保存映射关系
@@ -145,16 +142,13 @@ func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantI
 	}
 
 	if err := m.saveMapping(ctx, mapping); err != nil {
-		return nil, fmt.Errorf("保存映射失败: %w", err)
+		return fmt.Errorf("保存映射失败: %w", err)
 	}
 
 	// 5. 更新缓存
 	if err := m.cacheMapping(ctx, mapping); err != nil {
 		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
 	}
-
-	// 6. 转换为领域模型
-	org := convertToOrganization(orgResp)
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "organization_manager"),
@@ -166,7 +160,7 @@ func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantI
 		logx.Field("parent_remote_org_id", parentRemoteOrgID),
 	).Info("创建子组织成功")
 
-	return org, nil
+	return nil
 }
 
 // DeleteOrganization 删除组织

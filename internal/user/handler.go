@@ -49,11 +49,11 @@ func newUserManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, g
 }
 
 // CreateUser 创建Skylark用户
-func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error) {
+func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error {
 	// 1. 获取平台配置
 	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("获取平台配置失败: %w", err)
+		return fmt.Errorf("获取平台配置失败: %w", err)
 	}
 
 	// 2. 调用 Skylark API 创建用户
@@ -66,7 +66,7 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 
 	userResp, err := m.httpClient.createUser(ctx, platformConfig.App, platformConfig.Token, req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", core.ErrUserCreateFailed, err)
+		return fmt.Errorf("%w: %v", core.ErrUserCreateFailed, err)
 	}
 
 	// 3. 保存映射关系
@@ -79,16 +79,13 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 
 	if err := m.saveMapping(ctx, mapping); err != nil {
 		// TODO: 考虑是否需要回滚远程创建的用户（调用删除API，如果有的话）
-		return nil, fmt.Errorf("保存映射失败: %w", err)
+		return fmt.Errorf("保存映射失败: %w", err)
 	}
 
 	// 4. 更新缓存
 	if err := m.cacheMapping(ctx, mapping); err != nil {
 		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
 	}
-
-	// 5. 转换为领域模型
-	user := &core.User{ID: userResp.ID}
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "user_manager"),
@@ -98,18 +95,7 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 		logx.Field("remote_user_id", userResp.ID),
 	).Info("创建用户成功")
 
-	return user, nil
-}
-
-// GetUser 查询用户（通过本地用户ID）
-func (m *userManager) GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error) {
-	// 查询映射关系（缓存优先 → 数据库）
-	remoteUserID, err := m.GetRemoteUserID(ctx, tenantID, localUserID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &core.User{ID: remoteUserID}, nil
+	return nil
 }
 
 // GetRemoteUserID 查询远程用户ID（单个）

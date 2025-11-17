@@ -24,12 +24,13 @@ const (
 	CacheUserIDMappingReverseKeyPrefix = "skylark:user_mapping_rev"
 )
 
-// User Skylark 用户领域模型
+// User Skylark 用户领域模型（内部使用）
 // 说明：只存储 Skylark 用户ID（纯 Go 类型，无框架依赖）
 // 注意：
 //   - 不存储 name、phone、identifier 等本地已有的信息
 //   - 不存储组织关系（本地通过 system_user_org_relations 表管理）
-//   - 这个结构体只用于返回 Skylark 的用户ID
+//   - 这个结构体仅用于 SDK 内部（如 API 响应解析），不暴露给使用者
+//   - 远程用户ID对SDK使用者透明，使用者只需关心本地用户ID
 type User struct {
 	ID int // Skylark 用户ID（整数）
 }

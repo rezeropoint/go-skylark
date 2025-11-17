@@ -22,9 +22,12 @@ const (
 	CacheOrgIDMappingReverseKeyPrefix = "skylark:org_mapping_rev"
 )
 
-// Organization Skylark 组织领域模型
+// Organization Skylark 组织领域模型（内部使用）
 // 说明：存储 Skylark 组织的 ID 和层级关系信息（纯 Go 类型，无框架依赖）
-// 注意：不存储 name、description 等本地已有的信息，本地组织信息由调用方的 GO 项目管理
+// 注意：
+//   - 不存储 name、description 等本地已有的信息，本地组织信息由调用方的 GO 项目管理
+//   - 这个结构体仅用于 SDK 内部（如 API 响应解析），不暴露给使用者
+//   - 远程组织ID对SDK使用者透明，使用者只需关心本地组织ID
 type Organization struct {
 	ID       int     // Skylark 组织ID（整数）
 	ParentID *int    // 父组织的 Skylark ID（可空，顶级组织为 nil）

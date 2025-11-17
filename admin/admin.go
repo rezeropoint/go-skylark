@@ -3,7 +3,6 @@ package admin
 import (
 	"context"
 
-	"github.com/rezeropoint/go-skylark/v2/core"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
@@ -22,9 +21,12 @@ type AdminEngine interface {
 	//   - founderID: 创建人的本地用户ID
 	//
 	// 返回:
-	//   - *core.Organization: 创建的组织信息（包含 Skylark 组织ID）
 	//   - error: 错误信息
-	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description, founderID string) (*core.Organization, error)
+	//
+	// 说明:
+	//   - 成功后映射关系已保存，使用者无需关心 Skylark 组织ID
+	//   - Skylark 组织ID由SDK内部管理，对使用者透明
+	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description, founderID string) error
 
 	// CreateSubOrganization 创建子组织
 	//
@@ -38,9 +40,12 @@ type AdminEngine interface {
 	//   - founderID: 创建人的本地用户ID
 	//
 	// 返回:
-	//   - *core.Organization: 创建的组织信息（包含父组织ID和祖先路径）
 	//   - error: 错误信息
-	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description, founderID string) (*core.Organization, error)
+	//
+	// 说明:
+	//   - 成功后映射关系已保存，使用者无需关心 Skylark 组织ID
+	//   - Skylark 组织ID由SDK内部管理，对使用者透明
+	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description, founderID string) error
 
 	// DeleteOrganization 删除组织
 	//
@@ -65,21 +70,12 @@ type AdminEngine interface {
 	//   - openid: OpenID（可选）
 	//
 	// 返回:
-	//   - *core.User: 创建的用户信息（包含 Skylark 用户ID）
 	//   - error: 错误信息
-	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) (*core.User, error)
-
-	// GetUser 查询用户
 	//
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID
-	//   - localUserID: 本地用户ID
-	//
-	// 返回:
-	//   - *core.User: 用户信息
-	//   - error: 错误信息（如果映射不存在返回 ErrUserMappingNotFound）
-	GetUser(ctx context.Context, tenantID, localUserID string) (*core.User, error)
+	// 说明:
+	//   - 成功后映射关系已保存，使用者无需关心 Skylark 用户ID
+	//   - Skylark 用户ID由SDK内部管理，对使用者透明
+	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error
 }
 
 // NewAdminEngine 创建新的系统管理引擎实例
