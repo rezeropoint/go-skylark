@@ -128,24 +128,23 @@ func TranslateStatus(status string) string {
 // 用途：调用 POST /api/v4/yaw/flows/:id/journeys/search 接口
 // 示例：
 //
-//	status := core.StatusProcessing
 //	req := &core.JourneySearchRequest{
 //	    FlowID:   123,
-//	    Status:   &status, // 使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed
+//	    Status:   core.StatusProcessing, // 使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed
 //	    Page:     1,
 //	    PageSize: 20,
 //	}
 type JourneySearchRequest struct {
 	FlowID int64 // 流程ID（必填）
 
-	// 搜索条件（可选）
-	Status      *string // 流程状态（使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed）
-	Keyword     *string // 关键词搜索（搜索SN或字段值）
-	InitiatorID *string // 发起人ID（本地用户ID）
+	// 搜索条件（可选，空字符串表示不限制）
+	Status      string // 流程状态（使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed；空字符串表示不筛选）
+	Keyword     string // 关键词搜索（搜索SN或字段值；空字符串表示不搜索）
+	InitiatorID string // 发起人ID（本地用户ID；空字符串表示不限制发起人）
 
-	// 时间范围（可选）
-	CreatedFrom *string // 创建时间开始（ISO 8601格式，如 "2025-01-01T00:00:00Z"）
-	CreatedTo   *string // 创建时间结束（ISO 8601格式）
+	// 时间范围（可选，空字符串表示不限制）
+	CreatedFrom string // 创建时间开始（ISO 8601格式，如 "2025-01-01T00:00:00Z"；空字符串表示不限制开始时间）
+	CreatedTo   string // 创建时间结束（ISO 8601格式；空字符串表示不限制结束时间）
 
 	// 分页参数
 	Page     int // 页码（从1开始）

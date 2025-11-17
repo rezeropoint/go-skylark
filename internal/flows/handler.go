@@ -717,13 +717,13 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error) {
 	// 1. 转换发起人ID（本地用户ID → 远程用户ID）
 	var remoteInitiatorID *int64
-	if req.InitiatorID != nil && *req.InitiatorID != "" {
-		remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{*req.InitiatorID})
+	if req.InitiatorID != "" {
+		remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{req.InitiatorID})
 		if err != nil {
 			return nil, 0, fmt.Errorf("转换发起人ID失败: %w", err)
 		}
 		if len(remoteUserIDs) == 0 {
-			return nil, 0, fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", *req.InitiatorID)
+			return nil, 0, fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", req.InitiatorID)
 		}
 		remoteID := int64(remoteUserIDs[0])
 		remoteInitiatorID = &remoteID
@@ -763,20 +763,20 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 	}
 
 	// 添加可选过滤条件
-	if req.Status != nil {
-		searchBody["status"] = *req.Status
+	if req.Status != "" {
+		searchBody["status"] = req.Status
 	}
-	if req.Keyword != nil {
-		searchBody["keyword"] = *req.Keyword
+	if req.Keyword != "" {
+		searchBody["keyword"] = req.Keyword
 	}
 	if remoteInitiatorID != nil {
 		searchBody["initiator_id"] = *remoteInitiatorID
 	}
-	if req.CreatedFrom != nil {
-		searchBody["created_from"] = *req.CreatedFrom
+	if req.CreatedFrom != "" {
+		searchBody["created_from"] = req.CreatedFrom
 	}
-	if req.CreatedTo != nil {
-		searchBody["created_to"] = *req.CreatedTo
+	if req.CreatedTo != "" {
+		searchBody["created_to"] = req.CreatedTo
 	}
 
 	// 6. 发送 HTTP POST 请求
