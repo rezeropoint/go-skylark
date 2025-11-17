@@ -399,15 +399,22 @@ func (f *skylarkFlowRegistry) GetJourneyAssignments(
 		return nil, err
 	}
 
-	// 6. 转换为领域模型
-	assignments := make([]*core.Assignment, len(assignmentResponses))
-	for i, ar := range assignmentResponses {
-		assignments[i] = ar.ToDomain()
+	// 6. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(assignmentResponses, func(ar AssignmentResponse) int {
+		return int(ar.AssigneeID)
+	})
+
+	// 7. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
 	}
 
-	// 7. 批量转换用户ID（远程ID → 本地ID）
-	if err := convertAssignmentsUserIDs(ctx, assignments, f.fillLocalUserIDMap, tenantID); err != nil {
-		return nil, err
+	// 8. 使用映射转换为领域模型
+	assignments := make([]*core.Assignment, len(assignmentResponses))
+	for i, ar := range assignmentResponses {
+		assignments[i] = ar.ToDomain(userIDMapping)
 	}
 
 	return assignments, nil
@@ -462,13 +469,18 @@ func (f *skylarkFlowRegistry) GetJourneyDetail(
 		return nil, err
 	}
 
-	// 6. 转换为领域模型
-	journeyDetail := journeyDetailResp.ToDomain()
-
-	// 7. 转换发起人用户ID（远程ID → 本地ID）
-	if err := convertJourneyDetailUserID(ctx, journeyDetail, journeyDetailResp.User.ID, f.fillLocalUserIDMap, tenantID); err != nil {
-		return nil, err
+	// 6. 提取远程用户ID（发起人）
+	userIDMapping := map[int]string{
+		int(journeyDetailResp.User.ID): "",
 	}
+
+	// 7. 批量转换（远程ID → 本地ID），填充映射
+	if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+		return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+	}
+
+	// 8. 使用映射转换为领域模型
+	journeyDetail := journeyDetailResp.ToDomain(userIDMapping)
 
 	return journeyDetail, nil
 }
@@ -581,15 +593,22 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 		return nil, 0, err
 	}
 
-	// 7. 转换为领域模型
-	assignments := make([]*core.Assignment, len(assignmentsResp.Assignments))
-	for i, assignmentResp := range assignmentsResp.Assignments {
-		assignments[i] = assignmentResp.ToDomain()
+	// 7. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(assignmentsResp.Assignments, func(ar AssignmentResponse) int {
+		return int(ar.AssigneeID)
+	})
+
+	// 8. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, 0, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
 	}
 
-	// 8. 批量转换用户ID（远程ID → 本地ID）
-	if err := convertAssignmentsUserIDs(ctx, assignments, f.fillLocalUserIDMap, tenantID); err != nil {
-		return nil, 0, err
+	// 9. 使用映射转换为领域模型
+	assignments := make([]*core.Assignment, len(assignmentsResp.Assignments))
+	for i, assignmentResp := range assignmentsResp.Assignments {
+		assignments[i] = assignmentResp.ToDomain(userIDMapping)
 	}
 
 	// 9. 从响应头获取总数（X-SLP-Total-Count）
@@ -849,15 +868,22 @@ func (f *skylarkFlowRegistry) GetJourneyMoments(
 		return nil, err
 	}
 
-	// 8. 转换为领域模型
-	moments := make([]*core.Moment, len(momentResponses))
-	for i, mr := range momentResponses {
-		moments[i] = mr.ToDomain()
+	// 8. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(momentResponses, func(mr MomentResponse) int {
+		return int(mr.OperatorID)
+	})
+
+	// 9. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
 	}
 
-	// 9. 批量转换用户ID（远程ID → 本地ID）
-	if err := convertMomentsUserIDs(ctx, moments, f.fillLocalUserIDMap, tenantID); err != nil {
-		return nil, err
+	// 10. 使用映射转换为领域模型
+	moments := make([]*core.Moment, len(momentResponses))
+	for i, mr := range momentResponses {
+		moments[i] = mr.ToDomain(userIDMapping)
 	}
 
 	// 10. 返回结果
@@ -922,15 +948,22 @@ func (f *skylarkFlowRegistry) GetCurrentProcessingUsers(
 		return nil, err
 	}
 
-	// 8. 转换为领域模型
-	users := make([]*core.ProcessingUser, len(userResponses))
-	for i, ur := range userResponses {
-		users[i] = ur.ToDomain()
+	// 8. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(userResponses, func(ur ProcessingUserResponse) int {
+		return int(ur.ID)
+	})
+
+	// 9. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
 	}
 
-	// 9. 批量转换用户ID（远程ID → 本地ID）
-	if err := convertProcessingUsersIDs(ctx, users, f.fillLocalUserIDMap, tenantID); err != nil {
-		return nil, err
+	// 10. 使用映射转换为领域模型
+	users := make([]*core.ProcessingUser, len(userResponses))
+	for i, ur := range userResponses {
+		users[i] = ur.ToDomain(userIDMapping)
 	}
 
 	// 10. 返回结果

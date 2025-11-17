@@ -1,8 +1,6 @@
 package flows
 
 import (
-	"fmt"
-
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
@@ -119,10 +117,12 @@ type AssignmentResponse struct {
 }
 
 // ToDomain 将 API 响应转换为领域模型
-func (a *AssignmentResponse) ToDomain() *core.Assignment {
+// 参数：
+//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
+func (a *AssignmentResponse) ToDomain(userIDMapping map[int]string) *core.Assignment {
 	return &core.Assignment{
 		ID:         a.ID,
-		AssigneeID: fmt.Sprintf("%d", a.AssigneeID), // 暂时转为字符串表示远程ID，后续被转换函数替换为本地ID
+		AssigneeID: userIDMapping[int(a.AssigneeID)], // 直接使用本地用户ID（找不到为空字符串）
 		Status:     a.Status,
 		Category:   a.Category,
 		VertexID:   a.VertexID,
@@ -190,7 +190,9 @@ type AttachmentDetail struct {
 }
 
 // ToDomain 将 JourneyDetailResponse 转换为领域模型
-func (j *JourneyDetailResponse) ToDomain() *core.JourneyDetail {
+// 参数：
+//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
+func (j *JourneyDetailResponse) ToDomain(userIDMapping map[int]string) *core.JourneyDetail {
 	// 构建业务数据（优先级：ExportedValue > TextValue > Value）
 	businessData := make(map[string]interface{})
 	for fieldID, fieldValue := range j.Response.CachedValues {
@@ -230,12 +232,6 @@ func (j *JourneyDetailResponse) ToDomain() *core.JourneyDetail {
 		}
 	}
 
-	// 创建临时映射（远程ID → 字符串形式的远程ID）
-	// 注意：这只是临时占位，handler 会调用 convertJourneyDetailUserID 转换为本地ID
-	tempUserIDMapping := map[int]string{
-		int(j.User.ID): fmt.Sprintf("%d", j.User.ID),
-	}
-
 	return &core.JourneyDetail{
 		// 基础信息
 		ID:              j.ID,
@@ -251,8 +247,8 @@ func (j *JourneyDetailResponse) ToDomain() *core.JourneyDetail {
 		ReviewerVertexIDs:        j.ReviewerVertexIDs,
 		CurrentDurationThreshold: j.CurrentDurationThreshold,
 
-		// 发起人信息（暂时使用字符串形式的远程ID，后续被 handler 转换为本地ID）
-		Initiator: j.User.ToDomain(tempUserIDMapping),
+		// 发起人信息（直接使用本地用户ID）
+		Initiator: j.User.ToDomain(userIDMapping),
 
 		// 业务数据
 		BusinessData: businessData,
@@ -398,14 +394,16 @@ type OperatorInfo struct {
 }
 
 // ToDomain 将 API 响应转换为领域模型
-func (m *MomentResponse) ToDomain() *core.Moment {
+// 参数：
+//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
+func (m *MomentResponse) ToDomain(userIDMapping map[int]string) *core.Moment {
 	moment := &core.Moment{
 		ID:           m.ID,
 		AssignmentID: m.AssignmentID,
 		JourneyID:    m.JourneyID,
 		VertexID:     m.VertexID,
 		Status:       m.Status,
-		OperatorID:   fmt.Sprintf("%d", m.OperatorID), // 暂时转为字符串表示远程ID，后续被转换函数替换为本地ID
+		OperatorID:   userIDMapping[int(m.OperatorID)], // 直接使用本地用户ID（找不到为空字符串）
 		Comment:      m.Comment,
 		CreatedAt:    m.CreatedAt,
 		UpdatedAt:    m.UpdatedAt,
@@ -438,9 +436,11 @@ type ProcessingUserResponse struct {
 }
 
 // ToDomain 将 API 响应转换为领域模型
-func (u *ProcessingUserResponse) ToDomain() *core.ProcessingUser {
+// 参数：
+//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
+func (u *ProcessingUserResponse) ToDomain(userIDMapping map[int]string) *core.ProcessingUser {
 	return &core.ProcessingUser{
-		ID:         fmt.Sprintf("%d", u.ID), // 暂时转为字符串表示远程ID，后续被转换函数替换为本地ID
+		ID:         userIDMapping[int(u.ID)], // 直接使用本地用户ID（找不到为空字符串）
 		Name:       u.Name,
 		Nickname:   u.Nickname,
 		Phone:      u.Phone,
