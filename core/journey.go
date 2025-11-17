@@ -21,7 +21,7 @@ type Journey struct {
 // 说明：用于流程API返回的用户信息，包含完整的用户数据
 // 注意：不同于 core.User（用户映射专用），此结构体用于API响应
 type FlowUser struct {
-	ID    int64   // 用户ID
+	ID    string  // 用户ID（本地用户ID）
 	Name  string  // 用户名称
 	Email *string // 用户邮箱（可为空）
 }
@@ -141,7 +141,7 @@ type JourneySearchRequest struct {
 	// 搜索条件（可选）
 	Status      *string // 流程状态（使用常量：StatusProcessing, StatusFinished, StatusAborted, StatusStashed）
 	Keyword     *string // 关键词搜索（搜索SN或字段值）
-	InitiatorID *int64  // 发起人ID（远程用户ID）
+	InitiatorID *string // 发起人ID（本地用户ID）
 
 	// 时间范围（可选）
 	CreatedFrom *string // 创建时间开始（ISO 8601格式，如 "2025-01-01T00:00:00Z"）
@@ -172,7 +172,7 @@ type Moment struct {
 	VertexID     int64   // 节点ID
 	VertexName   *string // 节点名称（可为空）
 	Status       string  // 操作状态（approved/refused/transferred/cancelled等）
-	OperatorID   int64   // 操作人ID
+	OperatorID   string  // 操作人ID（本地用户ID）
 	OperatorName *string // 操作人姓名（可为空）
 	Comment      *string // 处理意见（可为空）
 	CreatedAt    string  // 创建时间（ISO 8601格式）
@@ -185,7 +185,7 @@ type Moment struct {
 // 用途：GetCurrentProcessingUsers 接口返回当前流程任务的处理者列表
 // 注意：部分字段可能为空（nickname、phone、identifier、headimgurl）
 type ProcessingUser struct {
-	ID         int64    // 用户ID
+	ID         string   // 用户ID（本地用户ID）
 	Name       string   // 用户名称
 	Nickname   *string  // 昵称（可为空）
 	Phone      *string  // 手机号（可为空）
@@ -198,8 +198,8 @@ type ProcessingUser struct {
 // 说明：用于更新流程任务状态时提供的可选参数
 // 用途：UpdateJourneyStatus 接口的参数，支持审批意见、下一节点、抄送等
 type UpdateJourneyStatusOptions struct {
-	Comment           string            // 处理意见
-	NextVertexID      int               // 下一个节点ID
-	CarbonCopyUserIDs []int             // 抄送者ID列表
+	Comment           string                // 处理意见
+	NextVertexID      int                   // 下一个节点ID
+	CarbonCopyUserIDs []string              // 抄送者ID列表（本地用户ID）
 	Data              map[string]TypedValue // 字段数据
 }

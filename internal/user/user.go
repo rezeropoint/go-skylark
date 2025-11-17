@@ -122,6 +122,31 @@ type Manager interface {
 	//   - string: 本地用户ID
 	//   - error: 错误信息
 	GetLocalUserID(ctx context.Context, tenantID string, remoteUserID int) (string, error)
+
+	// FillLocalUserIDMap 批量反向转换远程用户ID为本地用户ID（填充映射）
+	//
+	// 流程：
+	//   1. 从 userIDMapping 的 keys 提取需要查询的远程用户ID列表
+	//   2. 遍历ID列表，优先从反向缓存获取
+	//   3. 收集缓存未命中的remoteUserIDs
+	//   4. 批量查询数据库（使用IN子句）
+	//   5. 检查是否所有ID都有映射（无映射时返回错误）
+	//   6. 异步回写反向缓存
+	//   7. 填充传入的 userIDMapping
+	//
+	// 性能优势：
+	//   - 减少数据库查询次数（批量查询）
+	//   - 提高缓存命中率（30天TTL）
+	//   - 直接从 map keys 获取查询列表，减少参数传递
+	//
+	// 参数：
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - userIDMapping: 用户ID映射（指针，keys 为需要查询的远程ID，函数会填充 value 为本地ID）
+	//
+	// 返回：
+	//   - error: 如果任一远程ID无映射，返回 core.ErrUserMappingNotFound
+	FillLocalUserIDMap(ctx context.Context, tenantID string, userIDMapping *map[int]string) error
 }
 
 // NewManager 创建用户管理器

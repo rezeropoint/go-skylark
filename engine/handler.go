@@ -72,7 +72,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 4. 初始化流程和表单管理器（依赖 Platform + User）
-	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, platformMgr.GetRemoteDB)
+	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +124,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		platformMgr.GetRemoteDB,
 		eventMgr.GetWithFields,
 		mappingMgr.ListOrgMappings,
+		userMgr.FillLocalUserIDMap,
 		cache,
 	)
 	if err != nil {
@@ -141,6 +142,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		platformMgr.GetRemoteDB,
 		eventMgr.GetWithFields,
 		mappingMgr.ListOrgMappings,
+		userMgr.FillLocalUserIDMap,
 		cache,
 	)
 	if err != nil {
@@ -204,8 +206,8 @@ func (e *skylarkEngine) GetProposedJourneys(ctx context.Context, tenantID string
 }
 
 // SearchJourneys 搜索流程记录
-func (e *skylarkEngine) SearchJourneys(ctx context.Context, tenantID string, localUserID *string, req *core.JourneySearchRequest) ([]*core.Journey, int, error) {
-	return e.flows.SearchJourneys(ctx, tenantID, localUserID, req)
+func (e *skylarkEngine) SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error) {
+	return e.flows.SearchJourneys(ctx, tenantID, req)
 }
 
 // GetJourneyMoments 获取流程审批历史

@@ -108,7 +108,7 @@ type UserStats struct {
 
 // UserMetric 单个处理人统计指标
 type UserMetric struct {
-	UserID   string // 用户ID（对应slp_user_id）
+	UserID   string // 用户ID（本地用户ID）
 	UserName string // 用户姓名（通过远程users表转换）
 	Count    int64  // 处理的Journey数量
 	Rank     int    // 排名（1开始）

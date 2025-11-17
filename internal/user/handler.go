@@ -204,95 +204,56 @@ func (m *userManager) GetRemoteUserIDs(ctx context.Context, tenantID string, loc
 	return result, nil
 }
 
-// GetLocalUserID 反向查询本地用户ID
+// GetLocalUserID 反向查询本地用户ID（单个）
 func (m *userManager) GetLocalUserID(ctx context.Context, tenantID string, remoteUserID int) (string, error) {
-	// 1. 优先从反向缓存获取
-	localUserID, err := m.cache.GetUserIDMappingReverse(ctx, tenantID, remoteUserID)
-	if err == nil {
-		return localUserID, nil
-	}
-
-	// 2. 缓存未命中，查询数据库
-	query := "SELECT local_user_id FROM skylark_user_mappings WHERE tenant_id = $1 AND remote_user_id = $2"
-	err = m.localDB.QueryRowCtx(ctx, &localUserID, query, tenantID, remoteUserID)
+	// 使用统一的缓存查询函数（单个ID）
+	mapping, err := m.queryLocalUserIDsWithCache(ctx, tenantID, []int{remoteUserID})
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", core.ErrUserMappingNotFound
-		}
-		return "", fmt.Errorf("查询映射失败: %w", err)
+		return "", err
 	}
 
-	// 3. 回写反向缓存（TTL 30天）
-	if err := m.cache.SetUserIDMappingReverse(ctx, tenantID, remoteUserID, localUserID, 30*24*3600); err != nil {
-		logx.WithContext(ctx).Error("回写反向缓存失败（非致命错误）:", err)
+	// 检查是否有映射
+	localUserID, ok := mapping[remoteUserID]
+	if !ok {
+		return "", core.ErrUserMappingNotFound
 	}
 
 	return localUserID, nil
 }
 
-// saveMapping 保存映射关系到数据库
-func (m *userManager) saveMapping(ctx context.Context, mapping *core.UserIDMapping) error {
-	query := `
-		INSERT INTO skylark_user_mappings (id, tenant_id, local_user_id, remote_user_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-	`
-
-	_, err := m.localDB.ExecCtx(ctx, query,
-		mapping.ID,
-		mapping.TenantID,
-		mapping.LocalUserID,
-		mapping.RemoteUserID,
-	)
-
-	if err != nil {
-		return fmt.Errorf("插入映射失败: %w", err)
+// FillLocalUserIDMap 批量反向转换远程用户ID为本地用户ID（填充映射）
+func (m *userManager) FillLocalUserIDMap(ctx context.Context, tenantID string, userIDMapping *map[int]string) error {
+	if userIDMapping == nil {
+		return fmt.Errorf("userIDMapping 不能为 nil")
 	}
 
-	return nil
-}
-
-// cacheMapping 更新缓存（正向 + 反向）
-func (m *userManager) cacheMapping(ctx context.Context, mapping *core.UserIDMapping) error {
-	// 1. 正向缓存（local_user_id -> remote_user_id）
-	if err := m.cache.SetUserIDMapping(ctx, mapping.TenantID, mapping.LocalUserID, mapping.RemoteUserID, 30*24*3600); err != nil {
-		return fmt.Errorf("缓存正向映射失败: %w", err)
-	}
-
-	// 2. 反向缓存（remote_user_id -> local_user_id）
-	if err := m.cache.SetUserIDMappingReverse(ctx, mapping.TenantID, mapping.RemoteUserID, mapping.LocalUserID, 30*24*3600); err != nil {
-		return fmt.Errorf("缓存反向映射失败: %w", err)
-	}
-
-	return nil
-}
-
-// initTable 初始化数据库表（如果不存在则创建）
-func (m *userManager) initTable(ctx context.Context) error {
-	// 检查表是否存在
-	checkQuery := `
-		SELECT EXISTS (
-			SELECT FROM information_schema.tables
-			WHERE table_name = 'skylark_user_mappings'
-		)
-	`
-
-	var exists bool
-	err := m.localDB.QueryRowCtx(ctx, &exists, checkQuery)
-	if err != nil {
-		return fmt.Errorf("检查表存在性失败: %w", err)
-	}
-
-	// 如果表已存在，直接返回
-	if exists {
+	if len(*userIDMapping) == 0 {
 		return nil
 	}
 
-	// 创建表（使用 sql.go 中的常量）
-	_, err = m.localDB.ExecCtx(ctx, CreateTableSQL)
-	if err != nil {
-		return fmt.Errorf("创建表失败: %w", err)
+	// 从 map keys 提取需要查询的远程用户ID列表
+	remoteUserIDs := make([]int, 0, len(*userIDMapping))
+	for remoteUserID := range *userIDMapping {
+		remoteUserIDs = append(remoteUserIDs, remoteUserID)
 	}
 
-	logx.WithContext(ctx).Info("skylark_user_mappings 表创建成功")
+	// 使用统一的缓存查询函数
+	tempMap, err := m.queryLocalUserIDsWithCache(ctx, tenantID, remoteUserIDs)
+	if err != nil {
+		return err
+	}
+
+	// 检查是否所有ID都有映射
+	for _, remoteUserID := range remoteUserIDs {
+		if _, ok := tempMap[remoteUserID]; !ok {
+			return fmt.Errorf("%w: remote_user_id=%d", core.ErrUserMappingNotFound, remoteUserID)
+		}
+	}
+
+	// 填充传入的映射
+	for remoteUserID, localUserID := range tempMap {
+		(*userIDMapping)[remoteUserID] = localUserID
+	}
+
 	return nil
 }

@@ -13,12 +13,13 @@ import (
 
 // queryManager 远程查询管理器实现
 type queryManager struct {
-	config          Config                            // 配置参数
-	dbConn          sqlx.SqlConn                      // 本地数据库连接（查询事件配置、字段配置、组织映射）
-	getRemoteDB     core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
-	getEventConfig  core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
-	listOrgMappings core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
-	cache           core.CacheInterface               // 缓存接口（统一缓存管理）
+	config             Config                            // 配置参数
+	dbConn             sqlx.SqlConn                      // 本地数据库连接（查询事件配置、字段配置、组织映射）
+	getRemoteDB        core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
+	getEventConfig     core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
+	listOrgMappings    core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
+	fillLocalUserIDMap core.FillLocalUserIDMapFunc       // 批量反向转换远程用户ID为本地用户ID的函数（由 User Manager 提供）
+	cache              core.CacheInterface               // 缓存接口（统一缓存管理）
 }
 
 // newQueryManager 创建远程查询管理器
@@ -28,6 +29,7 @@ func newQueryManager(
 	getRemoteDB core.GetRemoteDBFunc,
 	getEventConfig core.GetEventConfigWithFieldsFunc,
 	listOrgMappings core.ListOrgMappingsFunc,
+	fillLocalUserIDMap core.FillLocalUserIDMapFunc,
 	cache core.CacheInterface,
 ) (*queryManager, error) {
 	// 验证必填参数
@@ -39,6 +41,9 @@ func newQueryManager(
 	}
 	if listOrgMappings == nil {
 		return nil, fmt.Errorf("listOrgMappings 函数不能为空")
+	}
+	if fillLocalUserIDMap == nil {
+		return nil, fmt.Errorf("fillLocalUserIDMap 函数不能为空")
 	}
 
 	// 缓存接口必须提供
@@ -68,12 +73,13 @@ func newQueryManager(
 	}
 
 	manager := &queryManager{
-		config:          config,
-		dbConn:          db,
-		getRemoteDB:     getRemoteDB,
-		getEventConfig:  getEventConfig,
-		listOrgMappings: listOrgMappings,
-		cache:           cache,
+		config:             config,
+		dbConn:             db,
+		getRemoteDB:        getRemoteDB,
+		getEventConfig:     getEventConfig,
+		listOrgMappings:    listOrgMappings,
+		fillLocalUserIDMap: fillLocalUserIDMap,
+		cache:              cache,
 	}
 
 	return manager, nil
@@ -379,6 +385,11 @@ func (m *queryManager) GetEventDetail(ctx context.Context, req *core.DetailReque
 
 	// 7. 组装 DetailResponse（传入可见字段列表，用于过滤业务数据）
 	response := m.buildDetailResponse(assignments, userNames, eventConfigWithFields.Fields)
+
+	// 8. 批量转换用户ID（远程ID → 本地ID）
+	if err := convertDetailResponseUserIDs(ctx, response, m.fillLocalUserIDMap, req.TenantID); err != nil {
+		return nil, fmt.Errorf("转换用户ID失败: %w", err)
+	}
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("module", "query_manager"),

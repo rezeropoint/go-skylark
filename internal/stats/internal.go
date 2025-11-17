@@ -390,6 +390,10 @@ func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCr
 	// 1. 尝试从缓存获取
 	cached, err := m.getCachedUserStats(ctx, req)
 	if err == nil && cached != nil {
+		// 批量转换用户ID（远程ID → 本地ID）
+		if err := convertUserStatsUserIDs(ctx, cached, m.fillLocalUserIDMap, req.TenantID); err != nil {
+			return nil, fmt.Errorf("转换用户ID失败: %w", err)
+		}
 		return cached, nil
 	}
 
@@ -466,7 +470,12 @@ func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCr
 		Total:       int64(len(userMetrics)),
 	}
 
-	// 11. 写入缓存
+	// 11. 批量转换用户ID（远程ID → 本地ID）
+	if err := convertUserStatsUserIDs(ctx, stats, m.fillLocalUserIDMap, req.TenantID); err != nil {
+		return nil, fmt.Errorf("转换用户ID失败: %w", err)
+	}
+
+	// 12. 写入缓存
 	_ = m.setCachedUserStats(ctx, req, stats)
 
 	return stats, nil

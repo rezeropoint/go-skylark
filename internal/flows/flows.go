@@ -104,13 +104,12 @@ type SkylarkFlowRegistry interface {
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - localUserID: 本地用户ID（可选，SDK内部自动转换为远程用户ID作为发起人筛选条件）
-	//   - req: 搜索请求（如果包含 InitiatorID，会被 SDK 覆盖）
+	//   - req: 搜索请求（req.InitiatorID 为本地用户ID，SDK内部自动转换为远程用户ID）
 	// 返回:
 	//   - []*core.Journey: 流程列表
 	//   - int: 总数
 	//   - error: 错误信息
-	SearchJourneys(ctx context.Context, tenantID string, localUserID *string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
+	SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
 
 	// GetJourneyMoments 获取流程审批历史
 	// 参数:
@@ -149,8 +148,9 @@ type SkylarkFlowRegistry interface {
 //   - config: 配置信息
 //   - cache: 缓存接口
 //   - getPlatformConfig: 获取平台配置的函数（通过依赖注入）
-//   - getRemoteUserIDs: 获取远程用户ID的函数（通过依赖注入，仅用于 UpdateJourneyStatus）
+//   - getRemoteUserIDs: 获取远程用户ID的函数（通过依赖注入，用于入参转换）
+//   - fillLocalUserIDMap: 批量反向转换函数（通过依赖注入，用于出参转换）
 //   - getRemoteDB: 获取远程数据库连接的函数（通过依赖注入，用于性能优化）
-func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, getRemoteDB core.GetRemoteDBFunc) (SkylarkFlowRegistry, error) {
-	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs, getRemoteDB)
+func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc) (SkylarkFlowRegistry, error) {
+	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs, fillLocalUserIDMap, getRemoteDB)
 }

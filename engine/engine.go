@@ -66,22 +66,23 @@ type SkylarkEngine interface {
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - localUserID: 本地用户ID（可选，SDK自动转换为远程用户ID作为发起人筛选条件）
-	//   - req: 搜索请求（如果包含 InitiatorID，会被 SDK 覆盖）
+	//   - req: 搜索请求（req.InitiatorID 为本地用户ID，SDK自动转换为远程用户ID）
 	// 返回:
 	//   - []*core.Journey: 流程列表
 	//   - int: 总数
 	//   - error: 错误信息
 	// 示例:
 	//   status := core.StatusProcessing
+	//   initiatorID := "local-user-123"
 	//   req := &core.JourneySearchRequest{
-	//       FlowID:   123,
-	//       Status:   &status, // 使用状态常量
-	//       Page:     1,
-	//       PageSize: 20,
+	//       FlowID:      123,
+	//       Status:      &status,      // 使用状态常量
+	//       InitiatorID: &initiatorID, // 本地用户ID（可选）
+	//       Page:        1,
+	//       PageSize:    20,
 	//   }
-	//   journeys, total, err := engine.SearchJourneys(ctx, "tenant-001", nil, req)
-	SearchJourneys(ctx context.Context, tenantID string, localUserID *string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
+	//   journeys, total, err := engine.SearchJourneys(ctx, "tenant-001", req)
+	SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
 	// GetJourneyMoments 获取流程审批历史
 	// 参数:
 	//   - ctx: 上下文

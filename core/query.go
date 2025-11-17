@@ -114,7 +114,7 @@ type DetailRequest struct {
 type DetailResponse struct {
 	JourneyID          int                    // Journey ID
 	CurrentStatus      string                 // 当前流程状态
-	InitiatorUserID    string                 // 发起人ID（第一个Assignment的UserID）
+	InitiatorUserID    string                 // 发起人ID（本地用户ID）
 	InitiatorUserName  string                 // 发起人姓名（通过远程users表转换）
 	InitiatedAt        time.Time              // 发起时间（第一个Assignment的创建时间）
 	LatestBusinessData map[string]interface{} // 最新的业务数据（当前快照，只包含最后一个Assignment的业务字段）
@@ -130,7 +130,7 @@ type FlowNode struct {
 	VertexID    int       // 节点ID
 	VertexName  string    // 节点名称
 	VertexAlias string    // 节点别名
-	UserIDs     []string  // 处理人ID列表（支持同一节点多人处理，对应slp_user_id）
+	UserIDs     []string  // 处理人ID列表（本地用户ID）
 	UserNames   []string  // 处理人姓名列表（与UserIDs一一对应，通过远程users表查询转换）
 	CreatedAt   time.Time // 该节点第一次创建时间
 	UpdatedAt   time.Time // 该节点最后更新时间

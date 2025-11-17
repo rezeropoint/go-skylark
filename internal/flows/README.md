@@ -166,8 +166,11 @@ type Dependencies struct {
     // 获取平台配置（由 platform.Manager 提供）
     GetPlatformConfig core.GetPlatformConfigFunc
 
-    // 获取远程用户ID（由 user.Manager 提供）
+    // 获取远程用户ID（由 user.Manager 提供，入参转换）
     GetRemoteUserIDs core.GetRemoteUserIDsFunc
+
+    // 批量反向转换函数（由 user.Manager 提供，出参转换）
+    FillLocalUserIDMap core.FillLocalUserIDMapFunc
 
     // 获取远程数据库连接（由 platform.Manager 提供）
     GetRemoteDB core.GetRemoteDBFunc
@@ -317,15 +320,17 @@ for _, assignment := range assignments {
 ```go
 // 搜索进行中的流程
 status := core.StatusProcessing
+initiatorID := "local-user-001" // 本地用户ID
 req := &core.JourneySearchRequest{
-    FlowID:   123,
-    Status:   &status,
-    Keyword:  core.String("报销"),
-    Page:     1,
-    PageSize: 20,
+    FlowID:      123,
+    Status:      &status,
+    Keyword:     core.String("报销"),
+    InitiatorID: &initiatorID, // SDK 自动转换为远程ID
+    Page:        1,
+    PageSize:    20,
 }
 
-journeys, total, err := flowRegistry.SearchJourneys(ctx, "tenant-001", nil, req)
+journeys, total, err := flowRegistry.SearchJourneys(ctx, "tenant-001", req)
 ```
 
 ### 获取审批历史
@@ -491,6 +496,13 @@ func TestGetJourneyBySN(t *testing.T) {
 ---
 
 ## 版本历史
+
+- **v1.1** (2025-01-14): 用户ID统一转换改造
+  - 8个接口支持出参转换（远程用户ID → 本地用户ID）
+  - 1个接口支持入参转换（本地抄送人ID → 远程ID）
+  - SearchJourneys 接口优化（移除冗余 localUserID 参数）
+  - 新增 5 个批量转换函数（helpers.go）
+  - 依赖注入 FillLocalUserIDMap 函数
 
 - **v1.0** (2025-11-12): 完成所有 11 个流程接口
   - 核心流程管理（5个接口）

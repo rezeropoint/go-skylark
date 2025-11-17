@@ -62,3 +62,59 @@ type UserIDMapping struct {
 //   - 用于批量操作场景
 //   - 由 User Manager 的 GetRemoteUserIDs 方法实现
 type GetRemoteUserIDsFunc func(ctx context.Context, tenantID string, localUserIDs []string) ([]int, error)
+
+// FillLocalUserIDMapFunc 批量反向转换函数类型（填充本地用户ID映射）
+// 用途：供其他 Manager 根据远程用户ID批量查询本地用户ID
+// 参数：
+//   - ctx: 上下文
+//   - tenantID: 租户ID
+//   - userIDMapping: 用户ID映射（指针，keys 为需要查询的远程ID，函数会填充 value 为本地ID）
+//
+// 返回：
+//   - error: 如果任一远程ID无映射，返回 core.ErrUserMappingNotFound
+//
+// 说明：
+//   - 该函数会优先查询缓存（反向缓存），缓存未命中时批量查询数据库
+//   - 直接从 map keys 获取需要查询的远程ID列表，填充 values
+//   - 用于出参用户ID转换场景（远程ID → 本地ID）
+//   - 由 User Manager 的 FillLocalUserIDMap 方法实现
+type FillLocalUserIDMapFunc func(ctx context.Context, tenantID string, userIDMapping *map[int]string) error
+
+// ExtractUserIDsToMap 通用函数：从结构体列表中提取用户ID到映射（用于去重和占位）
+// 用途：统一处理各种结构体列表的用户ID提取逻辑，避免重复代码
+//
+// 参数：
+//   - items: 任意类型的切片
+//   - extractor: 提取函数，从单个元素中提取用户ID（返回0表示无有效ID）
+//
+// 返回：
+//   - map[int]string: 用户ID映射（keys为远程ID，values为空字符串占位，用于后续填充本地ID）
+//
+// 说明：
+//   - 自动去重（同一个远程ID只会出现一次）
+//   - 跳过无效ID（extractor返回0的元素）
+//   - values为空字符串占位，后续通过 GetLocalUserIDsWithMapFunc 填充本地ID
+//
+// 使用示例：
+//
+//	// 示例1：Journey列表
+//	userIDMapping := core.ExtractUserIDsToMap(journeys, func(j *core.Journey) int {
+//	    if j.User != nil {
+//	        return int(j.User.ID)
+//	    }
+//	    return 0
+//	})
+//
+//	// 示例2：Assignment列表
+//	userIDMapping := core.ExtractUserIDsToMap(assignments, func(a *core.Assignment) int {
+//	    return int(a.AssigneeID)
+//	})
+func ExtractUserIDsToMap[T any](items []T, extractor func(T) int) map[int]string {
+	mapping := make(map[int]string)
+	for _, item := range items {
+		if id := extractor(item); id != 0 {
+			mapping[id] = ""
+		}
+	}
+	return mapping
+}

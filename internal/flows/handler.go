@@ -16,15 +16,16 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	config            *Config // 配置
-	cache             core.CacheInterface
-	getPlatformConfig core.GetPlatformConfigFunc // 获取平台配置的函数（依赖注入）
-	getRemoteUserIDs  core.GetRemoteUserIDsFunc  // 获取远程用户ID的函数（依赖注入）
-	getRemoteDB       core.GetRemoteDBFunc       // 获取远程数据库连接的函数（依赖注入，用于性能优化）
+	config             *Config                     // 配置
+	cache              core.CacheInterface         // 缓存接口
+	getPlatformConfig  core.GetPlatformConfigFunc  // 获取平台配置的函数（依赖注入）
+	getRemoteUserIDs   core.GetRemoteUserIDsFunc   // 获取远程用户ID的函数（依赖注入，用于入参转换）
+	fillLocalUserIDMap core.FillLocalUserIDMapFunc // 批量反向转换函数（依赖注入，用于出参转换）
+	getRemoteDB        core.GetRemoteDBFunc        // 获取远程数据库连接的函数（依赖注入，用于性能优化）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, getRemoteDB core.GetRemoteDBFunc) (*skylarkFlowRegistry, error) {
+func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc) (*skylarkFlowRegistry, error) {
 	if config == nil {
 		return nil, core.ErrConfigNil
 	}
@@ -37,6 +38,10 @@ func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatfo
 		return nil, fmt.Errorf("getRemoteUserIDs 不能为 nil")
 	}
 
+	if fillLocalUserIDMap == nil {
+		return nil, fmt.Errorf("fillLocalUserIDMap 不能为 nil")
+	}
+
 	if getRemoteDB == nil {
 		return nil, fmt.Errorf("getRemoteDB 不能为 nil")
 	}
@@ -47,11 +52,12 @@ func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatfo
 	}
 
 	return &skylarkFlowRegistry{
-		config:            config,
-		cache:             cache,
-		getPlatformConfig: getPlatformConfig,
-		getRemoteUserIDs:  getRemoteUserIDs,
-		getRemoteDB:       getRemoteDB,
+		config:             config,
+		cache:              cache,
+		getPlatformConfig:  getPlatformConfig,
+		getRemoteUserIDs:   getRemoteUserIDs,
+		fillLocalUserIDMap: fillLocalUserIDMap,
+		getRemoteDB:        getRemoteDB,
 	}, nil
 }
 
@@ -255,12 +261,22 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 
 	// 第二次请求：执行操作（approve/refuse/transfer/cancel）
+	// 转换抄送者本地用户ID为远程用户ID
+	var carbonCopyRemoteUserIDs []int
+	if len(options.CarbonCopyUserIDs) > 0 {
+		remoteIDs, err := f.getRemoteUserIDs(ctx, tenantID, options.CarbonCopyUserIDs)
+		if err != nil {
+			return fmt.Errorf("转换抄送者用户ID失败: %w", err)
+		}
+		carbonCopyRemoteUserIDs = remoteIDs
+	}
+
 	operationRequest, err := f.buildOperationRequest(
 		skylarkFlowAddress,
 		string(operation), // 转换为字符串
 		options.NextVertexID,
 		options.Comment,
-		options.CarbonCopyUserIDs,
+		carbonCopyRemoteUserIDs, // 使用远程用户ID
 	)
 	if err != nil {
 		return err
@@ -331,8 +347,13 @@ func (f *skylarkFlowRegistry) GetJourneyBySN(
 		return nil, err
 	}
 
-	// 6. 转换为领域模型并返回
-	return journeyResp.ToDomain(), nil
+	// 6. 转换为领域模型（包含用户ID转换）
+	journey, err := convertJourneyUserID(ctx, &journeyResp, f.fillLocalUserIDMap, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	return journey, nil
 }
 
 // GetJourneyAssignments 获取流程节点处理信息列表
@@ -382,6 +403,11 @@ func (f *skylarkFlowRegistry) GetJourneyAssignments(
 	assignments := make([]*core.Assignment, len(assignmentResponses))
 	for i, ar := range assignmentResponses {
 		assignments[i] = ar.ToDomain()
+	}
+
+	// 7. 批量转换用户ID（远程ID → 本地ID）
+	if err := convertAssignmentsUserIDs(ctx, assignments, f.fillLocalUserIDMap, tenantID); err != nil {
+		return nil, err
 	}
 
 	return assignments, nil
@@ -436,8 +462,15 @@ func (f *skylarkFlowRegistry) GetJourneyDetail(
 		return nil, err
 	}
 
-	// 6. 转换为领域模型并返回
-	return journeyDetailResp.ToDomain(), nil
+	// 6. 转换为领域模型
+	journeyDetail := journeyDetailResp.ToDomain()
+
+	// 7. 转换发起人用户ID（远程ID → 本地ID）
+	if err := convertJourneyDetailUserID(ctx, journeyDetail, journeyDetailResp.User.ID, f.fillLocalUserIDMap, tenantID); err != nil {
+		return nil, err
+	}
+
+	return journeyDetail, nil
 }
 
 // GetFlowDetail 获取流程详情
@@ -554,7 +587,12 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 		assignments[i] = assignmentResp.ToDomain()
 	}
 
-	// 8. 从响应头获取总数（X-SLP-Total-Count）
+	// 8. 批量转换用户ID（远程ID → 本地ID）
+	if err := convertAssignmentsUserIDs(ctx, assignments, f.fillLocalUserIDMap, tenantID); err != nil {
+		return nil, 0, err
+	}
+
+	// 9. 从响应头获取总数（X-SLP-Total-Count）
 	totalCount := 0
 	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
 		if count, err := strconv.Atoi(totalStr); err == nil {
@@ -562,7 +600,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 		}
 	}
 
-	// 9. 性能优化：自动补充 flow_id 和 flow_title
+	// 10. 性能优化：自动补充 flow_id 和 flow_title
 	if err := f.enrichAssignmentsWithFlowInfo(ctx, tenantID, assignments); err != nil {
 		// 容错处理：enrichment 失败不影响主流程，只记录错误
 		// 用户仍可获得完整的 assignment 列表，只是缺少 flow 信息
@@ -629,10 +667,10 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 		return nil, 0, err
 	}
 
-	// 7. 转换为领域模型
-	journeys := make([]*core.Journey, len(journeysResp.Journeys))
-	for i, journeyResp := range journeysResp.Journeys {
-		journeys[i] = journeyResp.ToDomain()
+	// 7. 转换为领域模型（包含批量用户ID转换）
+	journeys, err := convertJourneyResponsesToDomain(ctx, journeysResp.Journeys, f.fillLocalUserIDMap, tenantID)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// 8. 从响应头获取总数（X-SLP-Total-Count）
@@ -651,26 +689,25 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 // 参数:
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于获取平台配置）
-//   - localUserID: 本地用户ID（可选，SDK内部自动转换为远程用户ID作为发起人筛选条件）
-//   - req: 搜索请求（如果包含 InitiatorID，会被 SDK 覆盖）
+//   - req: 搜索请求（req.InitiatorID 为本地用户ID，SDK内部自动转换为远程用户ID）
 //
 // 返回:
 //   - []*core.Journey: 流程列表
 //   - int: 总数
 //   - error: 错误信息
-func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID string, localUserID *string, req *core.JourneySearchRequest) ([]*core.Journey, int, error) {
-	// 1. 如果提供了 localUserID，转换为远程用户ID并覆盖请求中的 InitiatorID
-	if localUserID != nil && *localUserID != "" {
-		remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{*localUserID})
+func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error) {
+	// 1. 转换发起人ID（本地用户ID → 远程用户ID）
+	var remoteInitiatorID *int64
+	if req.InitiatorID != nil && *req.InitiatorID != "" {
+		remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{*req.InitiatorID})
 		if err != nil {
-			return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+			return nil, 0, fmt.Errorf("转换发起人ID失败: %w", err)
 		}
 		if len(remoteUserIDs) == 0 {
-			return nil, 0, fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", *localUserID)
+			return nil, 0, fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", *req.InitiatorID)
 		}
-		// 覆盖请求中的 InitiatorID
-		remoteUserID := int64(remoteUserIDs[0])
-		req.InitiatorID = &remoteUserID
+		remoteID := int64(remoteUserIDs[0])
+		remoteInitiatorID = &remoteID
 	}
 
 	// 2. 参数校验
@@ -713,8 +750,8 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 	if req.Keyword != nil {
 		searchBody["keyword"] = *req.Keyword
 	}
-	if req.InitiatorID != nil {
-		searchBody["initiator_id"] = *req.InitiatorID
+	if remoteInitiatorID != nil {
+		searchBody["initiator_id"] = *remoteInitiatorID
 	}
 	if req.CreatedFrom != nil {
 		searchBody["created_from"] = *req.CreatedFrom
@@ -741,10 +778,10 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 		return nil, 0, err
 	}
 
-	// 9. 转换为领域模型
-	journeys := make([]*core.Journey, len(searchResp.Journeys))
-	for i, journeyResp := range searchResp.Journeys {
-		journeys[i] = journeyResp.ToDomain()
+	// 9. 转换为领域模型（包含批量用户ID转换）
+	journeys, err := convertJourneyResponsesToDomain(ctx, searchResp.Journeys, f.fillLocalUserIDMap, tenantID)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// 10. 从响应头获取总数（X-SLP-Total-Count）
@@ -818,7 +855,12 @@ func (f *skylarkFlowRegistry) GetJourneyMoments(
 		moments[i] = mr.ToDomain()
 	}
 
-	// 9. 返回结果
+	// 9. 批量转换用户ID（远程ID → 本地ID）
+	if err := convertMomentsUserIDs(ctx, moments, f.fillLocalUserIDMap, tenantID); err != nil {
+		return nil, err
+	}
+
+	// 10. 返回结果
 	return moments, nil
 }
 
@@ -886,7 +928,12 @@ func (f *skylarkFlowRegistry) GetCurrentProcessingUsers(
 		users[i] = ur.ToDomain()
 	}
 
-	// 9. 返回结果
+	// 9. 批量转换用户ID（远程ID → 本地ID）
+	if err := convertProcessingUsersIDs(ctx, users, f.fillLocalUserIDMap, tenantID); err != nil {
+		return nil, err
+	}
+
+	// 10. 返回结果
 	return users, nil
 }
 

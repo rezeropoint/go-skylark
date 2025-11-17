@@ -8,7 +8,7 @@ package core
 // 说明：表示流程中的一个任务节点处理信息（从 Skylark API 返回）
 type Assignment struct {
 	ID         int64   // 任务ID
-	AssigneeID int64   // 处理人ID
+	AssigneeID string  // 处理人ID（本地用户ID）
 	Status     string  // 任务状态（processing, completed）
 	Category   string  // 任务类型（proposed, processed, cc）
 	VertexID   int64   // 节点ID

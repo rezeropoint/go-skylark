@@ -1,8 +1,10 @@
 package query
 
 import (
+	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
@@ -94,4 +96,79 @@ func buildColumnInfo(fieldConfigs []*core.FieldConfig) []*core.ColumnInfo {
 	}
 
 	return columns
+}
+
+// convertDetailResponseUserIDs 转换 DetailResponse 中的用户ID（字符串格式的远程ID → 本地ID）
+// 说明：
+// - GetEventDetail 返回的用户ID是字符串格式的远程用户ID（来自 slp_user_id）
+// - 此函数将所有用户ID（InitiatorUserID 和 FlowHistory[].UserIDs）批量转换为本地用户ID
+// - 转换策略：提取 → 去重 → 批量查询映射 → 替换
+func convertDetailResponseUserIDs(
+	ctx context.Context,
+	detail *core.DetailResponse,
+	fillLocalUserIDMap core.FillLocalUserIDMapFunc,
+	tenantID string,
+) error {
+	if detail == nil {
+		return nil
+	}
+
+	// 1. 提取所有唯一的远程用户ID（字符串格式）
+	remoteIDMapping := make(map[int]string)
+
+	// 发起人ID
+	if detail.InitiatorUserID != "" {
+		if id, err := strconv.Atoi(detail.InitiatorUserID); err == nil && id > 0 {
+			remoteIDMapping[id] = ""
+		}
+	}
+
+	// FlowHistory 中的 UserIDs
+	for _, node := range detail.FlowHistory {
+		for _, userIDStr := range node.UserIDs {
+			if userIDStr != "" {
+				if id, err := strconv.Atoi(userIDStr); err == nil && id > 0 {
+					remoteIDMapping[id] = ""
+				}
+			}
+		}
+	}
+
+	if len(remoteIDMapping) == 0 {
+		return nil // 没有需要转换的用户ID
+	}
+
+	// 2. 批量转换（填充映射）
+	if err := fillLocalUserIDMap(ctx, tenantID, &remoteIDMapping); err != nil {
+		return fmt.Errorf("批量转换用户ID失败: %w", err)
+	}
+
+	// 3. 替换所有用户ID为本地ID
+	// 3.1 替换发起人ID
+	if detail.InitiatorUserID != "" {
+		if remoteID, err := strconv.Atoi(detail.InitiatorUserID); err == nil {
+			if localID, ok := remoteIDMapping[remoteID]; ok && localID != "" {
+				detail.InitiatorUserID = localID
+			} else {
+				return fmt.Errorf("发起人ID %s 无本地映射: %w", detail.InitiatorUserID, core.ErrUserMappingNotFound)
+			}
+		}
+	}
+
+	// 3.2 替换 FlowHistory 中的用户ID
+	for _, node := range detail.FlowHistory {
+		for i, userIDStr := range node.UserIDs {
+			if userIDStr != "" {
+				if remoteID, err := strconv.Atoi(userIDStr); err == nil {
+					if localID, ok := remoteIDMapping[remoteID]; ok && localID != "" {
+						node.UserIDs[i] = localID
+					} else {
+						return fmt.Errorf("用户ID %s 无本地映射: %w", userIDStr, core.ErrUserMappingNotFound)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
