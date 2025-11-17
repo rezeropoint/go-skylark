@@ -65,9 +65,9 @@ type AdminEngine interface {
 	//   - tenantID: 租户ID
 	//   - localUserID: 本地用户ID
 	//   - name: 用户姓名
-	//   - identifier: 用户标识符（可选）
-	//   - phone: 手机号（可选）
-	//   - openid: OpenID（可选）
+	//   - identifier: 用户标识符（可选，空字符串表示不提供）
+	//   - phone: 手机号（可选，空字符串表示不提供）
+	//   - openid: OpenID（可选，空字符串表示不提供）
 	//
 	// 返回:
 	//   - error: 错误信息
@@ -75,7 +75,8 @@ type AdminEngine interface {
 	// 说明:
 	//   - 成功后映射关系已保存，使用者无需关心 Skylark 用户ID
 	//   - Skylark 用户ID由SDK内部管理，对使用者透明
-	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error
+	//   - 可选参数传入空字符串时不会发送给Skylark API
+	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error
 }
 
 // NewAdminEngine 创建新的系统管理引擎实例

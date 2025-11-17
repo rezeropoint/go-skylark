@@ -49,19 +49,31 @@ func newUserManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, g
 }
 
 // CreateUser 创建Skylark用户
-func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error {
+func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error {
 	// 1. 获取平台配置
 	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return fmt.Errorf("获取平台配置失败: %w", err)
 	}
 
-	// 2. 调用 Skylark API 创建用户
+	// 2. 转换可选参数：空字符串 → nil 指针
+	var identifierPtr, phonePtr, openidPtr *string
+	if identifier != "" {
+		identifierPtr = &identifier
+	}
+	if phone != "" {
+		phonePtr = &phone
+	}
+	if openid != "" {
+		openidPtr = &openid
+	}
+
+	// 3. 调用 Skylark API 创建用户
 	req := &CreateUserRequest{
 		Name:       name,
-		Identifier: identifier,
-		Phone:      phone,
-		Openid:     openid,
+		Identifier: identifierPtr,
+		Phone:      phonePtr,
+		Openid:     openidPtr,
 	}
 
 	userResp, err := m.httpClient.createUser(ctx, platformConfig.App, platformConfig.Token, req)
@@ -69,7 +81,7 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 		return fmt.Errorf("%w: %v", core.ErrUserCreateFailed, err)
 	}
 
-	// 3. 保存映射关系
+	// 4. 保存映射关系
 	mapping := &core.UserIDMapping{
 		ID:           uuid.New().String(),
 		TenantID:     tenantID,
@@ -82,7 +94,7 @@ func (m *userManager) CreateUser(ctx context.Context, tenantID, localUserID, nam
 		return fmt.Errorf("保存映射失败: %w", err)
 	}
 
-	// 4. 更新缓存
+	// 5. 更新缓存
 	if err := m.cacheMapping(ctx, mapping); err != nil {
 		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
 	}

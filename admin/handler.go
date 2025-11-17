@@ -96,6 +96,6 @@ func (e *adminEngine) DeleteOrganization(ctx context.Context, tenantID, localOrg
 }
 
 // CreateUser 创建 Skylark 用户
-func (e *adminEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error {
+func (e *adminEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error {
 	return e.user.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
 }

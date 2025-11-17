@@ -79,4 +79,3 @@ func convertJourneyUserID(ctx context.Context, journeyResponse *JourneyResponse,
 	// 3. 使用映射转换为领域模型
 	return journeyResponse.ToDomain(userIDMapping), nil
 }
-

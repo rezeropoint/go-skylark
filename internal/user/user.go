@@ -34,9 +34,9 @@ type Manager interface {
 	//   - tenantID: 租户ID
 	//   - localUserID: 本地用户ID（由调用方生成和管理）
 	//   - name: 用户姓名
-	//   - identifier: 用户标识符（可选）
-	//   - phone: 手机号（可选）
-	//   - openid: 微信OpenID（可选）
+	//   - identifier: 用户标识符（可选，空字符串表示不提供）
+	//   - phone: 手机号（可选，空字符串表示不提供）
+	//   - openid: 微信OpenID（可选，空字符串表示不提供）
 	//
 	// 返回：
 	//   - error: 错误信息
@@ -48,7 +48,8 @@ type Manager interface {
 	// 说明：
 	//   - 成功后映射关系已保存，使用者无需关心远程用户ID
 	//   - 远程用户ID由SDK内部管理，对使用者透明
-	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid *string) error
+	//   - 可选参数传入空字符串时不会发送给Skylark API
+	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error
 
 	// GetRemoteUserID 查询远程用户ID（单个，内部使用）
 	//
