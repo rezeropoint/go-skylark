@@ -58,6 +58,24 @@ type AdminEngine interface {
 	//   - error: 错误信息
 	DeleteOrganization(ctx context.Context, tenantID, localOrgID string) error
 
+	// GetOrgSyncStatus 获取组织同步状态
+	//
+	// 用途: 检查本地组织是否已同步到 Skylark 平台
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	//
+	// 返回:
+	//   - bool: 是否已同步（true=已同步到Skylark，false=未同步）
+	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
+	//
+	// 说明:
+	//   - 优先从缓存检查，缓存未命中则查询数据库
+	//   - 可用于创建流程前验证组织是否已在Skylark中存在
+	GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID string) (bool, error)
+
 	// CreateUser 创建 Skylark 用户
 	//
 	// 参数:
@@ -77,6 +95,24 @@ type AdminEngine interface {
 	//   - Skylark 用户ID由SDK内部管理，对使用者透明
 	//   - 可选参数传入空字符串时不会发送给Skylark API
 	CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error
+
+	// GetUserSyncStatus 获取用户同步状态
+	//
+	// 用途: 检查本地用户是否已同步到 Skylark 平台
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localUserID: 本地用户ID
+	//
+	// 返回:
+	//   - bool: 是否已同步（true=已同步到Skylark，false=未同步）
+	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
+	//
+	// 说明:
+	//   - 优先从缓存检查，缓存未命中则查询数据库
+	//   - 可用于创建流程前验证用户是否已在Skylark中存在
+	GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error)
 }
 
 // NewAdminEngine 创建新的系统管理引擎实例

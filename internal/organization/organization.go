@@ -74,6 +74,16 @@ type Manager interface {
 	//   3. 回写反向缓存（TTL 30天）
 	// 返回：本地组织ID，如果不存在返回错误
 	GetLocalOrgID(ctx context.Context, tenantID string, remoteOrgID int) (string, error)
+
+	// GetOrgSyncStatus 获取组织同步状态
+	// 用途：检查本地组织是否已同步到 Skylark 平台
+	// 流程：
+	//   1. 优先从缓存检查映射是否存在
+	//   2. 缓存未命中则查询数据库
+	// 返回：
+	//   - bool: 是否已同步（true=已同步，false=未同步）
+	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
+	GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID string) (bool, error)
 }
 
 // NewManager 创建组织管理器

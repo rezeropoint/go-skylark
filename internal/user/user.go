@@ -132,6 +132,16 @@ type Manager interface {
 	// 返回：
 	//   - error: 如果任一远程ID无映射，返回 core.ErrUserMappingNotFound
 	FillLocalUserIDMap(ctx context.Context, tenantID string, userIDMapping *map[int]string) error
+
+	// GetUserSyncStatus 获取用户同步状态
+	// 用途：检查本地用户是否已同步到 Skylark 平台
+	// 流程：
+	//   1. 优先从缓存检查映射是否存在
+	//   2. 缓存未命中则查询数据库
+	// 返回：
+	//   - bool: 是否已同步（true=已同步，false=未同步）
+	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
+	GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error)
 }
 
 // NewManager 创建用户管理器

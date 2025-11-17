@@ -255,3 +255,33 @@ func (m *userManager) FillLocalUserIDMap(ctx context.Context, tenantID string, u
 
 	return nil
 }
+
+// GetUserSyncStatus 获取用户同步状态
+func (m *userManager) GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error) {
+	// 1. 优先从缓存检查
+	_, err := m.cache.GetUserIDMapping(ctx, tenantID, localUserID)
+	if err == nil {
+		// 缓存命中，说明映射存在
+		return true, nil
+	}
+
+	// 2. 缓存未命中，查询数据库
+	var remoteUserID int
+	query := "SELECT remote_user_id FROM skylark_user_mappings WHERE tenant_id = $1 AND local_user_id = $2"
+	err = m.localDB.QueryRowCtx(ctx, &remoteUserID, query, tenantID, localUserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 映射不存在，返回 false（不返回错误）
+			return false, nil
+		}
+		// 数据库查询错误
+		return false, fmt.Errorf("查询用户映射失败: %w", err)
+	}
+
+	// 3. 映射存在，回写缓存（TTL 30天）
+	if err := m.cache.SetUserIDMapping(ctx, tenantID, localUserID, remoteUserID, 30*24*3600); err != nil {
+		logx.WithContext(ctx).Error("回写缓存失败（非致命错误）:", err)
+	}
+
+	return true, nil
+}

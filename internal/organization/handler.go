@@ -317,6 +317,36 @@ func (m *organizationManager) GetLocalOrgID(ctx context.Context, tenantID string
 	return localOrgID, nil
 }
 
+// GetOrgSyncStatus 获取组织同步状态
+func (m *organizationManager) GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID string) (bool, error) {
+	// 1. 优先从缓存检查
+	_, err := m.cache.GetOrgIDMapping(ctx, tenantID, localOrgID)
+	if err == nil {
+		// 缓存命中，说明映射存在
+		return true, nil
+	}
+
+	// 2. 缓存未命中，查询数据库
+	var remoteOrgID int
+	query := "SELECT remote_org_id FROM skylark_org_mappings WHERE tenant_id = $1 AND local_org_id = $2"
+	err = m.localDB.QueryRowCtx(ctx, &remoteOrgID, query, tenantID, localOrgID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 映射不存在，返回 false（不返回错误）
+			return false, nil
+		}
+		// 数据库查询错误
+		return false, fmt.Errorf("查询组织映射失败: %w", err)
+	}
+
+	// 3. 映射存在，回写缓存（TTL 30天）
+	if err := m.cache.SetOrgIDMapping(ctx, tenantID, localOrgID, remoteOrgID, 30*24*3600); err != nil {
+		logx.WithContext(ctx).Error("回写缓存失败（非致命错误）:", err)
+	}
+
+	return true, nil
+}
+
 // initTable 初始化组织ID映射表（私有方法，在包初始化时调用）
 func (m *organizationManager) initTable(ctx context.Context) error {
 	// 检查表是否已存在

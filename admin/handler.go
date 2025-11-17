@@ -99,3 +99,13 @@ func (e *adminEngine) DeleteOrganization(ctx context.Context, tenantID, localOrg
 func (e *adminEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error {
 	return e.user.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
 }
+
+// GetOrgSyncStatus 获取组织同步状态
+func (e *adminEngine) GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID string) (bool, error) {
+	return e.organization.GetOrgSyncStatus(ctx, tenantID, localOrgID)
+}
+
+// GetUserSyncStatus 获取用户同步状态
+func (e *adminEngine) GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error) {
+	return e.user.GetUserSyncStatus(ctx, tenantID, localUserID)
+}
