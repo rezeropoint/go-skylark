@@ -72,12 +72,10 @@ type SkylarkEngine interface {
 	//   - int: 总数
 	//   - error: 错误信息
 	// 示例:
-	//   status := core.StatusProcessing
-	//   initiatorID := "local-user-123"
 	//   req := &core.JourneySearchRequest{
 	//       FlowID:      123,
-	//       Status:      &status,      // 使用状态常量
-	//       InitiatorID: &initiatorID, // 本地用户ID（可选）
+	//       Status:      core.StatusProcessing, // 使用状态常量
+	//       InitiatorID: "local-user-123",      // 本地用户ID（可选）
 	//       Page:        1,
 	//       PageSize:    20,
 	//   }

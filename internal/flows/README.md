@@ -319,13 +319,11 @@ for _, assignment := range assignments {
 
 ```go
 // 搜索进行中的流程
-status := core.StatusProcessing
-initiatorID := "local-user-001" // 本地用户ID
 req := &core.JourneySearchRequest{
     FlowID:      123,
-    Status:      &status,
-    Keyword:     core.String("报销"),
-    InitiatorID: &initiatorID, // SDK 自动转换为远程ID
+    Status:      core.StatusProcessing, // 直接使用常量
+    Keyword:     "报销",                 // 直接使用字符串
+    InitiatorID: "local-user-001",      // SDK 自动转换为远程ID
     Page:        1,
     PageSize:    20,
 }
