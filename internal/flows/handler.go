@@ -182,7 +182,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	operation core.JourneyOperation,
 	options core.UpdateJourneyStatusOptions,
 ) error {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return err
@@ -313,7 +313,7 @@ func (f *skylarkFlowRegistry) GetJourneyBySN(
 	flowID int64,
 	sn string,
 ) (*core.Journey, error) {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -370,7 +370,7 @@ func (f *skylarkFlowRegistry) GetJourneyAssignments(
 	tenantID string,
 	journeyID int64,
 ) ([]*core.Assignment, error) {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -429,7 +429,7 @@ func (f *skylarkFlowRegistry) GetJourneyDetail(
 	flowID int64,
 	journeyID int64,
 ) (*core.JourneyDetail, error) {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -487,7 +487,7 @@ func (f *skylarkFlowRegistry) GetFlowDetail(
 	tenantID string,
 	flowID int64,
 ) (*core.FlowDetail, error) {
-	// 1. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -548,7 +548,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 	}
 	remoteUserID := remoteUserIDs[0]
 
-	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
@@ -634,7 +634,7 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 	}
 	remoteUserID := remoteUserIDs[0]
 
-	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
@@ -721,7 +721,7 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 		return nil, 0, fmt.Errorf("flowID 必须大于 0")
 	}
 
-	// 3. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 3. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
@@ -815,7 +815,7 @@ func (f *skylarkFlowRegistry) GetJourneyMoments(
 		return nil, fmt.Errorf("journeyID 必须大于 0")
 	}
 
-	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -888,7 +888,7 @@ func (f *skylarkFlowRegistry) GetCurrentProcessingUsers(
 		return nil, fmt.Errorf("journeyID 必须大于 0")
 	}
 
-	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -960,7 +960,7 @@ func (f *skylarkFlowRegistry) AbortJourney(
 		return fmt.Errorf("journeyID 必须大于 0")
 	}
 
-	// 2. 获取API配置（已验证EnableAPI、APIBaseURL、APIToken）
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return err

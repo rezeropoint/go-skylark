@@ -24,12 +24,11 @@ type Manager interface {
 	// 该方法实现了 core.GetPlatformConfigFunc 函数签名，用于依赖注入
 	// 流程：
 	//   1. 根据 tenantID 查询平台配置
-	//   2. 验证 EnableAPI 是否开启
-	//   3. 验证 APIBaseURL 和 APIToken 是否配置
-	//   4. 返回轻量级的 SkylarkAPIConfig（不包含敏感数据库信息）
+	//   2. 验证 APIBaseURL 和 APIToken 是否配置
+	//   3. 返回轻量级的 SkylarkAPIConfig（不包含敏感数据库信息）
 	// 返回：
 	//   - *core.SkylarkAPIConfig: API调用配置（只包含App和Token）
-	//   - error: ErrPlatformConfigNotFound / ErrAPINotEnabled / ErrInvalidPlatformConfig
+	//   - error: ErrPlatformConfigNotFound / ErrInvalidPlatformConfig
 	GetAPIConfig(ctx context.Context, tenantID string) (*core.SkylarkAPIConfig, error)
 
 	// Update 更新平台配置

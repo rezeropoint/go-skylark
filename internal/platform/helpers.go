@@ -20,3 +20,17 @@ func convertToNullString(s *string) sql.NullString {
 	}
 	return sql.NullString{Valid: false}
 }
+
+// convertNullStringToString 将 sql.NullString 转换为 string（用于必填字段）
+// 如果字段为空，返回空字符串
+func convertNullStringToString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
+}
+
+// convertStringToNullString 将 string 转换为 sql.NullString（用于必填字段）
+func convertStringToNullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
+}

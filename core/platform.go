@@ -44,13 +44,12 @@ type GetRemoteDBFunc func(ctx context.Context, tenantID string) (sqlx.SqlConn, e
 //
 // 返回：
 //   - *SkylarkAPIConfig: API调用配置（只包含App和Token，不暴露敏感数据库信息）
-//   - error: 错误信息（如平台配置不存在、API未启用、配置不完整等）
+//   - error: 错误信息（如平台配置不存在、配置不完整等）
 //
 // 说明：
 //   - 该函数会从 skylark_platform_configs 表读取配置
-//   - 会自动验证：EnableAPI是否开启、APIBaseURL和APIToken是否配置
+//   - 会自动验证：APIBaseURL和APIToken是否配置
 //   - 配置不存在时返回 ErrPlatformConfigNotFound
-//   - API未启用时返回 ErrAPINotEnabled
 //   - 配置不完整时返回 ErrInvalidPlatformConfig
 //   - 只返回API调用必要的字段，不返回数据库连接信息
 type GetPlatformConfigFunc func(ctx context.Context, tenantID string) (*SkylarkAPIConfig, error)
@@ -65,9 +64,8 @@ type PlatformConfig struct {
 	Username    string    // 用户名
 	Password    string    // 密码（加密存储）
 	NamespaceID int       // 命名空间ID（用于筛选flows）
-	EnableAPI   bool      // 是否启用API对接（true-启用，false-禁用）
-	APIBaseURL  *string   // Skylark API基础地址，纯域名（如：skylark.example.com，不含https://前缀）
-	APIToken    *string   // API认证Token
+	APIBaseURL  string    // Skylark API基础地址，纯域名（如：skylark.example.com，不含https://前缀）【必填】
+	APIToken    string    // API认证Token【必填】
 	CreatedBy   *string   // 创建者用户ID
 	UpdatedBy   *string   // 最后修改者用户ID
 	CreatedAt   time.Time // 创建时间

@@ -46,7 +46,6 @@ var (
 	// 配置相关错误
 	ErrPlatformConfigNotFound = errors.New("平台配置不存在")
 	ErrInvalidPlatformConfig  = errors.New("平台配置无效")
-	ErrAPINotEnabled          = errors.New("API对接未启用")
 	ErrEventConfigNotFound    = errors.New("事件配置不存在")
 	ErrInvalidEventConfig     = errors.New("事件配置无效")
 

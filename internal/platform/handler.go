@@ -60,6 +60,12 @@ func (m *platformManager) Create(ctx context.Context, cfg *core.PlatformConfig) 
 	if cfg.NamespaceID <= 0 {
 		return "", fmt.Errorf("%w: NamespaceID 必须大于0", core.ErrInvalidPlatformConfig)
 	}
+	if cfg.APIBaseURL == "" {
+		return "", fmt.Errorf("%w: APIBaseURL 不能为空", core.ErrInvalidPlatformConfig)
+	}
+	if cfg.APIToken == "" {
+		return "", fmt.Errorf("%w: APIToken 不能为空", core.ErrInvalidPlatformConfig)
+	}
 
 	// 3. 验证连接是否可用（先测试连接再入库）
 	if err := m.validateConnection(ctx, cfg); err != nil {
@@ -156,23 +162,18 @@ func (m *platformManager) GetAPIConfig(ctx context.Context, tenantID string) (*c
 		return nil, err
 	}
 
-	// 2. 验证 EnableAPI 是否开启
-	if !cfg.EnableAPI {
-		return nil, fmt.Errorf("%w: 租户 %s 未启用API对接", core.ErrAPINotEnabled, tenantID)
-	}
-
-	// 3. 验证 APIBaseURL 和 APIToken 是否配置
-	if cfg.APIBaseURL == nil || *cfg.APIBaseURL == "" {
+	// 2. 验证 APIBaseURL 和 APIToken 是否配置
+	if cfg.APIBaseURL == "" {
 		return nil, fmt.Errorf("%w: 租户 %s 的 APIBaseURL 未配置", core.ErrInvalidPlatformConfig, tenantID)
 	}
-	if cfg.APIToken == nil || *cfg.APIToken == "" {
+	if cfg.APIToken == "" {
 		return nil, fmt.Errorf("%w: 租户 %s 的 APIToken 未配置", core.ErrInvalidPlatformConfig, tenantID)
 	}
 
-	// 4. 返回轻量级的 API 配置（不包含敏感数据库信息）
+	// 3. 返回轻量级的 API 配置（不包含敏感数据库信息）
 	return &core.SkylarkAPIConfig{
-		App:   *cfg.APIBaseURL,
-		Token: *cfg.APIToken,
+		App:   cfg.APIBaseURL,
+		Token: cfg.APIToken,
 	}, nil
 }
 
@@ -187,6 +188,12 @@ func (m *platformManager) Update(ctx context.Context, cfg *core.PlatformConfig) 
 	}
 	if cfg.NamespaceID <= 0 {
 		return fmt.Errorf("%w: NamespaceID 必须大于0", core.ErrInvalidPlatformConfig)
+	}
+	if cfg.APIBaseURL == "" {
+		return fmt.Errorf("%w: APIBaseURL 不能为空", core.ErrInvalidPlatformConfig)
+	}
+	if cfg.APIToken == "" {
+		return fmt.Errorf("%w: APIToken 不能为空", core.ErrInvalidPlatformConfig)
 	}
 
 	// 2. 验证新连接是否可用
