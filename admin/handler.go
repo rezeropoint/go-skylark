@@ -48,14 +48,14 @@ func newAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (
 		return nil, err
 	}
 
-	// 2. 初始化组织管理器（依赖 Platform.GetAPIConfig）
-	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig)
+	// 2. 初始化用户管理器（依赖 Platform.GetAPIConfig）
+	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.GetAPIConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 初始化用户管理器（依赖 Platform.GetAPIConfig）
-	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.GetAPIConfig)
+	// 3. 初始化组织管理器（依赖 Platform.GetAPIConfig + User.GetRemoteUserIDs）
+	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -70,24 +70,12 @@ func newAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (
 
 // CreateOrganization 创建根组织
 func (e *adminEngine) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description, founderID string) error {
-	// 将本地用户 ID 转换为远程用户 ID
-	remoteFounderID, err := e.user.GetRemoteUserID(ctx, tenantID, founderID)
-	if err != nil {
-		return err
-	}
-
-	return e.organization.CreateOrganization(ctx, tenantID, localOrgID, name, description, remoteFounderID)
+	return e.organization.CreateOrganization(ctx, tenantID, localOrgID, name, description, founderID)
 }
 
 // CreateSubOrganization 创建子组织
 func (e *adminEngine) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description, founderID string) error {
-	// 将本地用户 ID 转换为远程用户 ID
-	remoteFounderID, err := e.user.GetRemoteUserID(ctx, tenantID, founderID)
-	if err != nil {
-		return err
-	}
-
-	return e.organization.CreateSubOrganization(ctx, tenantID, localOrgID, parentLocalOrgID, name, description, remoteFounderID)
+	return e.organization.CreateSubOrganization(ctx, tenantID, localOrgID, parentLocalOrgID, name, description, founderID)
 }
 
 // DeleteOrganization 删除组织

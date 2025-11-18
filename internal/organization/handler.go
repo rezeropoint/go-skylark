@@ -14,14 +14,15 @@ import (
 
 // organizationManager 组织管理器实现
 type organizationManager struct {
-	localDB           sqlx.SqlConn               // 本地数据库连接
-	cache             core.CacheInterface        // 缓存接口
-	getPlatformConfig core.GetPlatformConfigFunc // 获取平台配置函数
-	httpClient        *skylarkHTTPClient         // HTTP 客户端
+	localDB           sqlx.SqlConn                 // 本地数据库连接
+	cache             core.CacheInterface          // 缓存接口
+	getPlatformConfig core.GetPlatformConfigFunc   // 获取平台配置函数
+	getRemoteUserIDs  core.GetRemoteUserIDsFunc    // 批量查询远程用户ID函数
+	httpClient        *skylarkHTTPClient           // HTTP 客户端
 }
 
 // newOrganizationManager 创建组织管理器
-func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc) (*organizationManager, error) {
+func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (*organizationManager, error) {
 	// 验证参数
 	if db == nil {
 		return nil, fmt.Errorf("db 不能为空")
@@ -32,11 +33,15 @@ func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInte
 	if getPlatformConfig == nil {
 		return nil, fmt.Errorf("getPlatformConfig 函数不能为空")
 	}
+	if getRemoteUserIDs == nil {
+		return nil, fmt.Errorf("getRemoteUserIDs 函数不能为空")
+	}
 
 	manager := &organizationManager{
 		localDB:           db,
 		cache:             cache,
 		getPlatformConfig: getPlatformConfig,
+		getRemoteUserIDs:  getRemoteUserIDs,
 		httpClient:        newSkylarkHTTPClient(),
 	}
 
@@ -50,82 +55,30 @@ func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInte
 }
 
 // CreateOrganization 创建根组织
-func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) error {
-	// 1. 获取平台配置
+func (m *organizationManager) CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID string) error {
+	// 1. 获取平台配置（已验证 APIBaseURL、APIToken）
 	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("获取平台配置失败: %w", err)
+		return err
 	}
 
-	// 验证 API 配置
-	// 2. 调用 Skylark API 创建组织
+	// 2. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := m.getRemoteUserIDs(ctx, tenantID, []string{founderID})
+	if err != nil {
+		return fmt.Errorf("转换创始人用户ID失败: %w", err)
+	}
+	if len(remoteUserIDs) == 0 {
+		return fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", founderID)
+	}
+	remoteFounderID := remoteUserIDs[0]
+
+	// 3. 调用 Skylark API 创建组织
 	req := &CreateOrganizationRequest{
 		Name:                name,
 		Description:         description,
 		ApplicationStrategy: "closed", // 默认关闭申请
-		FounderID:           founderID,
+		FounderID:           remoteFounderID,
 		ParentID:            nil, // 根组织无父组织
-	}
-
-	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
-	if err != nil {
-		return fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
-	}
-
-	// 3. 保存映射关系
-	mapping := &core.OrgIDMapping{
-		ID:          uuid.New().String(),
-		TenantID:    tenantID,
-		LocalOrgID:  localOrgID,
-		RemoteOrgID: orgResp.ID,
-	}
-
-	if err := m.saveMapping(ctx, mapping); err != nil {
-		// TODO: 考虑是否需要回滚远程创建的组织（调用删除API）
-		return fmt.Errorf("保存映射失败: %w", err)
-	}
-
-	// 4. 更新缓存
-	if err := m.cacheMapping(ctx, mapping); err != nil {
-		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
-	}
-
-	logx.WithContext(ctx).WithFields(
-		logx.Field("module", "organization_manager"),
-		logx.Field("operation", "create_organization"),
-		logx.Field("tenant_id", tenantID),
-		logx.Field("local_org_id", localOrgID),
-		logx.Field("remote_org_id", orgResp.ID),
-	).Info("创建组织成功")
-
-	return nil
-}
-
-// CreateSubOrganization 创建子组织
-func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) error {
-	// 1. 查询父组织的 remote_org_id
-	parentRemoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, parentLocalOrgID)
-	if err != nil {
-		if err == core.ErrOrgNotFound {
-			return core.ErrParentOrgNotFound
-		}
-		return fmt.Errorf("查询父组织映射失败: %w", err)
-	}
-
-	// 2. 获取平台配置
-	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
-	if err != nil {
-		return fmt.Errorf("获取平台配置失败: %w", err)
-	}
-
-	// 验证 API 配置
-	// 3. 调用 Skylark API 创建子组织
-	req := &CreateOrganizationRequest{
-		Name:                name,
-		Description:         description,
-		ApplicationStrategy: "closed",
-		FounderID:           founderID,
-		ParentID:            &parentRemoteOrgID, // 指定父组织ID
 	}
 
 	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
@@ -142,10 +95,80 @@ func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantI
 	}
 
 	if err := m.saveMapping(ctx, mapping); err != nil {
+		// TODO: 考虑是否需要回滚远程创建的组织（调用删除API）
 		return fmt.Errorf("保存映射失败: %w", err)
 	}
 
 	// 5. 更新缓存
+	if err := m.cacheMapping(ctx, mapping); err != nil {
+		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
+	}
+
+	logx.WithContext(ctx).WithFields(
+		logx.Field("module", "organization_manager"),
+		logx.Field("operation", "create_organization"),
+		logx.Field("tenant_id", tenantID),
+		logx.Field("local_org_id", localOrgID),
+		logx.Field("remote_org_id", orgResp.ID),
+	).Info("创建组织成功")
+
+	return nil
+}
+
+// CreateSubOrganization 创建子组织
+func (m *organizationManager) CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID string) error {
+	// 1. 获取平台配置（已验证 APIBaseURL、APIToken）
+	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	// 2. 转换本地用户ID为远程用户ID
+	remoteUserIDs, err := m.getRemoteUserIDs(ctx, tenantID, []string{founderID})
+	if err != nil {
+		return fmt.Errorf("转换创始人用户ID失败: %w", err)
+	}
+	if len(remoteUserIDs) == 0 {
+		return fmt.Errorf("本地用户ID %s 未找到对应的远程用户ID", founderID)
+	}
+	remoteFounderID := remoteUserIDs[0]
+
+	// 3. 查询父组织的 remote_org_id
+	parentRemoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, parentLocalOrgID)
+	if err != nil {
+		if err == core.ErrOrgNotFound {
+			return core.ErrParentOrgNotFound
+		}
+		return fmt.Errorf("查询父组织映射失败: %w", err)
+	}
+
+	// 4. 调用 Skylark API 创建子组织
+	req := &CreateOrganizationRequest{
+		Name:                name,
+		Description:         description,
+		ApplicationStrategy: "closed",
+		FounderID:           remoteFounderID,
+		ParentID:            &parentRemoteOrgID, // 指定父组织ID
+	}
+
+	orgResp, err := m.httpClient.createOrganization(ctx, platformConfig.App, platformConfig.Token, req)
+	if err != nil {
+		return fmt.Errorf("%w: %v", core.ErrOrgCreateFailed, err)
+	}
+
+	// 5. 保存映射关系
+	mapping := &core.OrgIDMapping{
+		ID:          uuid.New().String(),
+		TenantID:    tenantID,
+		LocalOrgID:  localOrgID,
+		RemoteOrgID: orgResp.ID,
+	}
+
+	if err := m.saveMapping(ctx, mapping); err != nil {
+		return fmt.Errorf("保存映射失败: %w", err)
+	}
+
+	// 6. 更新缓存
 	if err := m.cacheMapping(ctx, mapping); err != nil {
 		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
 	}

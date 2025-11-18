@@ -59,14 +59,14 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 2. 初始化组织ID映射管理器（依赖 Platform）
-	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig)
+	// 2. 初始化用户ID映射管理器（依赖 Platform）
+	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.GetAPIConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 初始化用户ID映射管理器（依赖 Platform）
-	userMgr, err := user.NewManager(user.Config{}, db, cache, platformMgr.GetAPIConfig)
+	// 3. 初始化组织ID映射管理器（依赖 Platform + User）
+	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs)
 	if err != nil {
 		return nil, err
 	}

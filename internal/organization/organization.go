@@ -18,27 +18,35 @@ import (
 type Manager interface {
 	// CreateOrganization 创建根组织（无父组织）
 	// 流程：
-	//   1. 调用 Skylark API: POST /api/v4/organizations
-	//   2. 保存映射关系到数据库
-	//   3. 更新缓存（正向 + 反向）
+	//   1. 验证平台配置是否存在
+	//   2. 转换创始人本地用户ID为远程用户ID
+	//   3. 调用 Skylark API: POST /api/v4/organizations
+	//   4. 保存映射关系到数据库
+	//   5. 更新缓存（正向 + 反向）
+	// 参数：
+	//   - founderID: 创始人本地用户ID（string 类型）
 	// 返回：错误信息
 	// 说明：
 	//   - 成功后映射关系已保存，使用者无需关心远程组织ID
 	//   - 远程组织ID由SDK内部管理，对使用者透明
-	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID int) error
+	CreateOrganization(ctx context.Context, tenantID, localOrgID, name, description string, founderID string) error
 
 	// CreateSubOrganization 创建子组织
 	// 流程：
-	//   1. 查询父组织的 remote_org_id
-	//   2. 调用 Skylark API: POST /api/v4/organizations（带 parent_id）
-	//   3. 保存映射关系到数据库
-	//   4. 更新缓存（正向 + 反向）
+	//   1. 验证平台配置是否存在
+	//   2. 转换创始人本地用户ID为远程用户ID
+	//   3. 查询父组织的 remote_org_id
+	//   4. 调用 Skylark API: POST /api/v4/organizations（带 parent_id）
+	//   5. 保存映射关系到数据库
+	//   6. 更新缓存（正向 + 反向）
+	// 参数：
+	//   - founderID: 创始人本地用户ID（string 类型）
 	// 返回：错误信息
 	// 错误：如果 parentLocalOrgID 不存在，返回 core.ErrParentOrgNotFound
 	// 说明：
 	//   - 成功后映射关系已保存，使用者无需关心远程组织ID
 	//   - 远程组织ID由SDK内部管理，对使用者透明
-	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID int) error
+	CreateSubOrganization(ctx context.Context, tenantID, localOrgID, parentLocalOrgID, name, description string, founderID string) error
 
 	// DeleteOrganization 删除组织
 	// 流程：
@@ -92,8 +100,9 @@ type Manager interface {
 //   - db: 本地数据库连接（sqlx.SqlConn，用于存储组织ID映射）
 //   - cache: 缓存接口（用于缓存组织ID映射，TTL 30天）
 //   - getPlatformConfig: 获取平台配置的函数（用于获取 API BaseURL 和 Token）
+//   - getRemoteUserIDs: 批量查询远程用户ID的函数（用于转换本地用户ID为远程用户ID）
 //
 // 返回：组织管理器实例
-func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc) (Manager, error) {
-	return newOrganizationManager(config, db, cache, getPlatformConfig)
+func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (Manager, error) {
+	return newOrganizationManager(config, db, cache, getPlatformConfig, getRemoteUserIDs)
 }
