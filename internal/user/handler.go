@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rezeropoint/go-skylark/v2/core"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
@@ -172,7 +173,7 @@ func (m *userManager) GetRemoteUserIDs(ctx context.Context, tenantID string, loc
 			RemoteUserID int    `db:"remote_user_id"`
 		}
 
-		err := m.localDB.QueryRowsCtx(ctx, &mappings, query, tenantID, missedLocalUserIDs)
+		err := m.localDB.QueryRowsCtx(ctx, &mappings, query, tenantID, pq.Array(missedLocalUserIDs))
 		if err != nil {
 			return nil, fmt.Errorf("批量查询映射失败: %w", err)
 		}

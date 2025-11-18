@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rezeropoint/go-skylark/v2/core"
 	"github.com/rezeropoint/go-skylark/v2/internal/httputils"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -154,7 +155,7 @@ func (m *userManager) batchGetLocalUserIDsFromDB(ctx context.Context, tenantID s
 		LocalUserID  string `db:"local_user_id"`
 	}
 
-	err := m.localDB.QueryRowsCtx(ctx, &mappings, query, tenantID, remoteUserIDs)
+	err := m.localDB.QueryRowsCtx(ctx, &mappings, query, tenantID, pq.Array(remoteUserIDs))
 	if err != nil {
 		return nil, fmt.Errorf("批量查询用户ID映射失败: %w", err)
 	}

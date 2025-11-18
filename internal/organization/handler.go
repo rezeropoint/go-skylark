@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/rezeropoint/go-skylark/v2/core"
-
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"github.com/rezeropoint/go-skylark/v2/core"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
@@ -261,7 +261,7 @@ func (m *organizationManager) GetRemoteOrgIDs(ctx context.Context, tenantID stri
 			LocalOrgID  string `db:"local_org_id"`
 			RemoteOrgID int    `db:"remote_org_id"`
 		}
-		err := m.localDB.QueryRowsCtx(ctx, &mappings, query, tenantID, cacheMissIDs)
+		err := m.localDB.QueryRowsCtx(ctx, &mappings, query, tenantID, pq.Array(cacheMissIDs))
 		if err != nil {
 			return nil, fmt.Errorf("批量查询映射失败: %w", err)
 		}
