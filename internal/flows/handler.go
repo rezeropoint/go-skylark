@@ -550,7 +550,13 @@ func (f *skylarkFlowRegistry) GetFlowDetail(
 //   - int: 总数
 //   - error: 错误信息
 func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID string, localUserID string, category string, page, pageSize int) ([]*core.Assignment, int, error) {
-	// 1. 转换本地用户ID为远程用户ID
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 2. 转换本地用户ID为远程用户ID
 	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
 	if err != nil {
 		return nil, 0, fmt.Errorf("获取用户任务失败: 查询用户映射时发生错误 (%w)", err)
@@ -559,12 +565,6 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 		return nil, 0, fmt.Errorf("获取用户任务失败: 用户 %s 未同步到 Skylark，请先调用 UserManager.CreateUser() 创建用户映射后重试", localUserID)
 	}
 	remoteUserID := remoteUserIDs[0]
-
-	// 2. 获取API配置（已验证APIBaseURL、APIToken）
-	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
-	if err != nil {
-		return nil, 0, err
-	}
 
 	// 3. 构建 SkylarkAPIContext
 	skylarkAddress := core.SkylarkAPIContext{
@@ -641,7 +641,13 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 //   - int: 总数
 //   - error: 错误信息
 func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error) {
-	// 1. 转换本地用户ID为远程用户ID
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 2. 转换本地用户ID为远程用户ID
 	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
 	if err != nil {
 		return nil, 0, fmt.Errorf("获取用户发起的流程失败: 查询用户映射时发生错误 (%w)", err)
@@ -650,12 +656,6 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 		return nil, 0, fmt.Errorf("获取用户发起的流程失败: 用户 %s 未同步到 Skylark，请先调用 UserManager.CreateUser() 创建用户映射后重试", localUserID)
 	}
 	remoteUserID := remoteUserIDs[0]
-
-	// 2. 获取API配置（已验证APIBaseURL、APIToken）
-	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
-	if err != nil {
-		return nil, 0, err
-	}
 
 	// 3. 构建 SkylarkAPIContext
 	skylarkAddress := core.SkylarkAPIContext{
