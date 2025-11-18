@@ -553,10 +553,10 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 	// 1. 转换本地用户ID为远程用户ID
 	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
 	if err != nil {
-		return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+		return nil, 0, fmt.Errorf("获取用户任务失败: 查询用户映射时发生错误 (%w)", err)
 	}
 	if len(remoteUserIDs) == 0 {
-		return nil, 0, core.ErrUserMappingNotFound
+		return nil, 0, fmt.Errorf("获取用户任务失败: 用户 %s 未同步到 Skylark，请先调用 UserManager.CreateUser() 创建用户映射后重试", localUserID)
 	}
 	remoteUserID := remoteUserIDs[0]
 
@@ -601,7 +601,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 	// 8. 批量转换（远程ID → 本地ID），填充映射
 	if len(userIDMapping) > 0 {
 		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
-			return nil, 0, fmt.Errorf("批量转换用户ID失败: %w", err)
+			return nil, 0, fmt.Errorf("获取用户任务失败: 任务中存在未同步的 Skylark 用户，无法转换为本地用户ID (%w)", err)
 		}
 	}
 
@@ -621,9 +621,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 
 	// 10. 性能优化：自动补充 flow_id 和 flow_title
 	if err := f.enrichAssignmentsWithFlowInfo(ctx, tenantID, assignments); err != nil {
-		// 容错处理：enrichment 失败不影响主流程，只记录错误
-		// 用户仍可获得完整的 assignment 列表，只是缺少 flow 信息
-		// （前端可降级显示或额外查询）
+		return nil, 0, err
 	}
 
 	// 10. 返回结果（已补充 flow_id 和 flow_title）
@@ -646,10 +644,10 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 	// 1. 转换本地用户ID为远程用户ID
 	remoteUserIDs, err := f.getRemoteUserIDs(ctx, tenantID, []string{localUserID})
 	if err != nil {
-		return nil, 0, fmt.Errorf("转换用户ID失败: %w", err)
+		return nil, 0, fmt.Errorf("获取用户发起的流程失败: 查询用户映射时发生错误 (%w)", err)
 	}
 	if len(remoteUserIDs) == 0 {
-		return nil, 0, core.ErrUserMappingNotFound
+		return nil, 0, fmt.Errorf("获取用户发起的流程失败: 用户 %s 未同步到 Skylark，请先调用 UserManager.CreateUser() 创建用户映射后重试", localUserID)
 	}
 	remoteUserID := remoteUserIDs[0]
 

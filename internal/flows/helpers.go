@@ -36,7 +36,7 @@ func convertJourneyResponsesToDomain(ctx context.Context, journeyResponses []Jou
 	// 2. 批量转换（远程ID → 本地ID），填充映射
 	if len(userIDMapping) > 0 {
 		if err := fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
-			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+			return nil, fmt.Errorf("获取流程列表失败: 流程中存在未同步的 Skylark 用户，无法转换为本地用户ID (%w)", err)
 		}
 	}
 
@@ -73,7 +73,7 @@ func convertJourneyUserID(ctx context.Context, journeyResponse *JourneyResponse,
 
 	// 2. 批量转换（远程ID → 本地ID），填充映射
 	if err := fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
-		return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		return nil, fmt.Errorf("获取流程详情失败: 流程发起人（远程用户ID %d）未同步到本地，无法转换为本地用户ID (%w)", journeyResponse.User.ID, err)
 	}
 
 	// 3. 使用映射转换为领域模型

@@ -277,14 +277,21 @@ func (m *organizationManager) GetRemoteOrgIDs(ctx context.Context, tenantID stri
 			}
 		}
 
-		// 填充结果
+		// 填充结果并检查映射完整性
+		var failedIDs []string
 		for i, localOrgID := range cacheMissIDs {
 			if remoteOrgID, exists := mappingMap[localOrgID]; exists {
 				result[cacheMissIndices[i]] = remoteOrgID
 			} else {
-				// 映射不存在，返回 0（调用方需要处理）
+				// 记录失败的组织ID
+				failedIDs = append(failedIDs, localOrgID)
 				result[cacheMissIndices[i]] = 0
 			}
+		}
+
+		// 如果有映射缺失，返回详细错误
+		if len(failedIDs) > 0 {
+			return nil, fmt.Errorf("批量查询组织映射失败: 以下本地组织ID未找到映射关系 %v，请先调用 OrganizationManager.Create() 创建组织映射 (%w)", failedIDs, core.ErrOrgNotFound)
 		}
 	}
 

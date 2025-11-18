@@ -50,9 +50,7 @@ func (f *skylarkFlowRegistry) enrichAssignmentsWithFlowInfo(
 	// Step 2: 批量查询 journey_id → flow_id 映射
 	journeyToFlowMap, err := f.getJourneyFlowMapping(ctx, tenantID, journeyIDs)
 	if err != nil {
-		// 容错处理：映射库查询失败只记录日志，不影响主流程
-		logx.Errorf("[enrichment] 查询 journey 映射失败: %v", err)
-		return nil
+		return fmt.Errorf("补充流程信息失败: 查询 journey 映射时发生错误 (%w)", err)
 	}
 
 	// Step 3: 提取所有唯一的 flow_id
@@ -68,9 +66,7 @@ func (f *skylarkFlowRegistry) enrichAssignmentsWithFlowInfo(
 	// Step 4: 批量获取 flow 信息（带缓存）
 	flowInfoMap, err := f.batchGetFlowInfo(ctx, tenantID, flowIDs)
 	if err != nil {
-		// 容错处理：flow 信息获取失败只记录日志，不影响主流程
-		logx.Errorf("[enrichment] 批量获取 flow 信息失败: %v", err)
-		return nil
+		return fmt.Errorf("补充流程信息失败: 批量获取 flow 信息时发生错误 (%w)", err)
 	}
 
 	// Step 5: 合并数据，填充 flow_id 和 flow_title
@@ -166,11 +162,16 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 
 	// Step 2: 批量调用 API 获取未命中的 flow 信息
 	if len(missedFlowIDs) > 0 {
+		var failedFlowIDs []int64
 		for _, flowID := range missedFlowIDs {
 			flowInfo, err := f.fetchFlowInfoFromAPI(ctx, tenantID, flowID)
 			if err != nil {
-				// 容错处理：单个 flow 查询失败只记录日志，继续处理其他 flow
-				logx.Errorf("[enrichment] 获取 flow %d 信息失败: %v", flowID, err)
+				failedFlowIDs = append(failedFlowIDs, flowID)
+				logx.WithContext(ctx).WithFields(
+					logx.Field("module", "flows_enrichment"),
+					logx.Field("flow_id", flowID),
+					logx.Field("error", err.Error()),
+				).Error("获取 flow 信息失败")
 				continue
 			}
 
@@ -178,6 +179,11 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 
 			// 异步回写缓存（不阻塞主流程）
 			go f.cacheFlowInfo(context.Background(), tenantID, flowInfo)
+		}
+
+		// 如果有失败的 flow，返回错误
+		if len(failedFlowIDs) > 0 {
+			return nil, fmt.Errorf("补充流程信息失败: 以下 flow ID 获取信息失败 %v", failedFlowIDs)
 		}
 	}
 
