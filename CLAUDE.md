@@ -117,13 +117,12 @@ type EventConfig struct {
 - Event 依赖 Platform（获取远程 DB 连接，验证远程 flow_id）
 - Query、Stats 依赖 Platform（获取远程 DB 连接）、Event（获取事件配置）、Mapping（获取组织映射）
 
-**接口分类**（24个方法）：
-- 流程管理（11个）：CreateFlow、UpdateJourneyStatus、GetJourneyBySN、GetJourneyAssignments、GetJourneyDetail、GetFlowDetail、GetUserAssignments、GetProposedJourneys、SearchJourneys、GetJourneyMoments、GetCurrentProcessingUsers、AbortJourney
-- 表单管理（1个）：CreateFormRow
-- 平台配置（5个）：Create/Get/Update/Delete/ValidatePlatformConfig
-- 事件配置（5个）：Create/Update/Get/List/DeleteEventWithFields
-- 组织映射（5个）：Create/Get/List/Update/DeleteOrgMapping
-- 远程查询（2个）：QueryEventData、GetEventDetail
+**接口分类**（37个方法）：
+- 流程管理（13个）：CreateFlow、UpdateFlowJourneyStatus、GetFlowJourneyBySN、GetFlowJourneyAssignments、GetFlowJourneyDetail、GetFlowDetail、GetUserAssignments、GetProposedJourneys、SearchJourneys、GetJourneyMoments、GetCurrentProcessingUsers、AbortJourney、CreateFormRow
+- 平台配置（5个）：CreatePlatformConfig、GetPlatformConfig、UpdatePlatformConfig、DeletePlatformConfig、ValidatePlatformConfig
+- 事件配置（5个）：CreateEventWithFields、UpdateEventWithFields、GetEventWithFields、ListEventWithFields、DeleteEvent
+- 组织映射（5个）：CreateOrgMapping、GetOrgMapping、ListOrgMappings、UpdateOrgMapping、DeleteOrgMapping
+- 远程查询（4个）：QueryEventData、GetEventDetail、GetFlowList、GetFlowFields
 - 统计分析（7个）：GetDurationStats、GetStatusStats、GetTrendStats、GetNodeStats、GetUserStats、GetOrgStats、GetPendingStats
 
 ### Internal 层关键模块
@@ -170,9 +169,9 @@ type EventConfig struct {
 - 缓存统计结果（Redis，TTL 5分钟）
 
 #### internal/flows（流程管理）
-- **完整的流程生命周期管理**（11个接口）
-  - 写操作：创建流程、更新状态（CreateFlow、UpdateJourneyStatus）
-  - 读操作：查询流程、获取详情、搜索、审批历史等（9个查询接口）
+- **完整的流程生命周期管理**（13个接口）
+  - 写操作：创建流程、创建表单、更新状态、终止流程（CreateFlow、CreateFormRow、UpdateFlowJourneyStatus、AbortJourney）
+  - 读操作：查询流程、获取详情、搜索、审批历史、当前处理人等（9个查询接口）
 - **性能优化机制**（enrichment.go）：
   - 问题：GetUserAssignments 返回的 assignment 缺少 flow_id 和 flow_title
   - 方案：映射库 + 批量查询 + Redis 缓存三层优化
@@ -195,6 +194,7 @@ type EventConfig struct {
 
 **函数类型**（用于依赖注入）：
 - `GetRemoteDBFunc`：获取远程数据库连接（query/stats/flows 使用）
+- `GetPlatformConfigFunc`：获取平台 API 配置（flows 使用）
 - `GetEventConfigWithFieldsFunc`：获取事件配置
 - `ListOrgMappingsFunc`：获取组织映射列表
 - `GetRemoteUserIDsFunc`：获取远程用户 ID（flows 使用）
@@ -639,7 +639,8 @@ func enrichItems(ctx context.Context, items []*Item) error {
 
 ## 参考文档
 
-- **README.md**：项目介绍、快速开始
-- **internal/flows/README.md**：流程模块详细文档
+- **README.md**：项目介绍、快速开始、安装说明
+- **internal/flows/README.md**：流程模块详细文档（性能优化机制详解）
 - **internal/cache/README.md**：缓存模块详细文档
 - **internal/stats/MULTI_EVENT_STATS.md**：多事件统计设计文档
+- **Skylark流程API文档.md**、**Skylark组织API文档.md**、**Skylark用户API文档.md**：Skylark 平台 API 参考
