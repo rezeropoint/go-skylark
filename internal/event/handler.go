@@ -121,7 +121,22 @@ func (m *eventManager) CreateWithFields(ctx context.Context, creation *core.Even
 		logx.Field("field_count", len(creation.Fields)),
 	).Info("创建事件配置成功（包含字段）")
 
-	// 5. 查询返回完整的事件配置
+	// 5. 清除缓存（新增事件会影响列表）
+	if m.cache != nil {
+		trueVal := true
+		falseVal := false
+		// 清除事件配置列表缓存
+		_ = m.cache.DeleteEventConfigList(ctx, creation.EventConfig.TenantID, &trueVal)  // enabled=true
+		_ = m.cache.DeleteEventConfigList(ctx, creation.EventConfig.TenantID, &falseVal) // enabled=false
+		_ = m.cache.DeleteEventConfigList(ctx, creation.EventConfig.TenantID, nil)       // enabled=all
+
+		// 清除 flow_id 列表缓存
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, creation.EventConfig.TenantID, &trueVal)  // enabled=true
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, creation.EventConfig.TenantID, &falseVal) // enabled=false
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, creation.EventConfig.TenantID, nil)       // enabled=all
+	}
+
+	// 6. 返回创建的事件配置ID
 	return createdID, nil
 }
 
@@ -220,6 +235,11 @@ func (m *eventManager) UpdateWithFields(ctx context.Context, update *core.EventU
 		_ = m.cache.DeleteEventConfigList(ctx, update.EventConfig.TenantID, &trueVal)  // enabled=true
 		_ = m.cache.DeleteEventConfigList(ctx, update.EventConfig.TenantID, &falseVal) // enabled=false
 		_ = m.cache.DeleteEventConfigList(ctx, update.EventConfig.TenantID, nil)       // enabled=all
+
+		// 清除 flow_id 列表缓存
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, update.EventConfig.TenantID, &trueVal)  // enabled=true
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, update.EventConfig.TenantID, &falseVal) // enabled=false
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, update.EventConfig.TenantID, nil)       // enabled=all
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -371,6 +391,11 @@ func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
 		_ = m.cache.DeleteEventConfigList(ctx, tenantID, &trueVal)  // enabled=true
 		_ = m.cache.DeleteEventConfigList(ctx, tenantID, &falseVal) // enabled=false
 		_ = m.cache.DeleteEventConfigList(ctx, tenantID, nil)       // enabled=all
+
+		// 清除 flow_id 列表缓存
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, tenantID, &trueVal)  // enabled=true
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, tenantID, &falseVal) // enabled=false
+		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, tenantID, nil)       // enabled=all
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -381,6 +406,48 @@ func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
 	).Info("删除事件配置成功")
 
 	return nil
+}
+
+// ListConfiguredFlowIDs 获取已配置的 flow_id 列表
+func (m *eventManager) ListConfiguredFlowIDs(ctx context.Context, tenantID string, enabled *bool) ([]int, error) {
+	// 1. 尝试从缓存获取
+	if m.cache != nil {
+		flowIDs, err := m.cache.GetConfiguredFlowIDsList(ctx, tenantID, enabled)
+		if err == nil {
+			return flowIDs, nil
+		}
+		// 缓存未命中或出错，继续查询数据库
+	}
+
+	// 2. 查询数据库（使用 DISTINCT 去重）
+	query := `
+		SELECT DISTINCT flow_id
+		FROM event_configs
+		WHERE tenant_id = $1
+	`
+
+	args := []interface{}{tenantID}
+
+	// 根据 enabled 参数过滤
+	if enabled != nil {
+		query += " AND enabled = $2"
+		args = append(args, *enabled)
+	}
+
+	query += " ORDER BY flow_id"
+
+	var flowIDs []int
+	err := m.dbConn.QueryRowsCtx(ctx, &flowIDs, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("查询已配置的 flow_id 列表失败: %w", err)
+	}
+
+	// 3. 写入缓存（TTL: 5分钟，与事件配置列表缓存一致）
+	if m.cache != nil {
+		_ = m.cache.SetConfiguredFlowIDsList(ctx, tenantID, enabled, flowIDs, 300) // 5分钟
+	}
+
+	return flowIDs, nil
 }
 
 // Update 更新事件配置（不含字段）

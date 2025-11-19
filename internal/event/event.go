@@ -46,6 +46,13 @@ type Manager interface {
 	// Delete 删除事件配置（软删除）
 	// 字段配置会通过数据库外键级联删除（ON DELETE CASCADE）
 	Delete(ctx context.Context, id, tenantID string) error
+
+	// ListConfiguredFlowIDs 获取已配置的 flow_id 列表
+	// 用途：供 flows 等 Manager 筛选已配置事件监控的流程
+	// 参数：
+	//   - enabled: nil=全部，true=已启用，false=已禁用
+	// 返回：flow_id 列表（去重）
+	ListConfiguredFlowIDs(ctx context.Context, tenantID string, enabled *bool) ([]int, error)
 }
 
 // NewManager 创建事件+字段配置管理器

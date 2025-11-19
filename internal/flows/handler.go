@@ -16,16 +16,17 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	config             *Config                     // 配置
-	cache              core.CacheInterface         // 缓存接口
-	getPlatformConfig  core.GetPlatformConfigFunc  // 获取平台配置的函数（依赖注入）
-	getRemoteUserIDs   core.GetRemoteUserIDsFunc   // 获取远程用户ID的函数（依赖注入，用于入参转换）
-	fillLocalUserIDMap core.FillLocalUserIDMapFunc // 批量反向转换函数（依赖注入，用于出参转换）
-	getRemoteDB        core.GetRemoteDBFunc        // 获取远程数据库连接的函数（依赖注入，用于性能优化）
+	config               *Config                          // 配置
+	cache                core.CacheInterface              // 缓存接口
+	getPlatformConfig    core.GetPlatformConfigFunc       // 获取平台配置的函数（依赖注入）
+	getRemoteUserIDs     core.GetRemoteUserIDsFunc        // 获取远程用户ID的函数（依赖注入，用于入参转换）
+	fillLocalUserIDMap   core.FillLocalUserIDMapFunc      // 批量反向转换函数（依赖注入，用于出参转换）
+	getRemoteDB          core.GetRemoteDBFunc             // 获取远程数据库连接的函数（依赖注入，用于性能优化）
+	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc  // 获取已配置事件的flow_id列表的函数（依赖注入，用于筛选流程实例）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc) (*skylarkFlowRegistry, error) {
+func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc) (*skylarkFlowRegistry, error) {
 	if config == nil {
 		return nil, core.ErrConfigNil
 	}
@@ -46,18 +47,23 @@ func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatfo
 		return nil, fmt.Errorf("getRemoteDB 不能为 nil")
 	}
 
+	if listConfiguredFlowIDs == nil {
+		return nil, fmt.Errorf("listConfiguredFlowIDs 不能为 nil")
+	}
+
 	// 设置缓存配置的默认值
 	if config.FlowInfoCacheTTL <= 0 {
 		config.FlowInfoCacheTTL = 3600 // 默认1小时
 	}
 
 	return &skylarkFlowRegistry{
-		config:             config,
-		cache:              cache,
-		getPlatformConfig:  getPlatformConfig,
-		getRemoteUserIDs:   getRemoteUserIDs,
-		fillLocalUserIDMap: fillLocalUserIDMap,
-		getRemoteDB:        getRemoteDB,
+		config:               config,
+		cache:                cache,
+		getPlatformConfig:    getPlatformConfig,
+		getRemoteUserIDs:     getRemoteUserIDs,
+		fillLocalUserIDMap:   fillLocalUserIDMap,
+		getRemoteDB:          getRemoteDB,
+		listConfiguredFlowIDs: listConfiguredFlowIDs,
 	}, nil
 }
 
@@ -611,21 +617,34 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 		assignments[i] = assignmentResp.ToDomain(userIDMapping)
 	}
 
-	// 9. 从响应头获取总数（X-SLP-Total-Count）
-	totalCount := 0
-	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
-		if count, err := strconv.Atoi(totalStr); err == nil {
-			totalCount = count
-		}
-	}
-
-	// 10. 性能优化：自动补充 flow_id 和 flow_title
+	// 9. 性能优化：自动补充 flow_id 和 flow_title（注：筛选后总数无需从响应头获取）
 	if err := f.enrichAssignmentsWithFlowInfo(ctx, tenantID, assignments); err != nil {
 		return nil, 0, err
 	}
 
-	// 10. 返回结果（已补充 flow_id 和 flow_title）
-	return assignments, totalCount, nil
+	// 11. 筛选：只保留已配置事件的任务
+	trueVal := true
+	configuredFlowIDs, err := f.listConfiguredFlowIDs(ctx, tenantID, &trueVal) // 只获取已启用的事件
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取已配置流程列表失败: %w", err)
+	}
+
+	// 构建快速查找集合
+	flowIDSet := make(map[int64]bool, len(configuredFlowIDs))
+	for _, flowID := range configuredFlowIDs {
+		flowIDSet[int64(flowID)] = true
+	}
+
+	// 过滤 assignments（只保留已配置事件的任务）
+	filteredAssignments := make([]*core.Assignment, 0, len(assignments))
+	for _, a := range assignments {
+		if a.FlowID != nil && flowIDSet[*a.FlowID] {
+			filteredAssignments = append(filteredAssignments, a)
+		}
+	}
+
+	// 12. 返回筛选后的结果
+	return filteredAssignments, len(filteredAssignments), nil
 }
 
 // GetProposedJourneys 获取用户发起的流程列表
@@ -691,16 +710,29 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 		return nil, 0, err
 	}
 
-	// 8. 从响应头获取总数（X-SLP-Total-Count）
-	totalCount := 0
-	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
-		if count, err := strconv.Atoi(totalStr); err == nil {
-			totalCount = count
+	// 8. 筛选：只保留已配置事件的流程（注：筛选后总数无需从响应头获取）
+	trueVal := true
+	configuredFlowIDs, err := f.listConfiguredFlowIDs(ctx, tenantID, &trueVal) // 只获取已启用的事件
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取已配置流程列表失败: %w", err)
+	}
+
+	// 构建快速查找集合
+	flowIDSet := make(map[int64]bool, len(configuredFlowIDs))
+	for _, flowID := range configuredFlowIDs {
+		flowIDSet[int64(flowID)] = true
+	}
+
+	// 过滤 journeys（只保留已配置事件的流程）
+	filteredJourneys := make([]*core.Journey, 0, len(journeys))
+	for _, j := range journeys {
+		if flowIDSet[j.FlowID] {
+			filteredJourneys = append(filteredJourneys, j)
 		}
 	}
 
-	// 9. 返回结果
-	return journeys, totalCount, nil
+	// 10. 返回筛选后的结果
+	return filteredJourneys, len(filteredJourneys), nil
 }
 
 // SearchJourneys 搜索流程记录
@@ -791,16 +823,29 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 		return nil, 0, err
 	}
 
-	// 10. 从响应头获取总数（X-SLP-Total-Count）
-	totalCount := 0
-	if totalStr := resp.Header.Get("X-SLP-Total-Count"); totalStr != "" {
-		if count, err := strconv.Atoi(totalStr); err == nil {
-			totalCount = count
+	// 10. 筛选：只保留已配置事件的流程（注：筛选后总数无需从响应头获取）
+	trueVal := true
+	configuredFlowIDs, err := f.listConfiguredFlowIDs(ctx, tenantID, &trueVal) // 只获取已启用的事件
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取已配置流程列表失败: %w", err)
+	}
+
+	// 构建快速查找集合
+	flowIDSet := make(map[int64]bool, len(configuredFlowIDs))
+	for _, flowID := range configuredFlowIDs {
+		flowIDSet[int64(flowID)] = true
+	}
+
+	// 过滤 journeys（只保留已配置事件的流程）
+	filteredJourneys := make([]*core.Journey, 0, len(journeys))
+	for _, j := range journeys {
+		if flowIDSet[j.FlowID] {
+			filteredJourneys = append(filteredJourneys, j)
 		}
 	}
 
-	// 11. 返回结果
-	return journeys, totalCount, nil
+	// 12. 返回筛选后的结果
+	return filteredJourneys, len(filteredJourneys), nil
 }
 
 // GetJourneyMoments 获取流程审批历史

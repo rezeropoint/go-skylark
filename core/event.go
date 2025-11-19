@@ -5,6 +5,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -32,6 +33,11 @@ const (
 	// key格式: skylark:event_list:{tenant_id}:enabled={true|false|all}
 	// TTL: 5分钟（列表实时性要求较高）
 	CacheEventConfigListKeyPrefix = "skylark:event_list:"
+
+	// CacheConfiguredFlowIDsListKeyPrefix 已配置 flow_id 列表缓存键前缀
+	// key格式: skylark:configured_flows:{tenant_id}:enabled={true|false|all}
+	// TTL: 5分钟（与事件配置列表缓存一致）
+	CacheConfiguredFlowIDsListKeyPrefix = "skylark:configured_flows:"
 )
 
 // EventConfig 事件配置领域模型（纯领域模型）
@@ -94,3 +100,20 @@ type EventAggregate struct {
 	EventConfig EventConfig    // 事件基本配置
 	Fields      []*FieldConfig // 字段列表（按DisplayOrder排序）
 }
+
+// ListConfiguredFlowIDsFunc 获取已配置事件的 flow_id 列表的函数类型
+// 用途：供 flows 等 Manager 筛选已配置事件监控的流程，实现 Manager 之间解耦
+// 参数：
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于查询事件配置）
+//   - enabled: 筛选条件（nil=全部，true=已启用，false=已禁用）
+//
+// 返回：
+//   - []int: 已配置的 flow_id 列表（去重）
+//   - error: 错误信息（如查询失败等）
+//
+// 说明：
+//   - 该函数会从 event_configs 表查询所有匹配的 flow_id
+//   - 自动去重（同一个 flow_id 只返回一次）
+//   - 用于筛选流程实例数据，确保只返回已配置事件的流程
+type ListConfiguredFlowIDsFunc func(ctx context.Context, tenantID string, enabled *bool) ([]int, error)

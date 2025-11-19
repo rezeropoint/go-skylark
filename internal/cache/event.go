@@ -99,3 +99,61 @@ func (f *SkylarkCache) DeleteEventConfigList(ctx context.Context, tenantID strin
 	_, err := f.redisClient.DelCtx(ctx, key)
 	return err
 }
+
+// GetConfiguredFlowIDsList 从缓存获取已配置的 flow_id 列表
+func (f *SkylarkCache) GetConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool) ([]int, error) {
+	enabledStr := "all"
+	if enabled != nil {
+		if *enabled {
+			enabledStr = "true"
+		} else {
+			enabledStr = "false"
+		}
+	}
+	key := fmt.Sprintf("%s%s:enabled=%s", core.CacheConfiguredFlowIDsListKeyPrefix, tenantID, enabledStr)
+	val, err := f.redisClient.GetCtx(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	var flowIDs []int
+	if err := json.Unmarshal([]byte(val), &flowIDs); err != nil {
+		return nil, fmt.Errorf("反序列化 flow_id 列表缓存失败: %w", err)
+	}
+
+	return flowIDs, nil
+}
+
+// SetConfiguredFlowIDsList 缓存已配置的 flow_id 列表
+func (f *SkylarkCache) SetConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool, flowIDs []int, ttl int) error {
+	enabledStr := "all"
+	if enabled != nil {
+		if *enabled {
+			enabledStr = "true"
+		} else {
+			enabledStr = "false"
+		}
+	}
+	key := fmt.Sprintf("%s%s:enabled=%s", core.CacheConfiguredFlowIDsListKeyPrefix, tenantID, enabledStr)
+	data, err := json.Marshal(flowIDs)
+	if err != nil {
+		return fmt.Errorf("序列化 flow_id 列表失败: %w", err)
+	}
+
+	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
+}
+
+// DeleteConfiguredFlowIDsList 删除已配置的 flow_id 列表缓存
+func (f *SkylarkCache) DeleteConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool) error {
+	enabledStr := "all"
+	if enabled != nil {
+		if *enabled {
+			enabledStr = "true"
+		} else {
+			enabledStr = "false"
+		}
+	}
+	key := fmt.Sprintf("%s%s:enabled=%s", core.CacheConfiguredFlowIDsListKeyPrefix, tenantID, enabledStr)
+	_, err := f.redisClient.DelCtx(ctx, key)
+	return err
+}

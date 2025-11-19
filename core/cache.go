@@ -90,4 +90,9 @@ type CacheInterface interface {
 	GetEventConfigList(ctx context.Context, tenantID string, enabled *bool) ([]*EventAggregate, error)
 	SetEventConfigList(ctx context.Context, tenantID string, enabled *bool, configs []*EventAggregate, ttl int) error
 	DeleteEventConfigList(ctx context.Context, tenantID string, enabled *bool) error
+
+	// 已配置 flow_id 列表缓存（event 模块 - 用于筛选流程实例）
+	GetConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool) ([]int, error)
+	SetConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool, flowIDs []int, ttl int) error
+	DeleteConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool) error
 }

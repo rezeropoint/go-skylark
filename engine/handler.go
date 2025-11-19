@@ -71,18 +71,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 4. 初始化流程和表单管理器（依赖 Platform + User）
-	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB)
-	if err != nil {
-		return nil, err
-	}
-
-	forms, err := forms.NewSkylarkFormRegistry(&forms.Config{}, cache)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. 初始化组织映射管理器（业务字段值映射）
+	// 4. 初始化组织映射管理器（业务字段值映射）
 	mappingConfig := mapping.Config{}
 	if config.Mapping != nil {
 		mappingConfig = *config.Mapping
@@ -96,7 +85,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		return nil, err
 	}
 
-	// 6. 初始化事件配置管理器（注入 platform.GetRemoteDB）
+	// 5. 初始化事件配置管理器（依赖 Platform，注入 platform.GetRemoteDB）
 	eventConfig := event.Config{}
 	if config.Event != nil {
 		eventConfig = *config.Event
@@ -109,6 +98,17 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 		eventConfig.EventConfigListCacheTTL = 5 * time.Minute
 	}
 	eventMgr, err := event.NewManager(eventConfig, db, cache, platformMgr.GetRemoteDB)
+	if err != nil {
+		return nil, err
+	}
+
+	// 6. 初始化流程和表单管理器（依赖 Platform + User + Event）
+	flows, err := flows.NewSkylarkFlowRegistry(&flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	forms, err := forms.NewSkylarkFormRegistry(&forms.Config{}, cache)
 	if err != nil {
 		return nil, err
 	}
