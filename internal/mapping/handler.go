@@ -92,22 +92,24 @@ func (m *mappingManager) CreateOrgMapping(ctx context.Context, mapping *core.Org
 				m.tenant_id,
 				m.remote_org_value,
 				m.local_org_id,
-				COALESCE(o.name, '') AS local_org_name,
+				o.name AS local_org_name,
 				m.created_at,
 				m.updated_at
 			FROM event_org_mappings m
 			LEFT JOIN organizations o ON m.local_org_id = o.id
 			WHERE m.id = $1
 		`
-		var createdMapping core.OrgMapping
-		if err := session.QueryRowCtx(ctx, &createdMapping, queryMapping, mapping.ID); err != nil {
+		var model OrgMappingModel
+		if err := session.QueryRowCtx(ctx, &model, queryMapping, mapping.ID); err != nil {
 			return fmt.Errorf("查询新创建的映射失败: %w", err)
 		}
+
+		createdMapping := model.ToDomain()
 
 		// 更新缓存（单个映射）
 		if m.cache != nil {
 			ttl := int(m.config.OrgMappingCacheTTL.Seconds())
-			if err := m.cache.SetOrgMapping(ctx, &createdMapping, ttl); err != nil {
+			if err := m.cache.SetOrgMapping(ctx, createdMapping, ttl); err != nil {
 				logx.WithContext(ctx).Error("缓存组织映射失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载
@@ -152,7 +154,7 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 			m.tenant_id,
 			m.remote_org_value,
 			m.local_org_id,
-			COALESCE(o.name, '') AS local_org_name,
+			o.name AS local_org_name,
 			m.created_at,
 			m.updated_at
 		FROM event_org_mappings m
@@ -160,8 +162,8 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 		WHERE m.id = $1
 	`
 
-	var mapping core.OrgMapping
-	err := m.dbConn.QueryRowCtx(ctx, &mapping, query, id)
+	var model OrgMappingModel
+	err := m.dbConn.QueryRowCtx(ctx, &model, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, core.ErrOrgMappingNotFound
@@ -169,15 +171,17 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 		return nil, fmt.Errorf("查询组织映射失败: %w", err)
 	}
 
+	mapping := model.ToDomain()
+
 	// 3. 更新缓存
 	if m.cache != nil {
 		ttl := int(m.config.OrgMappingCacheTTL.Seconds())
-		if err := m.cache.SetOrgMapping(ctx, &mapping, ttl); err != nil {
+		if err := m.cache.SetOrgMapping(ctx, mapping, ttl); err != nil {
 			logx.WithContext(ctx).Error("缓存组织映射失败（非致命错误）:", err)
 		}
 	}
 
-	return &mapping, nil
+	return mapping, nil
 }
 
 // ListOrgMappings 查询组织映射列表（根据租户ID）
@@ -198,7 +202,7 @@ func (m *mappingManager) ListOrgMappings(ctx context.Context, tenantID string) (
 			m.tenant_id,
 			m.remote_org_value,
 			m.local_org_id,
-			COALESCE(o.name, '') AS local_org_name,
+			o.name AS local_org_name,
 			m.created_at,
 			m.updated_at
 		FROM event_org_mappings m
@@ -207,10 +211,16 @@ func (m *mappingManager) ListOrgMappings(ctx context.Context, tenantID string) (
 		ORDER BY m.remote_org_value ASC
 	`
 
-	var mappings []*core.OrgMapping
-	err := m.dbConn.QueryRowsCtx(ctx, &mappings, query, tenantID)
+	var models []*OrgMappingModel
+	err := m.dbConn.QueryRowsCtx(ctx, &models, query, tenantID)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("查询组织映射列表失败: %w", err)
+	}
+
+	// 转换为领域模型
+	mappings := make([]*core.OrgMapping, 0, len(models))
+	for _, model := range models {
+		mappings = append(mappings, model.ToDomain())
 	}
 
 	// 如果没有记录，返回空数组而不是 nil
@@ -305,23 +315,25 @@ func (m *mappingManager) UpdateOrgMapping(ctx context.Context, mapping *core.Org
 				m.tenant_id,
 				m.remote_org_value,
 				m.local_org_id,
-				COALESCE(o.name, '') AS local_org_name,
+				o.name AS local_org_name,
 				m.created_at,
 				m.updated_at
 			FROM event_org_mappings m
 			LEFT JOIN organizations o ON m.local_org_id = o.id
 			WHERE m.id = $1
 		`
-		var updatedMapping core.OrgMapping
-		if err := session.QueryRowCtx(ctx, &updatedMapping, queryMapping, mapping.ID); err != nil {
+		var model OrgMappingModel
+		if err := session.QueryRowCtx(ctx, &model, queryMapping, mapping.ID); err != nil {
 			return fmt.Errorf("查询更新后的映射失败: %w", err)
 		}
+
+		updatedMapping := model.ToDomain()
 
 		// 更新缓存
 		if m.cache != nil {
 			// 更新单个映射缓存
 			ttl := int(m.config.OrgMappingCacheTTL.Seconds())
-			if err := m.cache.SetOrgMapping(ctx, &updatedMapping, ttl); err != nil {
+			if err := m.cache.SetOrgMapping(ctx, updatedMapping, ttl); err != nil {
 				logx.WithContext(ctx).Error("更新组织映射缓存失败（非致命错误）:", err)
 			}
 			// 删除列表缓存，触发下次查询时重新加载
