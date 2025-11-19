@@ -96,7 +96,7 @@ func (m *mappingManager) CreateOrgMapping(ctx context.Context, mapping *core.Org
 				m.created_at,
 				m.updated_at
 			FROM event_org_mappings m
-			LEFT JOIN organizations o ON m.local_org_id = o.id
+			LEFT JOIN system_organizations o ON m.local_org_id = o.id
 			WHERE m.id = $1
 		`
 		var model OrgMappingModel
@@ -158,7 +158,7 @@ func (m *mappingManager) GetOrgMapping(ctx context.Context, id string) (*core.Or
 			m.created_at,
 			m.updated_at
 		FROM event_org_mappings m
-		LEFT JOIN organizations o ON m.local_org_id = o.id
+		LEFT JOIN system_organizations o ON m.local_org_id = o.id
 		WHERE m.id = $1
 	`
 
@@ -206,7 +206,7 @@ func (m *mappingManager) ListOrgMappings(ctx context.Context, tenantID string) (
 			m.created_at,
 			m.updated_at
 		FROM event_org_mappings m
-		LEFT JOIN organizations o ON m.local_org_id = o.id
+		LEFT JOIN system_organizations o ON m.local_org_id = o.id
 		WHERE m.tenant_id = $1
 		ORDER BY m.remote_org_value ASC
 	`
@@ -319,7 +319,7 @@ func (m *mappingManager) UpdateOrgMapping(ctx context.Context, mapping *core.Org
 				m.created_at,
 				m.updated_at
 			FROM event_org_mappings m
-			LEFT JOIN organizations o ON m.local_org_id = o.id
+			LEFT JOIN system_organizations o ON m.local_org_id = o.id
 			WHERE m.id = $1
 		`
 		var model OrgMappingModel

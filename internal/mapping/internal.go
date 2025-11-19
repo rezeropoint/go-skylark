@@ -20,7 +20,7 @@ import (
 //   - error: 如果组织不存在或验证失败
 func (m *mappingManager) validateOrgExists(ctx context.Context, orgID, tenantID string) error {
 	query := `
-		SELECT id FROM organizations
+		SELECT id FROM system_organizations
 		WHERE id = $1 AND tenant_id = $2
 		  AND status = 'active'
 		  AND deleted_at IS NULL

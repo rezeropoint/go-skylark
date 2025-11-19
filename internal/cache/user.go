@@ -130,7 +130,7 @@ func (f *SkylarkCache) BatchGetUserNames(
 			Name string `db:"name"`
 		}
 
-		query := "SELECT id, name FROM users WHERE id = ANY($1)"
+		query := "SELECT id, name FROM system_users WHERE id = ANY($1)"
 		var users []*userRow
 		err := remoteDB.QueryRowsCtx(ctx, &users, query, pq.Array(uncachedIDs))
 		if err != nil && err != sql.ErrNoRows {
