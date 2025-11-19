@@ -499,9 +499,10 @@ func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsCri
 		return nil, fmt.Errorf("加载事件配置失败: %w", err)
 	}
 
-	// 3. 检查是否配置了组织字段
+	// 3. 检查是否配置了组织字段（未配置时返回空结果，前端应避免调用）
 	if eventConfigWithFields.EventConfig.OrgFieldName == nil {
-		return nil, fmt.Errorf("该事件未配置组织字段，无法进行组织统计")
+		// 返回空统计（提示前端该事件不支持组织统计）
+		return &core.OrgStats{OrgMetrics: []*core.OrgMetric{}}, nil
 	}
 
 	// 4. 加载组织映射
@@ -518,9 +519,6 @@ func (m *statsManager) getSingleOrgStats(ctx context.Context, req *core.StatsCri
 
 	// 6. 构建SQL
 	query, args := buildOrgStatsSQL(&eventConfigWithFields.EventConfig, allowedOrgValues, req)
-	if query == "" {
-		return nil, fmt.Errorf("构建组织统计SQL失败")
-	}
 
 	// 7. 获取远程数据库连接
 	remoteDB, err := m.getRemoteDB(ctx, req.TenantID)

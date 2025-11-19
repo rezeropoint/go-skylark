@@ -357,7 +357,7 @@ func buildOrgStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, 
 	args := []interface{}{}
 	argIndex := 1
 
-	// 必须配置组织字段才能统计
+	// 必须配置组织字段才能进行组织统计
 	if eventConfig.OrgFieldName == nil {
 		return "", nil
 	}
