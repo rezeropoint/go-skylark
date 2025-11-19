@@ -129,9 +129,16 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
           AND (flow_version IS NULL OR flow_version <> '0')
         ORDER BY id DESC
     `
-	err = remoteDB.QueryRowsCtx(ctx, &flows, flowQuery, namespaceID)
+	var flowModels []*flowInfoModel
+	err = remoteDB.QueryRowsCtx(ctx, &flowModels, flowQuery, namespaceID)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("查询远程 flows 表失败: %w", err)
+	}
+
+	// 5. 转换为领域模型
+	flows = make([]*core.FlowInfo, 0, len(flowModels))
+	for _, model := range flowModels {
+		flows = append(flows, model.ToDomain())
 	}
 
 	// 如果没有记录，返回空数组
@@ -139,7 +146,7 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		flows = []*core.FlowInfo{}
 	}
 
-	// 5. 写入缓存
+	// 6. 写入缓存
 	if len(flows) > 0 {
 		_ = m.cache.SetFlowList(ctx, tenantID, namespaceID, flows, int(m.config.FlowListCacheTTL.Seconds()))
 	}
@@ -192,18 +199,16 @@ func (m *queryManager) GetFlowFields(ctx context.Context, tenantID string, flowI
 		  AND table_name = $1
 		ORDER BY ordinal_position
 	`
-	var allFields []*core.FieldMetadata
-	err = remoteDB.QueryRowsCtx(ctx, &allFields, fieldQuery, tableName)
+	var fieldModels []*fieldMetadataModel
+	err = remoteDB.QueryRowsCtx(ctx, &fieldModels, fieldQuery, tableName)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("查询远程表字段失败: %w", err)
 	}
 
-	// 5. 过滤并标记系统字段
-	fields = make([]*core.FieldMetadata, 0, len(allFields))
-	for _, field := range allFields {
-		// 标记是否为系统字段
-		field.IsSystem = core.IsSystemField(field.FieldName)
-		fields = append(fields, field)
+	// 5. 转换为领域模型（自动标记系统字段）
+	fields = make([]*core.FieldMetadata, 0, len(fieldModels))
+	for _, model := range fieldModels {
+		fields = append(fields, model.ToDomain())
 	}
 
 	// 如果没有字段，返回空数组
