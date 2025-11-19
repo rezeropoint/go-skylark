@@ -4,6 +4,19 @@ import (
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
+// SearchJourneysRequest 搜索流程记录请求结构体
+// 说明：用于 POST /api/v4/yaw/flows/:id/journeys/search 请求体
+type SearchJourneysRequest struct {
+	Page        int     `json:"page"`                   // 页码
+	PerPage     int     `json:"per_page"`               // 每页数量
+	Status      string  `json:"status,omitempty"`       // 状态过滤（可选）
+	Keyword     string  `json:"keyword,omitempty"`      // 关键词搜索（可选）
+	InitiatorID *int64  `json:"initiator_id,omitempty"` // 发起人ID（可选）
+	CreatedFrom string  `json:"created_from,omitempty"` // 创建时间起始（可选）
+	CreatedTo   string  `json:"created_to,omitempty"`   // 创建时间结束（可选）
+	Token       string  `header:"Authorization"`        // 认证令牌
+}
+
 // FlowInfoModel 是数据库查询专用结构体（基础设施层）
 // 职责：处理数据库 ORM 映射
 type FlowInfoModel struct {
@@ -453,7 +466,8 @@ func (u *ProcessingUserResponse) ToDomain(userIDMapping map[int]string) *core.Pr
 // AbortJourneyRequest 终止流程请求结构体
 // 说明：用于 PUT /api/v4/yaw/flows/:flow_id/journeys/:id 请求体
 type AbortJourneyRequest struct {
-	Status string `json:"status"` // 固定为 "aborted"
+	Status string `json:"status"`          // 固定为 "aborted"
+	Token  string `header:"Authorization"` // 认证令牌
 }
 
 // AbortJourneyResponse Skylark API 返回的终止流程响应结构体

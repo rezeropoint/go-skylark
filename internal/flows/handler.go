@@ -331,7 +331,7 @@ func (f *skylarkFlowRegistry) GetJourneyBySN(
 	apiURL = fmt.Sprintf("%s?sn=%s", apiURL, sn)
 
 	// 4. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -387,7 +387,7 @@ func (f *skylarkFlowRegistry) GetJourneyAssignments(
 	apiURL := core.BuildJourneyAPIURL(skylarkAddress, journeyID, "assignments")
 
 	// 4. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -453,7 +453,7 @@ func (f *skylarkFlowRegistry) GetJourneyDetail(
 	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "journeys", fmt.Sprintf("%d", journeyID))
 
 	// 4. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -516,7 +516,7 @@ func (f *skylarkFlowRegistry) GetFlowDetail(
 	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID)
 
 	// 4. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -581,7 +581,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 		apiURL, remoteUserID, category, page, pageSize)
 
 	// 5. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, 0, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -672,7 +672,7 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 		apiURL, remoteUserID, page, pageSize)
 
 	// 5. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, 0, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -755,26 +755,15 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 	apiURL := core.BuildJourneySearchURL(skylarkAddress, req.FlowID)
 
 	// 6. 构建请求体
-	searchBody := map[string]interface{}{
-		"page":     req.Page,
-		"per_page": req.PageSize,
-	}
-
-	// 添加可选过滤条件
-	if req.Status != "" {
-		searchBody["status"] = req.Status
-	}
-	if req.Keyword != "" {
-		searchBody["keyword"] = req.Keyword
-	}
-	if remoteInitiatorID != nil {
-		searchBody["initiator_id"] = *remoteInitiatorID
-	}
-	if req.CreatedFrom != "" {
-		searchBody["created_from"] = req.CreatedFrom
-	}
-	if req.CreatedTo != "" {
-		searchBody["created_to"] = req.CreatedTo
+	searchBody := SearchJourneysRequest{
+		Page:        req.Page,
+		PerPage:     req.PageSize,
+		Status:      req.Status,
+		Keyword:     req.Keyword,
+		InitiatorID: remoteInitiatorID,
+		CreatedFrom: req.CreatedFrom,
+		CreatedTo:   req.CreatedTo,
+		Token:       skylarkAddress.AuthHeader,
 	}
 
 	// 6. 发送 HTTP POST 请求
@@ -849,7 +838,7 @@ func (f *skylarkFlowRegistry) GetJourneyMoments(
 	apiURL := core.BuildJourneyMomentsAPIURL(skylarkAddress, journeyID)
 
 	// 5. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -929,7 +918,7 @@ func (f *skylarkFlowRegistry) GetCurrentProcessingUsers(
 	apiURL := core.BuildCurrentProcessingUsersURL(skylarkAddress, flowID, journeyID)
 
 	// 5. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, nil)
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -1010,6 +999,7 @@ func (f *skylarkFlowRegistry) AbortJourney(
 	// 5. 构建请求体
 	requestBody := AbortJourneyRequest{
 		Status: core.StatusAborted,
+		Token:  skylarkAddress.AuthHeader,
 	}
 
 	// 6. 发送 HTTP PUT 请求
