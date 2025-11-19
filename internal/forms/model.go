@@ -1,9 +1,13 @@
 package forms
 
-// forms 模块不需要 model.go
-//
-// 原因：
-// - forms 模块主要处理表单数据的创建（写操作）
-// - 不涉及数据库查询和 ORM 映射
-// - 使用的都是 core 层的请求/响应类型
-// - 不需要额外的数据库模型转换
+// FormCreateRequest 表示表单创建请求
+type FormCreateRequest struct {
+	Response Response `json:"response"`        // 分配信息
+	UserID   int      `json:"user_id"`         // 用户ID
+	Token    string   `header:"Authorization"` // 认证令牌
+}
+
+// Response 表示路由分配信息
+type Response struct {
+	EntriesAttributes []map[string]any `json:"entries_attributes"` // 响应属性
+}
