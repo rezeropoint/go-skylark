@@ -201,8 +201,8 @@ func (e *skylarkEngine) GetUserAssignments(ctx context.Context, tenantID string,
 }
 
 // GetProposedJourneys 获取用户发起的流程列表
-func (e *skylarkEngine) GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error) {
-	return e.flows.GetProposedJourneys(ctx, tenantID, localUserID, page, pageSize)
+func (e *skylarkEngine) GetProposedJourneys(ctx context.Context, tenantID string, flowID int64, localUserID string, page, pageSize int) ([]*core.Journey, int, error) {
+	return e.flows.GetProposedJourneys(ctx, tenantID, flowID, localUserID, page, pageSize)
 }
 
 // SearchJourneys 搜索流程记录

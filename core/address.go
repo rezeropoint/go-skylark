@@ -90,11 +90,12 @@ func BuildUserAssignmentsURL(apiCtx SkylarkAPIContext) string {
 }
 
 // BuildProposedJourneysURL 构建用户发起的流程列表 API URL
-// 示例：https://app.skylark.com/api/v4/yaw/flows/proposed_journeys.json
+// 示例：https://app.skylark.com/api/v4/yaw/flows/123/journeys/proposed_journeys
 // 参数:
 //   - apiCtx: API 调用上下文
-func BuildProposedJourneysURL(apiCtx SkylarkAPIContext) string {
-	return BuildAPIURL(apiCtx.App, APIFlowsPath, "proposed_journeys.json")
+//   - flowID: 流程ID
+func BuildProposedJourneysURL(apiCtx SkylarkAPIContext, flowID int64) string {
+	return BuildFlowAPIURL(apiCtx, flowID, "journeys", "proposed_journeys")
 }
 
 // BuildJourneySearchURL 构建流程记录搜索 API URL

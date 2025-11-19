@@ -156,6 +156,7 @@ type SkylarkEngine interface {
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
 	//   - localUserID: 本地用户ID（SDK自动转换为远程用户ID）
 	//   - page: 页码（从1开始）
 	//   - pageSize: 每页数量
@@ -163,7 +164,7 @@ type SkylarkEngine interface {
 	//   - []*core.Journey: 流程列表
 	//   - int: 总数
 	//   - error: 错误信息
-	GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error)
+	GetProposedJourneys(ctx context.Context, tenantID string, flowID int64, localUserID string, page, pageSize int) ([]*core.Journey, int, error)
 	// SearchJourneys 搜索流程记录
 	// 参数:
 	//   - ctx: 上下文

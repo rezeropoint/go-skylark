@@ -358,22 +358,18 @@ func (e *FlowEdgeResponse) ToDomain() *core.FlowEdge {
 
 // UserAssignmentsResponse Skylark API 返回的用户任务列表结构体
 // 职责：处理 GET /api/v4/yaw/flows/user_assignments.json 响应的 JSON 反序列化
-type UserAssignmentsResponse struct {
-	Assignments []AssignmentResponse `json:"assignments"` // 任务列表（复用已有类型）
-}
+// 说明：该 API 直接返回数组，而非包装对象
+type UserAssignmentsResponse []AssignmentResponse
 
 // ProposedJourneysResponse Skylark API 返回的用户发起的流程列表结构体
-// 职责：处理 GET /api/v4/yaw/flows/proposed_journeys.json 响应的 JSON 反序列化
-type ProposedJourneysResponse struct {
-	Journeys []JourneyResponse `json:"journeys"` // 流程列表（复用已有类型）
-}
+// 职责：处理 GET /api/v4/yaw/flows/:flow_id/journeys/proposed_journeys 响应的 JSON 反序列化
+// 说明：该 API 直接返回数组，而非包装对象
+type ProposedJourneysResponse []JourneyResponse
 
 // JourneySearchAPIResponse Skylark API 返回的搜索响应结构体
 // 职责：处理 POST /api/v4/yaw/flows/:id/journeys/search 响应的 JSON 反序列化
-// 说明：总数从响应头 X-SLP-Total-Count 获取
-type JourneySearchAPIResponse struct {
-	Journeys []JourneyResponse `json:"journeys"` // 流程列表（复用已有类型）
-}
+// 说明：该 API 直接返回数组，而非包装对象；总数从响应头 X-SLP-Total-Count 获取
+type JourneySearchAPIResponse []JourneyResponse
 
 // MomentResponse Skylark API 返回的审批历史记录结构体
 // 职责：处理 GET /api/v4/yaw/journeys/:id/moments 响应的 JSON 反序列化

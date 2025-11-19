@@ -587,14 +587,14 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 	}
 	defer resp.Body.Close()
 
-	// 6. 解析响应
+	// 6. 解析响应（直接解析为数组）
 	var assignmentsResp UserAssignmentsResponse
 	if err := httputils.ReadJSONResponse(resp, &assignmentsResp); err != nil {
 		return nil, 0, err
 	}
 
 	// 7. 提取所有唯一的远程用户ID（使用通用函数）
-	userIDMapping := core.ExtractUserIDsToMap(assignmentsResp.Assignments, func(ar AssignmentResponse) int {
+	userIDMapping := core.ExtractUserIDsToMap(assignmentsResp, func(ar AssignmentResponse) int {
 		return int(ar.AssigneeID)
 	})
 
@@ -606,8 +606,8 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 	}
 
 	// 9. 使用映射转换为领域模型
-	assignments := make([]*core.Assignment, len(assignmentsResp.Assignments))
-	for i, assignmentResp := range assignmentsResp.Assignments {
+	assignments := make([]*core.Assignment, len(assignmentsResp))
+	for i, assignmentResp := range assignmentsResp {
 		assignments[i] = assignmentResp.ToDomain(userIDMapping)
 	}
 
@@ -632,6 +632,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 // 参数:
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
 //   - localUserID: 本地用户ID（SDK内部自动转换为远程用户ID）
 //   - page: 页码（从1开始）
 //   - pageSize: 每页数量
@@ -640,7 +641,7 @@ func (f *skylarkFlowRegistry) GetUserAssignments(ctx context.Context, tenantID s
 //   - []*core.Journey: 流程列表
 //   - int: 总数
 //   - error: 错误信息
-func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID string, localUserID string, page, pageSize int) ([]*core.Journey, int, error) {
+func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID string, flowID int64, localUserID string, page, pageSize int) ([]*core.Journey, int, error) {
 	// 1. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
@@ -664,8 +665,8 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 		AuthHeader: apiCfg.Token,
 	}
 
-	// 4. 构建 API URL: /api/v4/yaw/flows/proposed_journeys.json
-	apiURL := core.BuildProposedJourneysURL(skylarkAddress)
+	// 4. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/proposed_journeys
+	apiURL := core.BuildProposedJourneysURL(skylarkAddress, flowID)
 
 	// 5. 构建查询参数
 	apiURL = fmt.Sprintf("%s?user_id=%d&page=%d&per_page=%d",
@@ -678,14 +679,14 @@ func (f *skylarkFlowRegistry) GetProposedJourneys(ctx context.Context, tenantID 
 	}
 	defer resp.Body.Close()
 
-	// 6. 解析响应
+	// 6. 解析响应（直接解析为数组）
 	var journeysResp ProposedJourneysResponse
 	if err := httputils.ReadJSONResponse(resp, &journeysResp); err != nil {
 		return nil, 0, err
 	}
 
 	// 7. 转换为领域模型（包含批量用户ID转换）
-	journeys, err := convertJourneyResponsesToDomain(ctx, journeysResp.Journeys, f.fillLocalUserIDMap, tenantID)
+	journeys, err := convertJourneyResponsesToDomain(ctx, journeysResp, f.fillLocalUserIDMap, tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -778,14 +779,14 @@ func (f *skylarkFlowRegistry) SearchJourneys(ctx context.Context, tenantID strin
 		return nil, 0, core.ErrFlowNotFound
 	}
 
-	// 8. 解析响应
+	// 8. 解析响应（直接解析为数组）
 	var searchResp JourneySearchAPIResponse
 	if err := httputils.ReadJSONResponse(resp, &searchResp); err != nil {
 		return nil, 0, err
 	}
 
 	// 9. 转换为领域模型（包含批量用户ID转换）
-	journeys, err := convertJourneyResponsesToDomain(ctx, searchResp.Journeys, f.fillLocalUserIDMap, tenantID)
+	journeys, err := convertJourneyResponsesToDomain(ctx, []JourneyResponse(searchResp), f.fillLocalUserIDMap, tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
