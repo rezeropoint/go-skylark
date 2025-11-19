@@ -85,14 +85,17 @@ func (m *platformManager) Create(ctx context.Context, cfg *core.PlatformConfig) 
 	}
 
 	// 5. 插入数据库
+	// 转换为数据模型
+	model := FromDomain(cfg)
+
 	insertQuery := `
 		INSERT INTO skylark_platform_configs
 		(id, tenant_id, host, port, database, username, password, namespace_id, api_base_url, api_token, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err = m.dbConn.ExecCtx(ctx, insertQuery,
-		cfg.ID, cfg.TenantID, cfg.Host, cfg.Port, cfg.Database,
-		cfg.Username, cfg.Password, cfg.NamespaceID, cfg.APIBaseURL, cfg.APIToken, cfg.CreatedBy,
+		model.ID, model.TenantID, model.Host, model.Port, model.Database,
+		model.Username, model.Password, model.NamespaceID, model.APIBaseURL, model.APIToken, model.CreatedBy,
 	)
 	if err != nil {
 		return "", fmt.Errorf("插入平台配置失败: %w", err)
@@ -218,6 +221,9 @@ func (m *platformManager) Update(ctx context.Context, cfg *core.PlatformConfig) 
 	}
 
 	// 5. 更新数据库
+	// 转换为数据模型
+	model := FromDomain(cfg)
+
 	updateQuery := `
 		UPDATE skylark_platform_configs
 		SET host = $1, port = $2, database = $3, username = $4, password = $5,
@@ -225,8 +231,8 @@ func (m *platformManager) Update(ctx context.Context, cfg *core.PlatformConfig) 
 		WHERE id = $10 AND tenant_id = $11
 	`
 	result, err := m.dbConn.ExecCtx(ctx, updateQuery,
-		cfg.Host, cfg.Port, cfg.Database, cfg.Username, cfg.Password,
-		cfg.NamespaceID, cfg.APIBaseURL, cfg.APIToken, cfg.UpdatedBy, cfg.ID, cfg.TenantID,
+		model.Host, model.Port, model.Database, model.Username, model.Password,
+		model.NamespaceID, model.APIBaseURL, model.APIToken, model.UpdatedBy, model.ID, model.TenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("更新平台配置失败: %w", err)

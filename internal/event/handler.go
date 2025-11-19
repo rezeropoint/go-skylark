@@ -496,6 +496,9 @@ func (m *eventManager) Update(ctx context.Context, config *core.EventConfig) err
 	}
 
 	// 更新数据
+	// 转换为数据模型
+	model := FromDomainEvent(config)
+
 	updateQuery := `
 		UPDATE event_configs
 		SET name = $1, flow_id = $2, flow_title = $3, org_field_name = $4,
@@ -503,9 +506,9 @@ func (m *eventManager) Update(ctx context.Context, config *core.EventConfig) err
 		WHERE id = $8 AND tenant_id = $9
 	`
 	result, err := m.dbConn.ExecCtx(ctx, updateQuery,
-		config.Name, config.FlowID, config.FlowTitle, config.OrgFieldName,
-		config.Description, config.Enabled, config.UpdatedBy,
-		config.ID, config.TenantID,
+		model.Name, model.FlowID, model.FlowTitle, model.OrgFieldName,
+		model.Description, model.Enabled, model.UpdatedBy,
+		model.ID, model.TenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("更新事件配置失败: %w", err)

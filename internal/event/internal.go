@@ -77,15 +77,18 @@ func (m *eventManager) insertEvent(ctx context.Context, session sqlx.Session, co
 		return "", fmt.Errorf("id不能为空")
 	}
 
+	// 转换为数据模型
+	model := FromDomainEvent(config)
+
 	insertQuery := `
         INSERT INTO event_configs
         (id, name, flow_id, flow_title, org_field_name, description, enabled, tenant_id, created_by)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `
 	_, err := session.ExecCtx(ctx, insertQuery,
-		config.ID, config.Name, config.FlowID, config.FlowTitle,
-		config.OrgFieldName, config.Description, config.Enabled,
-		config.TenantID, config.CreatedBy,
+		model.ID, model.Name, model.FlowID, model.FlowTitle,
+		model.OrgFieldName, model.Description, model.Enabled,
+		model.TenantID, model.CreatedBy,
 	)
 	if err != nil {
 		return "", fmt.Errorf("插入事件配置失败: %w", err)
@@ -96,6 +99,9 @@ func (m *eventManager) insertEvent(ctx context.Context, session sqlx.Session, co
 
 // updateEvent 更新事件配置（事务内使用）
 func (m *eventManager) updateEvent(ctx context.Context, session sqlx.Session, config *core.EventConfig) error {
+	// 转换为数据模型
+	model := FromDomainEvent(config)
+
 	updateQuery := `
         UPDATE event_configs
         SET name = $1, flow_id = $2, flow_title = $3, org_field_name = $4,
@@ -103,9 +109,9 @@ func (m *eventManager) updateEvent(ctx context.Context, session sqlx.Session, co
         WHERE id = $8 AND tenant_id = $9
     `
 	_, err := session.ExecCtx(ctx, updateQuery,
-		config.Name, config.FlowID, config.FlowTitle, config.OrgFieldName,
-		config.Description, config.Enabled, config.UpdatedBy,
-		config.ID, config.TenantID,
+		model.Name, model.FlowID, model.FlowTitle, model.OrgFieldName,
+		model.Description, model.Enabled, model.UpdatedBy,
+		model.ID, model.TenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("更新事件配置失败: %w", err)
