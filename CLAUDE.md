@@ -169,7 +169,7 @@ type EventConfig struct {
 - **多事件ID聚合**：支持 `EventConfigIDs` 数组，合并多个事件的统计结果
 - 缓存统计结果（Redis，TTL 5分钟）
 
-#### internal/flows（流程管理，已完成重构）
+#### internal/flows（流程管理）
 - **完整的流程生命周期管理**（11个接口）
   - 写操作：创建流程、更新状态（CreateFlow、UpdateJourneyStatus）
   - 读操作：查询流程、获取详情、搜索、审批历史等（9个查询接口）
@@ -200,37 +200,6 @@ type EventConfig struct {
 - `GetRemoteUserIDsFunc`：获取远程用户 ID（flows 使用）
 
 **错误定义**：36 个预定义错误（`core/var.go`）
-
-## 测试规范
-
-### 测试文件组织
-- 测试文件命名: `*_test.go`
-- 单元测试: `Test<FunctionName>`
-- 基准测试: `Benchmark<FunctionName>`
-- 示例测试: `Example<FunctionName>`
-
-### 测试覆盖率要求
-- 新增代码: 核心逻辑 ≥ 80%
-- 边界情况: 必须覆盖错误处理路径
-- Mock 使用: 使用 `gomock` 或接口注入方式
-
-### 测试示例
-```go
-// ✅ 正确：测试使用接口注入 Mock
-func TestQueryManager_Query(t *testing.T) {
-    mockDB := sqlmock.New()
-    mockCache := &MockCacheInterface{}
-
-    mgr := query.NewManager(query.Config{
-        Cache: mockCache,
-        GetRemoteDB: func(tenantID string) (sqlx.SqlConn, error) {
-            return mockDB, nil
-        },
-    })
-
-    // 测试逻辑...
-}
-```
 
 ## 常用开发命令
 
@@ -285,14 +254,22 @@ go mod graph | grep 'go-skylark'
 | 文件 | 职责 | 必需性 |
 |------|-----|--------|
 | `<manager>.go` | 接口定义 + NewManager() 构造函数 | ✅ 必需 |
-| `handler.go` | 接口实现 | ✅ 必需 |
-| `model.go` | 数据库模型 + ToDomain() 转换方法 | ✅ 必需 |
-| `helpers.go` | 辅助函数（convertNullString 等） | 🟡 推荐 |
-| `config.go` | Manager 配置结构 | ✅ 必需 |
+| `handler.go` | 接口实现（导出方法，实现接口） | ✅ 必需 |
+| `model.go` | 数据库模型（包含 db 标签和 ToDomain 方法） | ✅ 必需 |
+| `helpers.go` | 普通函数（辅助方法，如 convertNullString） | 🟡 推荐 |
+| `internal.go` | 未导出的方法（私有方法实现） | 🟡 推荐 |
+| `sql.go` | 数据库表初始化 SQL（仅包含建表语句） | 🟡 可选 |
+| `config.go` | Manager 配置结构体 | ✅ 必需 |
+
+**重要约定**：
+- `model.go` 只包含结构体定义和导出方法（如 `ToDomain()`）
+- `helpers.go` 包含辅助方法（普通函数，如类型转换函数）
+- `internal.go` 包含未导出的方法（小写开头的私有方法）
+- `sql.go` 只包含数据库表初始化 SQL，查询语句应内联在代码中
 
 ### model.go 规范
 
-**数据模型 → 领域模型转换** (详见 `DEVELOPMENT.md`)：
+**数据模型 → 领域模型转换**：
 ```go
 // internal/*/model.go - 允许框架类型
 type EventConfigModel struct {
@@ -310,6 +287,23 @@ type EventConfig struct {
 }
 ```
 
+**辅助函数** (定义在 helpers.go):
+```go
+func convertNullString(ns sql.NullString) *string {
+    if ns.Valid {
+        return &ns.String
+    }
+    return nil
+}
+
+func convertNullTime(nt sql.NullTime) *time.Time {
+    if nt.Valid {
+        return &nt.Time
+    }
+    return nil
+}
+```
+
 ### 关键规范
 
 **数据库查询**：
@@ -319,6 +313,42 @@ type EventConfig struct {
 **错误处理**：
 - 使用预定义错误 (`core/var.go`): `return core.ErrEventConfigNotFound`
 - logx 使用 `Error`，禁止使用 `Warn`
+
+## 核心设计理念
+
+### Core 层黄金法则
+
+#### ✅ Core 层应该是什么
+
+1. **纯粹的领域模型**
+   - 代表业务概念: `TypedValue`、`FieldMapping`、`QueryCondition`
+   - 包含业务规则: `IsOptionField()`、`IsImageField()`
+   - 独立于技术实现
+
+2. **稳定的抽象**
+   - 变化频率低（业务概念变化缓慢）
+   - 被多个模块依赖
+   - 定义清晰的接口（如 `CacheInterface`）
+
+3. **框架无关**
+   - 只使用 Go 标准库类型
+   - 不依赖特定框架（Redis、ORM、HTTP）
+
+#### ❌ Core 层不应该是什么
+
+1. **不是数据传输对象 (DTO)**
+   - 不包含 JSON 序列化逻辑
+   - 不为 API 响应格式设计
+   - ❌ 禁止定义 Request/Response 结构（例外：跨多层传递的 DTO）
+
+2. **不是 ORM 模型**
+   - **禁止出现**: `db:"field_name"` 标签
+   - **禁止出现**: `bson:"field_name"` 标签
+   - **禁止出现**: `gorm:` 标签
+
+3. **不是数据库查询结果**
+   - 不为数据库扫描而设计
+   - 不包含 `sql.NullString`、`sql.NullTime` 等框架类型
 
 ## 重要约定
 
@@ -347,6 +377,10 @@ type Config struct {
     DB          sqlx.SqlConn        // ❌ 运行时实例
 }
 ```
+
+**原因**: Config 结构体应该只存储**静态配置参数**，所有依赖（接口、函数、运行时实例）都应该通过 **NewManager 函数参数**传入。
+
+**优势**: Config 职责单一、依赖显式化、易于测试、避免循环依赖
 
 ### 字段类型处理
 
@@ -461,6 +495,121 @@ go test -memprofile=mem.prof -bench=. ./internal/query
 go tool pprof mem.prof
 ```
 
+## 性能优化设计模式
+
+### 批量查询优化模式
+
+**适用场景**: 需要从远程数据库或 API 获取多个关联对象的信息
+
+**问题**: N+1 查询问题导致性能瓶颈
+
+**解决方案**:
+```go
+// ❌ 错误：N+1 查询
+for _, item := range items {
+    relatedData, _ := fetchRelatedData(item.ID)  // N 次查询
+}
+
+// ✅ 正确：批量查询（4 步法）
+ids := extractUniqueIDs(items)                              // 1. 提取唯一 ID
+results, _ := db.Query("... WHERE id = ANY($1)", pq.Array(ids))  // 2. 批量查询
+mapping := buildMapping(results)                            // 3. 构建映射
+fillData(items, mapping)                                    // 4. 填充数据
+```
+
+**关键原则**:
+- 使用 `pq.Array` 进行批量 SQL 查询（PostgreSQL）
+- 容错处理：部分失败不影响整体流程
+
+### 多级缓存策略
+
+**适用场景**: 频繁访问的关联数据（如 Flow 信息、用户信息）
+
+**缓存层级**:
+```
+1. Redis 缓存（优先） → 2. 批量 API 调用 → 3. 异步回写缓存
+```
+
+**实现规范**:
+```go
+func batchGetData(ctx context.Context, ids []int64) (map[int64]*Data, error) {
+    result, missedIDs := make(map[int64]*Data), []int64{}
+
+    // Level 1: 批量查询 Redis
+    for _, id := range ids {
+        if data, err := cache.Get(ctx, id); err == nil {
+            result[id] = data
+        } else {
+            missedIDs = append(missedIDs, id)
+        }
+    }
+
+    // Level 2: 批量 API 调用（只查询未命中的）
+    for _, id := range missedIDs {
+        if data, err := fetchFromAPI(ctx, id); err == nil {
+            result[id] = data
+            go cache.Set(context.Background(), id, data, ttl) // Level 3: 异步回写
+        }
+    }
+
+    return result, nil
+}
+```
+
+**关键原则**:
+- TTL 通过 Config 配置（如 `FlowInfoCacheTTL`）
+- 异步回写使用 `context.Background()`（避免主请求取消影响缓存）
+
+### 数据补充（Enrichment）模式
+
+**适用场景**: API 返回的数据缺少关联信息，需要自动补充
+
+**解决方案**:
+```go
+func GetList(ctx context.Context, req *Request) ([]*Item, error) {
+    items, err := fetchItemsFromAPI(ctx, req)  // 1. 获取主数据
+    if err != nil {
+        return nil, err
+    }
+
+    // 2. 自动补充关联信息（失败不影响主流程）
+    if err := enrichItems(ctx, items); err != nil {
+        logx.Errorf("补充数据失败: %v", err)  // 只记录日志
+    }
+
+    return items, nil  // 3. 返回数据（可能包含补充字段）
+}
+
+func enrichItems(ctx context.Context, items []*Item) error {
+    ids := extractUniqueIDs(items)             // 提取唯一 ID
+    dataMap, _ := batchGetData(ctx, ids)       // 批量查询（应用多级缓存）
+    for _, item := range items {               // 填充可选字段（指针类型）
+        if data, ok := dataMap[item.ID]; ok {
+            item.RelatedData = data
+        }
+    }
+    return nil
+}
+```
+
+**关键原则**:
+- Enrichment 是**可选的**（失败不影响主流程）
+- 补充字段使用**指针类型**（如 `*string`）
+- 用户无需关心 enrichment 细节（SDK 内部自动处理）
+
+**示例参考**: `internal/flows/enrichment.go`
+
+### 性能优化清单
+
+添加新接口时，检查是否需要性能优化：
+
+- [ ] 是否存在 N+1 查询？→ 使用批量查询
+- [ ] 是否频繁访问相同数据？→ 添加缓存
+- [ ] 是否需要关联数据？→ 考虑 enrichment 模式
+- [ ] 缓存 TTL 是否可配置？→ 添加到 Config
+- [ ] 是否有容错机制？→ 优化失败不影响主流程
+- [ ] 是否记录性能指标？→ 添加日志（可选）
+
 ## 常见问题
 
 ### Q: 如何添加新的 Manager?
@@ -490,5 +639,7 @@ go tool pprof mem.prof
 
 ## 参考文档
 
-- **DEVELOPMENT.md**：详细的架构设计、开发规范、代码示例
 - **README.md**：项目介绍、快速开始
+- **internal/flows/README.md**：流程模块详细文档
+- **internal/cache/README.md**：缓存模块详细文档
+- **internal/stats/MULTI_EVENT_STATS.md**：多事件统计设计文档
