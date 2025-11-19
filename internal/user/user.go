@@ -142,6 +142,44 @@ type Manager interface {
 	//   - bool: 是否已同步（true=已同步，false=未同步）
 	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
 	GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error)
+
+	// BindUser 绑定已存在的远程用户
+	// 用途：将本地用户ID与已存在的远程用户ID建立映射关系
+	// 流程：
+	//   1. 获取平台配置（APIBaseURL、APIToken）
+	//   2. 调用 Skylark API 验证远程用户是否存在
+	//   3. 检查本地用户ID是否已绑定其他远程用户ID
+	//   4. 保存映射关系到数据库
+	//   5. 更新缓存（正向 + 反向）
+	// 参数：
+	//   - tenantID: 租户ID
+	//   - localUserID: 本地用户ID
+	//   - remoteUserID: 远程用户ID（Skylark 中已存在的用户ID）
+	// 返回：错误信息
+	// 错误：
+	//   - core.ErrUserNotFound: 远程用户不存在
+	//   - core.ErrUserMappingExists: 映射已存在（需要先解绑）
+	// 说明：
+	//   - 此方法用于绑定已存在的远程用户，不会创建新用户
+	//   - 如果本地用户ID已绑定，必须先调用 UnbindUser 解绑
+	BindUser(ctx context.Context, tenantID, localUserID string, remoteUserID int) error
+
+	// UnbindUser 解绑用户映射
+	// 用途：删除本地用户ID与远程用户ID的映射关系
+	// 流程：
+	//   1. 检查映射是否存在
+	//   2. 删除数据库映射记录
+	//   3. 清理缓存（正向 + 反向）
+	// 参数：
+	//   - tenantID: 租户ID
+	//   - localUserID: 本地用户ID
+	// 返回：错误信息
+	// 错误：
+	//   - core.ErrUserMappingNotFound: 映射不存在
+	// 说明：
+	//   - 只删除本地映射关系，不删除 Skylark 远程用户
+	//   - 解绑后可以重新绑定到其他远程用户
+	UnbindUser(ctx context.Context, tenantID, localUserID string) error
 }
 
 // NewManager 创建用户管理器

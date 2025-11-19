@@ -74,6 +74,55 @@ func (c *skylarkHTTPClient) createUser(ctx context.Context, apiBaseURL, apiToken
 	return &userResp, nil
 }
 
+// getUser 调用Skylark API查询用户详情（用于验证用户是否存在）
+//
+// API端点: GET https://{apiBaseURL}/api/v4/users/{id}
+// 请求头:
+//   - Authorization: {apiToken}
+//
+// 参数：
+//   - ctx: 上下文
+//   - apiBaseURL: Skylark API地址（如: skylark.example.com）
+//   - apiToken: API认证Token
+//   - remoteUserID: 远程用户ID
+//
+// 返回：
+//   - *UserResponse: 用户响应
+//   - error: 错误信息
+//
+// 错误：
+//   - core.ErrSkylarkAPINotFound: 404 用户不存在
+//   - core.ErrSkylarkAPIUnauthorized: 401 认证失败
+//   - core.ErrSkylarkAPIServerError: 500 服务器错误
+func (c *skylarkHTTPClient) getUser(ctx context.Context, apiBaseURL, apiToken string, remoteUserID int) (*UserResponse, error) {
+	// 构建 URL
+	url := fmt.Sprintf("https://%s/api/v4/users/%d", apiBaseURL, remoteUserID)
+
+	// 创建 HTTP 请求
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建HTTP请求失败: %w", err)
+	}
+
+	// 设置请求头
+	httpReq.Header.Set("Authorization", apiToken)
+
+	// 发送请求
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrSkylarkAPIServerError, err)
+	}
+	defer resp.Body.Close()
+
+	// 使用 httputils 处理响应
+	var userResp UserResponse
+	if err := httputils.ReadJSONResponse(resp, &userResp); err != nil {
+		return nil, err
+	}
+
+	return &userResp, nil
+}
+
 // queryLocalUserIDsWithCache 查询本地用户ID（带缓存优化，支持单个和批量）
 //
 // 职责：

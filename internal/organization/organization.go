@@ -114,6 +114,44 @@ type Manager interface {
 	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
 	GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID string) (bool, error)
 
+	// BindOrganization 绑定已存在的远程组织
+	// 用途：将本地组织ID与已存在的远程组织ID建立映射关系
+	// 流程：
+	//   1. 获取平台配置（APIBaseURL、APIToken）
+	//   2. 调用 Skylark API 验证远程组织是否存在
+	//   3. 检查本地组织ID是否已绑定其他远程组织ID
+	//   4. 保存映射关系到数据库
+	//   5. 更新缓存（正向 + 反向）
+	// 参数：
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	//   - remoteOrgID: 远程组织ID（Skylark 中已存在的组织ID）
+	// 返回：错误信息
+	// 错误：
+	//   - core.ErrOrgNotFound: 远程组织不存在
+	//   - core.ErrOrgIDMappingExists: 映射已存在（需要先解绑）
+	// 说明：
+	//   - 此方法用于绑定已存在的远程组织，不会创建新组织
+	//   - 如果本地组织ID已绑定，必须先调用 UnbindOrganization 解绑
+	BindOrganization(ctx context.Context, tenantID, localOrgID string, remoteOrgID int) error
+
+	// UnbindOrganization 解绑组织映射
+	// 用途：删除本地组织ID与远程组织ID的映射关系
+	// 流程：
+	//   1. 检查映射是否存在
+	//   2. 删除数据库映射记录
+	//   3. 清理缓存（正向 + 反向）
+	// 参数：
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	// 返回：错误信息
+	// 错误：
+	//   - core.ErrOrgNotFound: 映射不存在
+	// 说明：
+	//   - 只删除本地映射关系，不删除 Skylark 远程组织
+	//   - 解绑后可以重新绑定到其他远程组织
+	UnbindOrganization(ctx context.Context, tenantID, localOrgID string) error
+
 	// ========== 组织成员管理 ==========
 
 	// GetMembers 获取组织成员列表

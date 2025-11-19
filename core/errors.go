@@ -93,6 +93,7 @@ var (
 	ErrOrganizationManagerUpdateFailed   = errors.New("failed to update organization manager")
 	ErrOrganizationManagerUpdateConflict = errors.New("organization manager update conflict, please retry")
 	ErrParentOrgNotFound                 = errors.New("parent organization mapping not found")
+	ErrOrgIDMappingExists                = errors.New("organization ID mapping already exists")
 
 	// 组织成员相关错误
 	ErrMemberNotFound     = errors.New("member not found in organization")

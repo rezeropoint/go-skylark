@@ -286,3 +286,84 @@ func (m *userManager) GetUserSyncStatus(ctx context.Context, tenantID, localUser
 
 	return true, nil
 }
+
+// BindUser 绑定已存在的远程用户
+func (m *userManager) BindUser(ctx context.Context, tenantID, localUserID string, remoteUserID int) error {
+	// 1. 获取平台配置（验证租户配置是否存在）
+	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	// 2. 调用 Skylark API 验证远程用户是否存在
+	_, err = m.httpClient.getUser(ctx, platformConfig.App, platformConfig.Token, remoteUserID)
+	if err != nil {
+		// 如果是404错误，返回 ErrUserNotFound
+		return fmt.Errorf("%w: 远程用户ID %d 不存在", core.ErrUserNotFound, remoteUserID)
+	}
+
+	// 3. 检查本地用户ID是否已绑定
+	_, err = m.GetRemoteUserID(ctx, tenantID, localUserID)
+	if err == nil {
+		// 映射已存在
+		return fmt.Errorf("%w: 本地用户ID %s 已绑定", core.ErrUserMappingExists, localUserID)
+	}
+	if err != core.ErrUserMappingNotFound {
+		// 数据库查询错误
+		return fmt.Errorf("检查映射失败: %w", err)
+	}
+
+	// 4. 保存映射关系到数据库
+	mapping := &core.UserIDMapping{
+		ID:           uuid.New().String(),
+		TenantID:     tenantID,
+		LocalUserID:  localUserID,
+		RemoteUserID: remoteUserID,
+	}
+
+	if err := m.saveMapping(ctx, mapping); err != nil {
+		return fmt.Errorf("保存映射失败: %w", err)
+	}
+
+	// 5. 更新缓存（正向 + 反向）
+	if err := m.cacheMapping(ctx, mapping); err != nil {
+		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
+	}
+
+	return nil
+}
+
+// UnbindUser 解绑用户映射
+func (m *userManager) UnbindUser(ctx context.Context, tenantID, localUserID string) error {
+	// 1. 检查映射是否存在
+	remoteUserID, err := m.GetRemoteUserID(ctx, tenantID, localUserID)
+	if err != nil {
+		// 映射不存在
+		return err
+	}
+
+	// 2. 删除数据库映射记录
+	if err := m.deleteMapping(ctx, tenantID, localUserID); err != nil {
+		return fmt.Errorf("删除映射失败: %w", err)
+	}
+
+	// 3. 清理缓存（正向 + 反向）
+	if err := m.cache.DeleteUserIDMapping(ctx, tenantID, localUserID); err != nil {
+		logx.WithContext(ctx).Error("清理正向缓存失败（非致命错误）:", err)
+	}
+	if err := m.cache.DeleteUserIDMappingReverse(ctx, tenantID, remoteUserID); err != nil {
+		logx.WithContext(ctx).Error("清理反向缓存失败（非致命错误）:", err)
+	}
+
+	return nil
+}
+
+// deleteMapping 删除映射（辅助方法）
+func (m *userManager) deleteMapping(ctx context.Context, tenantID, localUserID string) error {
+	query := "DELETE FROM skylark_user_mappings WHERE tenant_id = $1 AND local_user_id = $2"
+	_, err := m.localDB.ExecCtx(ctx, query, tenantID, localUserID)
+	if err != nil {
+		return fmt.Errorf("删除用户映射失败: %w", err)
+	}
+	return nil
+}

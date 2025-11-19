@@ -382,6 +382,77 @@ func (m *organizationManager) GetOrgSyncStatus(ctx context.Context, tenantID, lo
 	return true, nil
 }
 
+// BindOrganization 绑定已存在的远程组织
+func (m *organizationManager) BindOrganization(ctx context.Context, tenantID, localOrgID string, remoteOrgID int) error {
+	// 1. 获取平台配置（验证租户配置是否存在）
+	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	// 2. 调用 Skylark API 验证远程组织是否存在
+	_, err = m.httpClient.getOrganization(ctx, platformConfig.App, platformConfig.Token, remoteOrgID)
+	if err != nil {
+		// 如果是404错误，返回 ErrOrgNotFound
+		return fmt.Errorf("%w: 远程组织ID %d 不存在", core.ErrOrgNotFound, remoteOrgID)
+	}
+
+	// 3. 检查本地组织ID是否已绑定
+	_, err = m.GetRemoteOrgID(ctx, tenantID, localOrgID)
+	if err == nil {
+		// 映射已存在
+		return fmt.Errorf("%w: 本地组织ID %s 已绑定", core.ErrOrgIDMappingExists, localOrgID)
+	}
+	if err != core.ErrOrgNotFound {
+		// 数据库查询错误
+		return fmt.Errorf("检查映射失败: %w", err)
+	}
+
+	// 4. 保存映射关系到数据库
+	mapping := &core.OrgIDMapping{
+		ID:          uuid.New().String(),
+		TenantID:    tenantID,
+		LocalOrgID:  localOrgID,
+		RemoteOrgID: remoteOrgID,
+	}
+
+	if err := m.saveMapping(ctx, mapping); err != nil {
+		return fmt.Errorf("保存映射失败: %w", err)
+	}
+
+	// 5. 更新缓存（正向 + 反向）
+	if err := m.cacheMapping(ctx, mapping); err != nil {
+		logx.WithContext(ctx).Error("更新缓存失败（非致命错误）:", err)
+	}
+
+	return nil
+}
+
+// UnbindOrganization 解绑组织映射
+func (m *organizationManager) UnbindOrganization(ctx context.Context, tenantID, localOrgID string) error {
+	// 1. 检查映射是否存在
+	remoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, localOrgID)
+	if err != nil {
+		// 映射不存在
+		return err
+	}
+
+	// 2. 删除数据库映射记录
+	if err := m.deleteMapping(ctx, tenantID, localOrgID); err != nil {
+		return fmt.Errorf("删除映射失败: %w", err)
+	}
+
+	// 3. 清理缓存（正向 + 反向）
+	if err := m.cache.DeleteOrgIDMapping(ctx, tenantID, localOrgID); err != nil {
+		logx.WithContext(ctx).Error("清理正向缓存失败（非致命错误）:", err)
+	}
+	if err := m.cache.DeleteOrgIDMappingReverse(ctx, tenantID, remoteOrgID); err != nil {
+		logx.WithContext(ctx).Error("清理反向缓存失败（非致命错误）:", err)
+	}
+
+	return nil
+}
+
 // ========== 组织成员管理实现 ==========
 
 // GetMembers 获取组织成员列表

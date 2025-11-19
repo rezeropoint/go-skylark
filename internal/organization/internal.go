@@ -165,6 +165,36 @@ func (c *skylarkHTTPClient) listChildOrganizations(ctx context.Context, apiBaseU
 	return orgs, nil
 }
 
+// getOrganization 调用 Skylark API 查询组织详情（用于验证组织是否存在）
+func (c *skylarkHTTPClient) getOrganization(ctx context.Context, apiBaseURL, apiToken string, remoteOrgID int) (*OrganizationResponse, error) {
+	// 构建 URL
+	url := fmt.Sprintf("https://%s/api/v4/organizations/%d", apiBaseURL, remoteOrgID)
+
+	// 创建 HTTP 请求
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建HTTP请求失败: %w", err)
+	}
+
+	// 设置请求头
+	httpReq.Header.Set("Authorization", apiToken)
+
+	// 发送请求
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrSkylarkAPIServerError, err)
+	}
+	defer resp.Body.Close()
+
+	// 使用 httputils 处理响应
+	var orgResp OrganizationResponse
+	if err := httputils.ReadJSONResponse(resp, &orgResp); err != nil {
+		return nil, err
+	}
+
+	return &orgResp, nil
+}
+
 // ========== 组织成员管理 HTTP 接口 ==========
 
 // getMembers 调用 Skylark API 获取组织成员

@@ -1,3 +1,43 @@
+// Package admin 提供 Skylark 低代码平台 SDK 的系统管理引擎。
+//
+// AdminEngine 专门用于系统管理微服务，提供组织和用户管理功能。
+//
+// # 快速开始
+//
+// 1. 初始化引擎：
+//
+//	config := &admin.Config{}
+//	db := sqlx.NewMysql("your-db-dsn")
+//	redis := redis.New("localhost:6379")
+//
+//	adminEng, err := admin.NewAdminEngine(config, db, redis)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+// 2. 创建组织：
+//
+//	err = adminEng.CreateOrganization(ctx, tenantID, localOrgID, name, desc, founderID)
+//
+// 3. 创建用户：
+//
+//	err = adminEng.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
+//
+// 4. 绑定已存在的组织：
+//
+//	err = adminEng.BindOrganization(ctx, tenantID, localOrgID, remoteOrgID)
+//
+// 5. 管理组织成员：
+//
+//	successIDs, err := adminEng.AddMembers(ctx, tenantID, localOrgID, memberIDs)
+//
+// # 核心功能模块
+//
+//   - 组织管理（7个方法）：CreateOrganization、CreateSubOrganization、UpdateOrganization、DeleteOrganization、BindOrganization、UnbindOrganization、GetOrgSyncStatus
+//   - 用户管理（4个方法）：CreateUser、GetUserSyncStatus、BindUser、UnbindUser
+//   - 成员管理（2个方法）：AddMembers、RemoveMembers
+//
+// 详细文档：https://github.com/rezeropoint/go-skylark
 package admin
 
 import (
@@ -131,6 +171,100 @@ type AdminEngine interface {
 	//   - 优先从缓存检查，缓存未命中则查询数据库
 	//   - 可用于创建流程前验证用户是否已在Skylark中存在
 	GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error)
+
+	// ========== 组织ID映射管理 ==========
+
+	// BindOrganization 绑定已存在的远程组织
+	//
+	// 用途: 将本地组织ID与已存在的远程组织ID建立映射关系
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	//   - remoteOrgID: 远程组织ID（Skylark 中已存在的组织ID）
+	//
+	// 返回:
+	//   - error: 错误信息
+	//
+	// 错误:
+	//   - core.ErrOrgNotFound: 远程组织不存在
+	//   - core.ErrOrgIDMappingExists: 映射已存在（需要先解绑）
+	//
+	// 说明:
+	//   - 此方法用于绑定已存在的远程组织，不会创建新组织
+	//   - 会调用 Skylark API 验证远程组织是否存在
+	//   - 如果本地组织ID已绑定，必须先调用 UnbindOrganization 解绑
+	//   - 成功后自动更新缓存（正向 + 反向）
+	BindOrganization(ctx context.Context, tenantID, localOrgID string, remoteOrgID int) error
+
+	// UnbindOrganization 解绑组织映射
+	//
+	// 用途: 删除本地组织ID与远程组织ID的映射关系
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	//
+	// 返回:
+	//   - error: 错误信息
+	//
+	// 错误:
+	//   - core.ErrOrgNotFound: 映射不存在
+	//
+	// 说明:
+	//   - 只删除本地映射关系，不删除 Skylark 远程组织
+	//   - 解绑后可以重新绑定到其他远程组织
+	//   - 自动清理缓存（正向 + 反向）
+	UnbindOrganization(ctx context.Context, tenantID, localOrgID string) error
+
+	// ========== 用户ID映射管理 ==========
+
+	// BindUser 绑定已存在的远程用户
+	//
+	// 用途: 将本地用户ID与已存在的远程用户ID建立映射关系
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localUserID: 本地用户ID
+	//   - remoteUserID: 远程用户ID（Skylark 中已存在的用户ID）
+	//
+	// 返回:
+	//   - error: 错误信息
+	//
+	// 错误:
+	//   - core.ErrUserNotFound: 远程用户不存在
+	//   - core.ErrUserMappingExists: 映射已存在（需要先解绑）
+	//
+	// 说明:
+	//   - 此方法用于绑定已存在的远程用户，不会创建新用户
+	//   - 会调用 Skylark API 验证远程用户是否存在
+	//   - 如果本地用户ID已绑定，必须先调用 UnbindUser 解绑
+	//   - 成功后自动更新缓存（正向 + 反向）
+	BindUser(ctx context.Context, tenantID, localUserID string, remoteUserID int) error
+
+	// UnbindUser 解绑用户映射
+	//
+	// 用途: 删除本地用户ID与远程用户ID的映射关系
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localUserID: 本地用户ID
+	//
+	// 返回:
+	//   - error: 错误信息
+	//
+	// 错误:
+	//   - core.ErrUserMappingNotFound: 映射不存在
+	//
+	// 说明:
+	//   - 只删除本地映射关系，不删除 Skylark 远程用户
+	//   - 解绑后可以重新绑定到其他远程用户
+	//   - 自动清理缓存（正向 + 反向）
+	UnbindUser(ctx context.Context, tenantID, localUserID string) error
 
 	// ========== 组织成员管理 ==========
 

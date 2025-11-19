@@ -26,8 +26,10 @@ go mod tidy                             # 整理依赖
 - ❌ Manager 之间直接相互引用
 - ❌ 在 Config 中包含具体实现类型(如 `*redis.Client`)或函数类型
 - ❌ 忘记在 model.go 使用 `sql.Null*` 处理可空字段
-- ❌ 不使用预定义错误(`core/var.go`)
+- ❌ 不使用预定义错误(`core/errors.go`)
 - ❌ Flows 模块依赖注入不完整（需要 getPlatformConfig、getRemoteUserIDs、getRemoteDB）
+- ❌ **将系统管理功能暴露在 Engine 层**（组织/用户管理应在 Admin 层）
+- ❌ **将业务流程功能暴露在 Admin 层**（流程/查询/统计应在 Engine 层）
 
 ## 项目简介
 
@@ -38,7 +40,9 @@ go-skylark 是一个用于对接 Skylark 低代码平台的 Go SDK，提供流�
 ### 三层架构与依赖流向
 
 ```
-Engine Layer (engine/)          ← 对外接口，聚合所有 Manager
+对外接口层 (两个入口)
+├─ Admin Layer (admin/)         ← 系统管理引擎（组织/用户管理、ID映射）
+└─ Engine Layer (engine/)       ← 业务流程引擎（流程管理、查询统计）
     ↓ 依赖
 Internal Layer (internal/*)     ← Manager 模式，业务逻辑实现
     ↓ 依赖
@@ -46,6 +50,7 @@ Core Layer (core/)              ← 领域模型，纯 Go 类型，无框架依�
 ```
 
 **关键原则**：
+- **职责分离**：Admin 负责系统管理，Engine 负责业务流程，两者独立初始化
 - Core 层不依赖任何框架（无 `db` 标签、无 `sql.Null*`）
 - Internal 层通过 `model.go` 处理数据库类型，通过 `ToDomain()` 转换为 Core 类型
 - Manager 之间通过 Core 层的**函数类型注入**解耦（避免循环依赖）
@@ -102,9 +107,35 @@ type EventConfig struct {
 
 ## 核心模块职责
 
-### Engine 层（engine/）
+### 对外接口层职责分离
 
-**职责**：对外统一接口，管理所有 Manager 生命周期
+SDK 提供两个对外入口，职责明确分离：
+
+#### Admin 层（admin/）- 系统管理引擎
+
+**职责**：系统管理功能（组织管理、用户管理、ID映射管理）
+
+**使用场景**：系统管理微服务使用，用于管理租户、组织、用户等基础数据
+
+**接口分类**（14个方法）：
+- **组织管理**（5个）：CreateOrganization、CreateSubOrganization、DeleteOrganization、UpdateOrganization、GetOrgSyncStatus
+- **用户管理**（2个）：CreateUser、GetUserSyncStatus
+- **组织ID映射管理**（2个）：BindOrganization（绑定已存在的远程组织）、UnbindOrganization（解绑组织映射）
+- **用户ID映射管理**（2个）：BindUser（绑定已存在的远程用户）、UnbindUser（解绑用户映射）
+- **组织成员管理**（2个）：AddMembers、RemoveMembers
+- **平台配置**（1个）：通过 internal/platform 访问（不直接暴露）
+
+**关键特性**：
+- 所有操作自动维护本地ID与远程ID的双向映射
+- 映射关系存储在本地数据库（skylark_org_mappings、skylark_user_mappings）
+- 支持缓存优化（Redis，TTL 30天）
+- 绑定/解绑时会验证远程资源存在性（调用 Skylark API）
+
+#### Engine 层（engine/）- 业务流程引擎
+
+**职责**：业务流程功能（流程管理、事件查询、统计分析）
+
+**使用场景**：业务微服务使用，用于创建流程、查询事件数据、统计分析等
 
 **初始化顺序**（`engine/handler.go:36-140`）：
 ```
@@ -118,12 +149,16 @@ type EventConfig struct {
 - Query、Stats 依赖 Platform（获取远程 DB 连接）、Event（获取事件配置）、Mapping（获取组织映射）
 
 **接口分类**（37个方法）：
-- 流程管理（13个）：CreateFlow、UpdateFlowJourneyStatus、GetFlowJourneyBySN、GetFlowJourneyAssignments、GetFlowJourneyDetail、GetFlowDetail、GetUserAssignments、GetProposedJourneys、SearchJourneys、GetJourneyMoments、GetCurrentProcessingUsers、AbortJourney、CreateFormRow
-- 平台配置（5个）：CreatePlatformConfig、GetPlatformConfig、UpdatePlatformConfig、DeletePlatformConfig、ValidatePlatformConfig
-- 事件配置（5个）：CreateEventWithFields、UpdateEventWithFields、GetEventWithFields、ListEventWithFields、DeleteEvent
-- 组织映射（5个）：CreateOrgMapping、GetOrgMapping、ListOrgMappings、UpdateOrgMapping、DeleteOrgMapping
-- 远程查询（4个）：QueryEventData、GetEventDetail、GetFlowList、GetFlowFields
-- 统计分析（7个）：GetDurationStats、GetStatusStats、GetTrendStats、GetNodeStats、GetUserStats、GetOrgStats、GetPendingStats
+- **流程管理**（13个）：CreateFlow、UpdateFlowJourneyStatus、GetFlowJourneyBySN、GetFlowJourneyAssignments、GetFlowJourneyDetail、GetFlowDetail、GetUserAssignments、GetProposedJourneys、SearchJourneys、GetJourneyMoments、GetCurrentProcessingUsers、AbortJourney、CreateFormRow
+- **平台配置**（5个）：CreatePlatformConfig、GetPlatformConfig、UpdatePlatformConfig、DeletePlatformConfig、ValidatePlatformConfig
+- **事件配置**（5个）：CreateEventWithFields、UpdateEventWithFields、GetEventWithFields、ListEventWithFields、DeleteEvent
+- **组织映射**（5个）：CreateOrgMapping、GetOrgMapping、ListOrgMappings、UpdateOrgMapping、DeleteOrgMapping
+- **远程查询**（4个）：QueryEventData、GetEventDetail、GetFlowList、GetFlowFields
+- **统计分析**（7个）：GetDurationStats、GetStatusStats、GetTrendStats、GetNodeStats、GetUserStats、GetOrgStats、GetPendingStats
+
+**关键特性**：
+- 所有业务操作透明使用本地ID，SDK内部自动转换为远程ID
+- 用户无需关心ID映射细节，只需确保先通过 AdminEngine 完成初始化
 
 ### Internal 层关键模块
 
@@ -138,12 +173,18 @@ type EventConfig struct {
 - 查询远程 Skylark 数据库的 organizations 表
 - 支持批量转换：`[]localOrgID → []remoteOrgID`
 - 提供组织信息缓存（Redis，TTL 可配置）
+- **绑定/解绑功能**：
+  - `BindOrganization`：绑定已存在的远程组织（验证远程资源存在性）
+  - `UnbindOrganization`：解绑组织映射（只删除本地映射，不删除远程资源）
 
 #### internal/user（用户管理）
 - 管理本地用户 ID 与远程用户 ID 的映射关系
 - 查询远程 Skylark 数据库的 users 表
 - **批量查询用户名**：Redis 缓存（TTL 24h）
 - 支持批量转换：`[]localUserID → []remoteUserID`
+- **绑定/解绑功能**：
+  - `BindUser`：绑定已存在的远程用户（验证远程资源存在性）
+  - `UnbindUser`：解绑用户映射（只删除本地映射，不删除远程用户）
 
 #### internal/event（事件配置）
 - 聚合管理事件配置+字段配置（事务保证原子性）

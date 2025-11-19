@@ -103,6 +103,30 @@ func (e *adminEngine) GetUserSyncStatus(ctx context.Context, tenantID, localUser
 	return e.user.GetUserSyncStatus(ctx, tenantID, localUserID)
 }
 
+// ========== 组织ID映射管理 ==========
+
+// BindOrganization 绑定已存在的远程组织
+func (e *adminEngine) BindOrganization(ctx context.Context, tenantID, localOrgID string, remoteOrgID int) error {
+	return e.organization.BindOrganization(ctx, tenantID, localOrgID, remoteOrgID)
+}
+
+// UnbindOrganization 解绑组织映射
+func (e *adminEngine) UnbindOrganization(ctx context.Context, tenantID, localOrgID string) error {
+	return e.organization.UnbindOrganization(ctx, tenantID, localOrgID)
+}
+
+// ========== 用户ID映射管理 ==========
+
+// BindUser 绑定已存在的远程用户
+func (e *adminEngine) BindUser(ctx context.Context, tenantID, localUserID string, remoteUserID int) error {
+	return e.user.BindUser(ctx, tenantID, localUserID, remoteUserID)
+}
+
+// UnbindUser 解绑用户映射
+func (e *adminEngine) UnbindUser(ctx context.Context, tenantID, localUserID string) error {
+	return e.user.UnbindUser(ctx, tenantID, localUserID)
+}
+
 // ========== 组织成员管理 ==========
 
 // AddMembers 批量添加成员到组织
