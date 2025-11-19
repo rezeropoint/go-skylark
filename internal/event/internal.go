@@ -22,8 +22,8 @@ func (m *eventManager) get(ctx context.Context, id, tenantID string) (*core.Even
         WHERE id = $1 AND tenant_id = $2
     `
 
-	var config core.EventConfig
-	err := m.dbConn.QueryRowCtx(ctx, &config, query, id, tenantID)
+	var model EventConfigModel
+	err := m.dbConn.QueryRowCtx(ctx, &model, query, id, tenantID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, core.ErrEventConfigNotFound
@@ -31,7 +31,7 @@ func (m *eventManager) get(ctx context.Context, id, tenantID string) (*core.Even
 		return nil, fmt.Errorf("查询事件配置失败: %w", err)
 	}
 
-	return &config, nil
+	return model.ToDomain(), nil
 }
 
 // List 查询事件配置列表（不含字段）
@@ -53,10 +53,16 @@ func (m *eventManager) list(ctx context.Context, tenantID string, enabled *bool)
 
 	query += " ORDER BY created_at DESC"
 
-	var configs []*core.EventConfig
-	err := m.dbConn.QueryRowsCtx(ctx, &configs, query, args...)
+	var models []*EventConfigModel
+	err := m.dbConn.QueryRowsCtx(ctx, &models, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("查询事件配置列表失败: %w", err)
+	}
+
+	// 转换为领域模型
+	configs := make([]*core.EventConfig, 0, len(models))
+	for _, model := range models {
+		configs = append(configs, model.ToDomain())
 	}
 
 	return configs, nil
@@ -191,10 +197,16 @@ func (m *eventManager) listFieldsByEventID(ctx context.Context, eventConfigID st
         ORDER BY display_order ASC, created_at ASC
     `
 
-	var fields []*core.FieldConfig
-	err := m.dbConn.QueryRowsCtx(ctx, &fields, query, eventConfigID)
+	var models []*FieldConfigModel
+	err := m.dbConn.QueryRowsCtx(ctx, &models, query, eventConfigID)
 	if err != nil {
 		return nil, fmt.Errorf("查询字段配置失败: %w", err)
+	}
+
+	// 转换为领域模型
+	fields := make([]*core.FieldConfig, 0, len(models))
+	for _, model := range models {
+		fields = append(fields, model.ToDomain())
 	}
 
 	return fields, nil
@@ -215,15 +227,16 @@ func (m *eventManager) listFieldsByEventIDs(ctx context.Context, eventConfigIDs 
         ORDER BY event_config_id, display_order ASC, created_at ASC
     `
 
-	var fields []*core.FieldConfig
-	err := m.dbConn.QueryRowsCtx(ctx, &fields, query, pq.Array(eventConfigIDs))
+	var models []*FieldConfigModel
+	err := m.dbConn.QueryRowsCtx(ctx, &models, query, pq.Array(eventConfigIDs))
 	if err != nil {
 		return nil, fmt.Errorf("批量查询字段配置失败: %w", err)
 	}
 
-	// 按 event_config_id 分组
+	// 转换为领域模型并按 event_config_id 分组
 	fieldsMap := make(map[string][]*core.FieldConfig)
-	for _, field := range fields {
+	for _, model := range models {
+		field := model.ToDomain()
 		fieldsMap[field.EventConfigID] = append(fieldsMap[field.EventConfigID], field)
 	}
 
