@@ -122,7 +122,7 @@ SDK 提供两个对外入口，职责明确分离：
 - **用户管理**（2个）：CreateUser、GetUserSyncStatus
 - **组织ID映射管理**（2个）：BindOrganization（绑定已存在的远程组织）、UnbindOrganization（解绑组织映射）
 - **用户ID映射管理**（2个）：BindUser（绑定已存在的远程用户）、UnbindUser（解绑用户映射）
-- **组织成员管理**（2个）：AddMembers、RemoveMembers
+- **组织成员管理**（2个）：AddMember（添加单个成员，使用本地用户ID）、RemoveMember（移除单个成员，使用本地用户ID）
 - **平台配置**（1个）：通过 internal/platform 访问（不直接暴露）
 
 **关键特性**：

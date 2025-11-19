@@ -97,10 +97,9 @@ var (
 
 	// 组织成员相关错误
 	ErrMemberNotFound     = errors.New("member not found in organization")
-	ErrMemberAddFailed    = errors.New("failed to add members to organization")
-	ErrMemberRemoveFailed = errors.New("failed to remove members from organization")
+	ErrMemberAddFailed    = errors.New("failed to add member to organization")
+	ErrMemberRemoveFailed = errors.New("failed to remove member from organization")
 	ErrInvalidMemberID    = errors.New("invalid member ID")
-	ErrEmptyMemberIDList  = errors.New("member ID list cannot be empty")
 	ErrGetMembersFailed   = errors.New("failed to get organization members")
 
 	// 组织管理员相关错误

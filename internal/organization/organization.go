@@ -165,21 +165,27 @@ type Manager interface {
 	// 返回：成员列表
 	GetMembers(ctx context.Context, tenantID, localOrgID string, withDescendants bool) ([]*core.OrganizationMember, error)
 
-	// AddMembers 批量增加组织成员
+	// AddMember 增加组织成员
 	// 流程：
 	//   1. 查询本地组织ID对应的远程组织ID
-	//   2. 调用 Skylark API: PUT /api/v4/organizations/:organization_id/members/add
-	//   3. 清除相关缓存（成员列表缓存）
-	// 返回：成功添加的成员ID列表
-	AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
+	//   2. 将本地用户ID转换为远程用户ID
+	//   3. 调用 Skylark API: PUT /api/v4/organizations/:organization_id/members/add
+	//   4. 清除相关缓存（成员列表缓存）
+	// 参数：
+	//   - localMemberID: 成员的本地用户ID
+	// 返回：错误信息
+	AddMember(ctx context.Context, tenantID, localOrgID, localMemberID string) error
 
-	// RemoveMembers 批量移除组织成员
+	// RemoveMember 移除组织成员
 	// 流程：
 	//   1. 查询本地组织ID对应的远程组织ID
-	//   2. 调用 Skylark API: PUT /api/v4/organizations/:organization_id/members/remove
-	//   3. 清除相关缓存（成员列表缓存）
-	// 返回：成功移除的成员ID列表
-	RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
+	//   2. 将本地用户ID转换为远程用户ID
+	//   3. 调用 Skylark API: PUT /api/v4/organizations/:organization_id/members/remove
+	//   4. 清除相关缓存（成员列表缓存）
+	// 参数：
+	//   - localMemberID: 成员的本地用户ID
+	// 返回：错误信息
+	RemoveMember(ctx context.Context, tenantID, localOrgID, localMemberID string) error
 }
 
 // NewManager 创建组织管理器

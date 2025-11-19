@@ -29,13 +29,13 @@
 //
 // 5. 管理组织成员：
 //
-//	successIDs, err := adminEng.AddMembers(ctx, tenantID, localOrgID, memberIDs)
+//	err = adminEng.AddMember(ctx, tenantID, localOrgID, localMemberID)
 //
 // # 核心功能模块
 //
 //   - 组织管理（7个方法）：CreateOrganization、CreateSubOrganization、UpdateOrganization、DeleteOrganization、BindOrganization、UnbindOrganization、GetOrgSyncStatus
 //   - 用户管理（4个方法）：CreateUser、GetUserSyncStatus、BindUser、UnbindUser
-//   - 成员管理（2个方法）：AddMembers、RemoveMembers
+//   - 成员管理（2个方法）：AddMember、RemoveMember
 //
 // 详细文档：https://github.com/rezeropoint/go-skylark
 package admin
@@ -268,39 +268,37 @@ type AdminEngine interface {
 
 	// ========== 组织成员管理 ==========
 
-	// AddMembers 批量添加成员到组织
+	// AddMember 添加成员到组织
 	//
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID
 	//   - localOrgID: 本地组织ID
-	//   - memberIDs: 成员ID列表（远程用户ID）
+	//   - localMemberID: 成员的本地用户ID
 	//
 	// 返回:
-	//   - []int: 成功添加的成员ID列表
 	//   - error: 错误信息
 	//
 	// 说明:
-	//   - 内部调用 GetMembers 校验组织同步状态（确保之前的同步正常）
+	//   - SDK内部自动将本地用户ID转换为远程用户ID
 	//   - 成功后自动清理相关缓存
-	AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
+	AddMember(ctx context.Context, tenantID, localOrgID, localMemberID string) error
 
-	// RemoveMembers 批量从组织移除成员
+	// RemoveMember 从组织移除成员
 	//
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID
 	//   - localOrgID: 本地组织ID
-	//   - memberIDs: 成员ID列表（远程用户ID）
+	//   - localMemberID: 成员的本地用户ID
 	//
 	// 返回:
-	//   - []int: 成功移除的成员ID列表
 	//   - error: 错误信息
 	//
 	// 说明:
-	//   - 内部调用 GetMembers 校验组织同步状态（确保之前的同步正常）
+	//   - SDK内部自动将本地用户ID转换为远程用户ID
 	//   - 成功后自动清理相关缓存
-	RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
+	RemoveMember(ctx context.Context, tenantID, localOrgID, localMemberID string) error
 }
 
 // NewAdminEngine 创建新的系统管理引擎实例

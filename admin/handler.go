@@ -129,12 +129,12 @@ func (e *adminEngine) UnbindUser(ctx context.Context, tenantID, localUserID stri
 
 // ========== 组织成员管理 ==========
 
-// AddMembers 批量添加成员到组织
-func (e *adminEngine) AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error) {
-	return e.organization.AddMembers(ctx, tenantID, localOrgID, memberIDs)
+// AddMember 添加成员到组织
+func (e *adminEngine) AddMember(ctx context.Context, tenantID, localOrgID, localMemberID string) error {
+	return e.organization.AddMember(ctx, tenantID, localOrgID, localMemberID)
 }
 
-// RemoveMembers 批量从组织移除成员
-func (e *adminEngine) RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error) {
-	return e.organization.RemoveMembers(ctx, tenantID, localOrgID, memberIDs)
+// RemoveMember 从组织移除成员
+func (e *adminEngine) RemoveMember(ctx context.Context, tenantID, localOrgID, localMemberID string) error {
+	return e.organization.RemoveMember(ctx, tenantID, localOrgID, localMemberID)
 }

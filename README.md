@@ -91,8 +91,8 @@ func main() {
     // 绑定已存在的远程组织
     err = adminEngine.BindOrganization(ctx, "tenant_001", "org_local_002", "remote_org_456")
 
-    // 添加组织成员
-    err = adminEngine.AddMembers(ctx, "tenant_001", "org_local_001", []string{"user_local_001"})
+    // 添加组织成员（使用本地用户ID）
+    err = adminEngine.AddMember(ctx, "tenant_001", "org_local_001", "user_local_001")
 }
 ```
 
@@ -271,8 +271,9 @@ type AdminEngine interface {
     UnbindUser(ctx context.Context, tenantID, localID string) error
 
     // 组织成员管理（2个）
-    AddMembers(ctx context.Context, tenantID, orgLocalID string, userLocalIDs []string) error
-    RemoveMembers(ctx context.Context, tenantID, orgLocalID string, userLocalIDs []string) error
+    // 添加/移除单个成员，SDK内部自动将本地用户ID转换为远程用户ID
+    AddMember(ctx context.Context, tenantID, orgLocalID, userLocalID string) error
+    RemoveMember(ctx context.Context, tenantID, orgLocalID, userLocalID string) error
 }
 ```
 
