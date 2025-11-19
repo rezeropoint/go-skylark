@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 
 	"github.com/rezeropoint/go-skylark/v2/core"
 
@@ -428,8 +429,8 @@ func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCr
 
 	// 7. 执行查询
 	type userRow struct {
-		UserID string `db:"slp_user_id"`
-		Count  int64  `db:"count"`
+		UserID int64 `db:"slp_user_id"`
+		Count  int64 `db:"count"`
 	}
 	var rows []*userRow
 	err = remoteDB.QueryRowsCtx(ctx, &rows, query, args...)
@@ -437,10 +438,10 @@ func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCr
 		return nil, fmt.Errorf("查询处理人统计失败: %w", err)
 	}
 
-	// 8. 提取用户ID列表
+	// 8. 提取用户ID列表（转换为字符串）
 	userIDs := make([]string, 0, len(rows))
 	for _, row := range rows {
-		userIDs = append(userIDs, row.UserID)
+		userIDs = append(userIDs, strconv.FormatInt(row.UserID, 10))
 	}
 
 	// 9. 批量查询用户名（复用现有逻辑）
@@ -452,13 +453,14 @@ func (m *statsManager) getSingleUserStats(ctx context.Context, req *core.StatsCr
 	// 10. 处理结果（添加排名和用户名）
 	userMetrics := make([]*core.UserMetric, 0, len(rows))
 	for i, row := range rows {
-		userName := userNames[row.UserID]
+		userIDStr := strconv.FormatInt(row.UserID, 10)
+		userName := userNames[userIDStr]
 		if userName == "" {
-			userName = row.UserID // 如果查不到用户名，显示用户ID
+			userName = userIDStr // 如果查不到用户名，显示用户ID
 		}
 
 		userMetrics = append(userMetrics, &core.UserMetric{
-			UserID:   row.UserID,
+			UserID:   userIDStr,
 			UserName: userName,
 			Count:    row.Count,
 			Rank:     i + 1, // 排名从1开始

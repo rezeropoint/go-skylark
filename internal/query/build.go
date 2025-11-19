@@ -3,6 +3,7 @@ package query
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/rezeropoint/go-skylark/v2/core"
@@ -20,7 +21,7 @@ func (m *queryManager) buildDetailResponse(assignments []*assignmentRow, userNam
 	firstAssignment := assignments[0]
 	initiatorUserID := ""
 	if firstAssignment.UserID.Valid {
-		initiatorUserID = firstAssignment.UserID.String
+		initiatorUserID = strconv.FormatInt(firstAssignment.UserID.Int64, 10)
 	}
 	initiatorUserName := userNames[initiatorUserID]
 
@@ -91,8 +92,8 @@ func (m *queryManager) buildDetailResponse(assignments []*assignmentRow, userNam
 
 		for i, assignment := range vertexAssignments {
 			// 收集用户信息（去重）
-			if assignment.UserID.Valid && assignment.UserID.String != "" {
-				userID := assignment.UserID.String
+			if assignment.UserID.Valid {
+				userID := strconv.FormatInt(assignment.UserID.Int64, 10)
 				if !userIDSet[userID] {
 					userIDSet[userID] = true
 					userIDList = append(userIDList, userID)

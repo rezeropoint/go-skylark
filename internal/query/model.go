@@ -16,7 +16,7 @@ type assignmentRow struct {
 	VertexID     int            `db:"slp_vertex_id"`     // 节点ID
 	VertexName   sql.NullString `db:"vertex_name"`       // 节点名称（JOIN vertices表）
 	VertexAlias  sql.NullString `db:"vertex_alias"`      // 节点别名（JOIN vertices表）
-	UserID       sql.NullString `db:"slp_user_id"`       // 处理人ID
+	UserID       sql.NullInt64  `db:"slp_user_id"`       // 处理人ID（INTEGER类型）
 	CreatedAt    time.Time      `db:"slp_created_at"`    // 创建时间
 	UpdatedAt    time.Time      `db:"slp_updated_at"`    // 更新时间
 	BusinessData string         `db:"business_data"`     // 业务数据（JSON字符串）

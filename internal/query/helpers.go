@@ -43,8 +43,8 @@ func extractUserIDs(assignments []*assignmentRow) []string {
 	var distinctSet map[string]struct{}
 
 	for _, assignment := range assignments {
-		if assignment.UserID.Valid && assignment.UserID.String != "" {
-			id := assignment.UserID.String
+		if assignment.UserID.Valid {
+			id := strconv.FormatInt(assignment.UserID.Int64, 10)
 			if !haveFirst {
 				firstID = id
 				haveFirst = true
