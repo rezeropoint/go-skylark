@@ -85,10 +85,30 @@ var (
 
 var (
 	// 组织相关错误
-	ErrOrgNotFound       = errors.New("organization not found in Skylark")
-	ErrOrgCreateFailed   = errors.New("failed to create organization in Skylark")
-	ErrOrgDeleteFailed   = errors.New("failed to delete organization in Skylark")
-	ErrParentOrgNotFound = errors.New("parent organization mapping not found")
+	ErrOrgNotFound                       = errors.New("organization not found in Skylark")
+	ErrOrgCreateFailed                   = errors.New("failed to create organization in Skylark")
+	ErrOrgDeleteFailed                   = errors.New("failed to delete organization in Skylark")
+	ErrOrgUpdateFailed                   = errors.New("failed to update organization in Skylark")
+	ErrOrganizationUpdateFailed          = errors.New("failed to update organization")
+	ErrOrganizationManagerUpdateFailed   = errors.New("failed to update organization manager")
+	ErrOrganizationManagerUpdateConflict = errors.New("organization manager update conflict, please retry")
+	ErrParentOrgNotFound                 = errors.New("parent organization mapping not found")
+
+	// 组织成员相关错误
+	ErrMemberNotFound     = errors.New("member not found in organization")
+	ErrMemberAddFailed    = errors.New("failed to add members to organization")
+	ErrMemberRemoveFailed = errors.New("failed to remove members from organization")
+	ErrInvalidMemberID    = errors.New("invalid member ID")
+	ErrEmptyMemberIDList  = errors.New("member ID list cannot be empty")
+	ErrGetMembersFailed   = errors.New("failed to get organization members")
+
+	// 组织管理员相关错误
+	ErrAdministratorNotFound     = errors.New("administrator not found in organization")
+	ErrAdministratorAddFailed    = errors.New("failed to add organization administrator")
+	ErrAdministratorUpdateFailed = errors.New("failed to update organization administrator")
+	ErrAdministratorDeleteFailed = errors.New("failed to delete organization administrator")
+	ErrGetAdministratorsFailed   = errors.New("failed to get organization administrators")
+	ErrInvalidAccessID           = errors.New("invalid access ID")
 
 	// 用户相关错误
 	ErrUserNotFound        = errors.New("user not found in Skylark")

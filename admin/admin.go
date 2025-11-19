@@ -3,6 +3,8 @@ package admin
 import (
 	"context"
 
+	"github.com/rezeropoint/go-skylark/v2/core"
+
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
@@ -57,6 +59,22 @@ type AdminEngine interface {
 	// 返回:
 	//   - error: 错误信息
 	DeleteOrganization(ctx context.Context, tenantID, localOrgID string) error
+
+	// UpdateOrganization 更新组织信息
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - req: 更新请求参数（所有字段可选，nil 表示不修改）
+	//
+	// 返回:
+	//   - error: 错误信息
+	//
+	// 说明:
+	//   - 支持更新组织名称、描述、管理员
+	//   - 更新管理员时使用分布式锁确保原子性（防止并发修改冲突）
+	//   - SDK 内部封装多次 API 调用（查询旧管理员 → 添加新管理员 → 删除旧管理员）
+	//   - 支持部分更新（只修改指定字段）
+	UpdateOrganization(ctx context.Context, req *core.UpdateOrganizationRequest) error
 
 	// GetOrgSyncStatus 获取组织同步状态
 	//
@@ -113,6 +131,42 @@ type AdminEngine interface {
 	//   - 优先从缓存检查，缓存未命中则查询数据库
 	//   - 可用于创建流程前验证用户是否已在Skylark中存在
 	GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error)
+
+	// ========== 组织成员管理 ==========
+
+	// AddMembers 批量添加成员到组织
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	//   - memberIDs: 成员ID列表（远程用户ID）
+	//
+	// 返回:
+	//   - []int: 成功添加的成员ID列表
+	//   - error: 错误信息
+	//
+	// 说明:
+	//   - 内部调用 GetMembers 校验组织同步状态（确保之前的同步正常）
+	//   - 成功后自动清理相关缓存
+	AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
+
+	// RemoveMembers 批量从组织移除成员
+	//
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID
+	//   - localOrgID: 本地组织ID
+	//   - memberIDs: 成员ID列表（远程用户ID）
+	//
+	// 返回:
+	//   - []int: 成功移除的成员ID列表
+	//   - error: 错误信息
+	//
+	// 说明:
+	//   - 内部调用 GetMembers 校验组织同步状态（确保之前的同步正常）
+	//   - 成功后自动清理相关缓存
+	RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
 }
 
 // NewAdminEngine 创建新的系统管理引擎实例

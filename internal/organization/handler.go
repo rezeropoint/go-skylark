@@ -14,15 +14,16 @@ import (
 
 // organizationManager 组织管理器实现
 type organizationManager struct {
-	localDB           sqlx.SqlConn                 // 本地数据库连接
-	cache             core.CacheInterface          // 缓存接口
-	getPlatformConfig core.GetPlatformConfigFunc   // 获取平台配置函数
-	getRemoteUserIDs  core.GetRemoteUserIDsFunc    // 批量查询远程用户ID函数
-	httpClient        *skylarkHTTPClient           // HTTP 客户端
+	localDB            sqlx.SqlConn                // 本地数据库连接
+	cache              core.CacheInterface         // 缓存接口
+	getPlatformConfig  core.GetPlatformConfigFunc  // 获取平台配置函数
+	getRemoteUserIDs   core.GetRemoteUserIDsFunc   // 批量查询远程用户ID函数
+	fillLocalUserIDMap core.FillLocalUserIDMapFunc // 批量反向转换远程用户ID为本地用户ID函数
+	httpClient         *skylarkHTTPClient          // HTTP 客户端
 }
 
 // newOrganizationManager 创建组织管理器
-func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (*organizationManager, error) {
+func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc) (*organizationManager, error) {
 	// 验证参数
 	if db == nil {
 		return nil, fmt.Errorf("db 不能为空")
@@ -36,13 +37,17 @@ func newOrganizationManager(config Config, db sqlx.SqlConn, cache core.CacheInte
 	if getRemoteUserIDs == nil {
 		return nil, fmt.Errorf("getRemoteUserIDs 函数不能为空")
 	}
+	if fillLocalUserIDMap == nil {
+		return nil, fmt.Errorf("fillLocalUserIDMap 函数不能为空")
+	}
 
 	manager := &organizationManager{
-		localDB:           db,
-		cache:             cache,
-		getPlatformConfig: getPlatformConfig,
-		getRemoteUserIDs:  getRemoteUserIDs,
-		httpClient:        newSkylarkHTTPClient(),
+		localDB:            db,
+		cache:              cache,
+		getPlatformConfig:  getPlatformConfig,
+		getRemoteUserIDs:   getRemoteUserIDs,
+		fillLocalUserIDMap: fillLocalUserIDMap,
+		httpClient:         newSkylarkHTTPClient(),
 	}
 
 	// 初始化数据库表（在包初始化时执行）
@@ -377,83 +382,197 @@ func (m *organizationManager) GetOrgSyncStatus(ctx context.Context, tenantID, lo
 	return true, nil
 }
 
-// initTable 初始化组织ID映射表（私有方法，在包初始化时调用）
-func (m *organizationManager) initTable(ctx context.Context) error {
-	// 检查表是否已存在
-	var count int
-	err := m.localDB.QueryRowCtx(ctx, &count, CheckTableExistsSQL)
+// ========== 组织成员管理实现 ==========
+
+// GetMembers 获取组织成员列表
+func (m *organizationManager) GetMembers(ctx context.Context, tenantID, localOrgID string, withDescendants bool) ([]*core.OrganizationMember, error) {
+	// 1. 获取平台配置
+	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("检查组织映射表存在性失败: %w", err)
+		return nil, err
 	}
 
-	// 如果表已存在，直接返回
-	if count > 0 {
-		return nil
+	// 2. 查询远程组织ID
+	remoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, localOrgID)
+	if err != nil {
+		return nil, err
 	}
 
-	// 表不存在，执行创建
-	_, err = m.localDB.ExecCtx(ctx, CreateTableSQL)
+	// 3. 尝试从缓存获取
+	members, err := m.cache.GetOrgMembers(ctx, tenantID, remoteOrgID, withDescendants)
+	if err == nil {
+		return members, nil
+	}
+
+	// 4. 缓存未命中，调用 Skylark API
+	memberModels, err := m.httpClient.getMembers(ctx, platformConfig.App, platformConfig.Token, remoteOrgID, withDescendants)
 	if err != nil {
-		return fmt.Errorf("创建组织映射表失败: %w", err)
+		return nil, fmt.Errorf("%w: %v", core.ErrGetMembersFailed, err)
+	}
+
+	// 5. 转换为领域模型
+	members = make([]*core.OrganizationMember, 0, len(memberModels))
+	for i := range memberModels {
+		members = append(members, memberModels[i].ToDomain())
+	}
+
+	// 6. 回写缓存（TTL 5分钟）
+	if err := m.cache.SetOrgMembers(ctx, tenantID, remoteOrgID, withDescendants, members, 300); err != nil {
+		logx.Error("缓存组织成员列表失败:", err)
+	}
+
+	return members, nil
+}
+
+// AddMembers 批量增加组织成员
+func (m *organizationManager) AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error) {
+	// 1. 验证参数
+	if len(memberIDs) == 0 {
+		return nil, core.ErrEmptyMemberIDList
+	}
+
+	// 2. 获取平台配置
+	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 查询远程组织ID
+	remoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, localOrgID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 内部调用 GetMembers 获取当前成员列表并校验映射表
+	currentMembers, err := m.GetMembers(ctx, tenantID, localOrgID, false)
+	if err != nil {
+		return nil, fmt.Errorf("获取当前成员列表失败: %w", err)
+	}
+
+	// 5. 校验当前成员是否都在本地映射表中（确保之前的同步正常）
+	if err := m.validateMemberMappings(ctx, tenantID, currentMembers); err != nil {
+		return nil, fmt.Errorf("成员映射校验失败: %w", err)
 	}
 
 	logx.WithContext(ctx).WithFields(
-		logx.Field("module", "organization_manager"),
-		logx.Field("operation", "init_table"),
-		logx.Field("table", TableName),
-	).Info("组织映射表初始化成功")
+		logx.Field("current_member_count", len(currentMembers)),
+		logx.Field("adding_count", len(memberIDs)),
+	).Info("添加成员前校验通过")
 
-	return nil
-}
+	// 6. 调用 Skylark API 批量增加成员
+	req := &AddMembersRequest{
+		MemberIDs: memberIDs,
+	}
 
-// saveMapping 保存映射到数据库
-func (m *organizationManager) saveMapping(ctx context.Context, mapping *core.OrgIDMapping) error {
-	query := `
-		INSERT INTO skylark_org_mappings (id, tenant_id, local_org_id, remote_org_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`
-	_, err := m.localDB.ExecCtx(ctx, query, mapping.ID, mapping.TenantID, mapping.LocalOrgID, mapping.RemoteOrgID)
+	addedIDs, err := m.httpClient.addMembers(ctx, platformConfig.App, platformConfig.Token, remoteOrgID, req)
 	if err != nil {
-		return fmt.Errorf("插入映射失败: %w", err)
+		return nil, fmt.Errorf("%w: %v", core.ErrMemberAddFailed, err)
 	}
-	return nil
+
+	// 6. 清除成员列表缓存
+	m.deleteMemberCache(ctx, tenantID, remoteOrgID)
+
+	return addedIDs, nil
 }
 
-// deleteMapping 删除映射
-func (m *organizationManager) deleteMapping(ctx context.Context, tenantID, localOrgID string) error {
-	query := "DELETE FROM skylark_org_mappings WHERE tenant_id = $1 AND local_org_id = $2"
-	_, err := m.localDB.ExecCtx(ctx, query, tenantID, localOrgID)
+// RemoveMembers 批量移除组织成员
+func (m *organizationManager) RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error) {
+	// 1. 验证参数
+	if len(memberIDs) == 0 {
+		return nil, core.ErrEmptyMemberIDList
+	}
+
+	// 2. 获取平台配置
+	platformConfig, err := m.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("删除映射失败: %w", err)
+		return nil, err
 	}
-	return nil
+
+	// 3. 查询远程组织ID
+	remoteOrgID, err := m.GetRemoteOrgID(ctx, tenantID, localOrgID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 内部调用 GetMembers 获取当前成员列表并校验映射表
+	currentMembers, err := m.GetMembers(ctx, tenantID, localOrgID, false)
+	if err != nil {
+		return nil, fmt.Errorf("获取当前成员列表失败: %w", err)
+	}
+
+	// 5. 校验当前成员是否都在本地映射表中（确保之前的同步正常）
+	if err := m.validateMemberMappings(ctx, tenantID, currentMembers); err != nil {
+		return nil, fmt.Errorf("成员映射校验失败: %w", err)
+	}
+
+	logx.WithContext(ctx).WithFields(
+		logx.Field("current_member_count", len(currentMembers)),
+		logx.Field("removing_count", len(memberIDs)),
+	).Info("移除成员前校验通过")
+
+	// 6. 调用 Skylark API 批量移除成员
+	req := &RemoveMembersRequest{
+		MemberIDs: memberIDs,
+	}
+
+	removedIDs, err := m.httpClient.removeMembers(ctx, platformConfig.App, platformConfig.Token, remoteOrgID, req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrMemberRemoveFailed, err)
+	}
+
+	// 6. 清除成员列表缓存
+	m.deleteMemberCache(ctx, tenantID, remoteOrgID)
+
+	return removedIDs, nil
 }
 
-// cacheMapping 缓存映射（正向 + 反向）
-func (m *organizationManager) cacheMapping(ctx context.Context, mapping *core.OrgIDMapping) error {
-	// 正向缓存：local_org_id -> remote_org_id
-	if err := m.cache.SetOrgIDMapping(ctx, mapping.TenantID, mapping.LocalOrgID, mapping.RemoteOrgID, 30*24*3600); err != nil {
+// ========== UpdateOrganization 实现 ==========
+
+// UpdateOrganization 更新组织信息
+func (m *organizationManager) UpdateOrganization(ctx context.Context, req *core.UpdateOrganizationRequest) error {
+	// 1. 获取平台配置
+	platformConfig, err := m.getPlatformConfig(ctx, req.TenantID)
+	if err != nil {
 		return err
 	}
 
-	// 反向缓存：remote_org_id -> local_org_id
-	if err := m.cache.SetOrgIDMappingReverse(ctx, mapping.TenantID, mapping.RemoteOrgID, mapping.LocalOrgID, 30*24*3600); err != nil {
+	// 2. 查询远程组织ID
+	remoteOrgID, err := m.GetRemoteOrgID(ctx, req.TenantID, req.LocalOrgID)
+	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-// deleteCacheMapping 删除缓存映射（正向 + 反向）
-func (m *organizationManager) deleteCacheMapping(ctx context.Context, tenantID, localOrgID string, remoteOrgID int) error {
-	// 删除正向缓存
-	if err := m.cache.DeleteOrgIDMapping(ctx, tenantID, localOrgID); err != nil {
-		return err
+	// 3. 内部调用 GetMembers 校验组织同步状态并校验映射表
+	currentMembers, err := m.GetMembers(ctx, req.TenantID, req.LocalOrgID, false)
+	if err != nil {
+		return fmt.Errorf("获取当前成员列表失败: %w", err)
 	}
 
-	// 删除反向缓存
-	if err := m.cache.DeleteOrgIDMappingReverse(ctx, tenantID, remoteOrgID); err != nil {
-		return err
+	// 4. 校验当前成员是否都在本地映射表中（确保之前的同步正常）
+	if err := m.validateMemberMappings(ctx, req.TenantID, currentMembers); err != nil {
+		return fmt.Errorf("成员映射校验失败: %w", err)
+	}
+
+	logx.WithContext(ctx).WithFields(
+		logx.Field("current_member_count", len(currentMembers)),
+	).Info("更新组织前校验通过")
+
+	// 5. 更新管理员（如果指定）
+	if req.ManagerID != "" {
+		if err := m.updateOrganizationManager(ctx, req.TenantID, req.LocalOrgID, remoteOrgID, req.ManagerID, platformConfig); err != nil {
+			return err
+		}
+	}
+
+	// 6. 更新组织名称（如果指定）
+	if req.Name != "" {
+		name := req.Name
+		updateReq := &UpdateOrganizationBasicInfoRequest{
+			Name: &name,
+		}
+		if err := m.httpClient.updateOrganizationBasicInfo(ctx, platformConfig.App, platformConfig.Token, remoteOrgID, updateReq); err != nil {
+			return fmt.Errorf("%w: %v", core.ErrOrganizationUpdateFailed, err)
+		}
 	}
 
 	return nil

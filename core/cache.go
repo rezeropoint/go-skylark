@@ -56,6 +56,16 @@ type CacheInterface interface {
 	SetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int, localOrgID string, ttl int) error
 	DeleteOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int) error
 
+	// 组织成员缓存（organization 模块 - 成员列表）
+	GetOrgMembers(ctx context.Context, tenantID string, remoteOrgID int, withDescendants bool) ([]*OrganizationMember, error)
+	SetOrgMembers(ctx context.Context, tenantID string, remoteOrgID int, withDescendants bool, members []*OrganizationMember, ttl int) error
+	DeleteOrgMembers(ctx context.Context, tenantID string, remoteOrgID int, withDescendants bool) error
+
+	// 组织管理员缓存（organization 模块 - 管理员列表）
+	GetOrgAdministrators(ctx context.Context, tenantID string, remoteOrgID int) ([]*OrganizationAdministrator, error)
+	SetOrgAdministrators(ctx context.Context, tenantID string, remoteOrgID int, admins []*OrganizationAdministrator, ttl int) error
+	DeleteOrgAdministrators(ctx context.Context, tenantID string, remoteOrgID int) error
+
 	// 用户ID映射缓存（user 模块 - 用户ID双向映射）
 	GetUserIDMapping(ctx context.Context, tenantID, localUserID string) (int, error)
 	SetUserIDMapping(ctx context.Context, tenantID, localUserID string, remoteUserID int, ttl int) error

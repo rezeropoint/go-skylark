@@ -54,8 +54,8 @@ func newAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (
 		return nil, err
 	}
 
-	// 3. 初始化组织管理器（依赖 Platform.GetAPIConfig + User.GetRemoteUserIDs）
-	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs)
+	// 3. 初始化组织管理器（依赖 Platform.GetAPIConfig + User.GetRemoteUserIDs + User.FillLocalUserIDMap）
+	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +83,11 @@ func (e *adminEngine) DeleteOrganization(ctx context.Context, tenantID, localOrg
 	return e.organization.DeleteOrganization(ctx, tenantID, localOrgID)
 }
 
+// UpdateOrganization 更新组织信息
+func (e *adminEngine) UpdateOrganization(ctx context.Context, req *core.UpdateOrganizationRequest) error {
+	return e.organization.UpdateOrganization(ctx, req)
+}
+
 // CreateUser 创建 Skylark 用户
 func (e *adminEngine) CreateUser(ctx context.Context, tenantID, localUserID, name string, identifier, phone, openid string) error {
 	return e.user.CreateUser(ctx, tenantID, localUserID, name, identifier, phone, openid)
@@ -96,4 +101,16 @@ func (e *adminEngine) GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID
 // GetUserSyncStatus 获取用户同步状态
 func (e *adminEngine) GetUserSyncStatus(ctx context.Context, tenantID, localUserID string) (bool, error) {
 	return e.user.GetUserSyncStatus(ctx, tenantID, localUserID)
+}
+
+// ========== 组织成员管理 ==========
+
+// AddMembers 批量添加成员到组织
+func (e *adminEngine) AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error) {
+	return e.organization.AddMembers(ctx, tenantID, localOrgID, memberIDs)
+}
+
+// RemoveMembers 批量从组织移除成员
+func (e *adminEngine) RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error) {
+	return e.organization.RemoveMembers(ctx, tenantID, localOrgID, memberIDs)
 }

@@ -66,7 +66,7 @@ func newSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis)
 	}
 
 	// 3. 初始化组织ID映射管理器（依赖 Platform + User）
-	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs)
+	orgMgr, err := organization.NewManager(organization.Config{}, db, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap)
 	if err != nil {
 		return nil, err
 	}

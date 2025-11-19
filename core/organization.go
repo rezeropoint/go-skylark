@@ -20,6 +20,16 @@ const (
 	// 格式：skylark:org_mapping_rev:{tenantID}:{remoteOrgID}
 	// TTL: 30天
 	CacheOrgIDMappingReverseKeyPrefix = "skylark:org_mapping_rev"
+
+	// CacheOrgMembersKeyPrefix 组织成员缓存键前缀
+	// 格式：skylark:org_members:{tenantID}:{orgID}:{withDescendants}
+	// TTL: 5分钟
+	CacheOrgMembersKeyPrefix = "skylark:org_members"
+
+	// CacheOrgAdminsKeyPrefix 组织管理员缓存键前缀
+	// 格式：skylark:org_admins:{tenantID}:{orgID}
+	// TTL: 30分钟
+	CacheOrgAdminsKeyPrefix = "skylark:org_admins"
 )
 
 // Organization Skylark 组织领域模型（内部使用）
@@ -63,3 +73,48 @@ type OrgIDMapping struct {
 //   - 用于组织权限过滤场景
 //   - 由 Organization Manager 的 GetRemoteOrgIDs 方法实现
 type GetRemoteOrgIDsFunc func(ctx context.Context, tenantID string, localOrgIDs []string) ([]int, error)
+
+// OrganizationMember Skylark 组织成员领域模型
+// 说明：表示 Skylark 组织的成员信息（纯 Go 类型，无框架依赖）
+// 用途：用于组织成员管理（查询、创建、修改等操作）
+type OrganizationMember struct {
+	ID         int        // Skylark 用户ID（整数）
+	Name       string     // 用户姓名
+	Nickname   *string    // 昵称（可空）
+	Sex        *string    // 性别（可空）
+	Phone      *string    // 电话号码（可空）
+	Identifier string     // 识别码（唯一标识）
+	OpenID     *string    // 微信 OpenID（可空）
+	Headimgurl *string    // 头像URL（可空）
+	CreatedAt  *time.Time // 创建时间（可空）
+	UpdatedAt  *time.Time // 更新时间（可空）
+}
+
+// OrganizationAccess Skylark 组织管理员权限领域模型
+// 说明：表示组织管理员的权限级别和操作权限
+type OrganizationAccess struct {
+	ID      int    // 权限ID
+	Name    string // 权限名称（如"超级管理员"、"创建者"）
+	Actions []int  // 操作权限列表（如 [1, 3, 4]）
+	Founded bool   // 是否为创建者
+}
+
+// OrganizationAdministrator Skylark 组织管理员领域模型
+// 说明：表示组织管理员及其权限信息（纯 Go 类型，无框架依赖）
+// 用途：用于组织管理员管理（查询、创建、修改、删除等操作）
+type OrganizationAdministrator struct {
+	ID             int                 // 管理员关联ID（整数）
+	User           *OrganizationMember // 用户信息（可空）
+	Access         *OrganizationAccess // 权限信息（可空）
+	OrganizationID int                 // 组织ID
+}
+
+// UpdateOrganizationRequest 更新组织请求参数
+// 说明：用于更新组织信息（包括组织名称和管理员）
+// 注意：Name 和 ManagerID 为可选，空字符串表示不修改；管理员权限ID默认为1（"管理员"权限）
+type UpdateOrganizationRequest struct {
+	TenantID   string // 租户ID（必需）
+	LocalOrgID string // 本地组织ID（必需）
+	Name       string // 组织名称（可选，空字符串表示不修改）
+	ManagerID  string // 管理员的本地用户ID（可选，空字符串表示不修改管理员）
+}

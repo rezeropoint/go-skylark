@@ -57,6 +57,27 @@ type Manager interface {
 	// 错误：如果组织不存在，返回 core.ErrOrgNotFound
 	DeleteOrganization(ctx context.Context, tenantID, localOrgID string) error
 
+	// UpdateOrganization 更新组织信息
+	// 流程：
+	//   1. 验证平台配置是否存在
+	//   2. 查询组织的 remote_org_id
+	//   3. 如果需要更新管理员（ManagerID 不为 nil）：
+	//      a. 获取分布式锁（防止并发修改）
+	//      b. 查询当前所有管理员
+	//      c. 转换新管理员的本地用户ID为远程用户ID
+	//      d. 添加新管理员（Skylark API）
+	//      e. 删除所有旧管理员（Skylark API，多次调用）
+	//      f. 释放分布式锁
+	//      g. 清理管理员缓存
+	//   4. 如果需要更新基本信息（Name 或 Description 不为 nil）：
+	//      - 调用 Skylark API: PATCH /api/v4/organizations/:id
+	// 参数：req - 更新请求（所有字段可选，nil 表示不修改）
+	// 返回：错误信息
+	// 说明：
+	//   - 使用分布式锁确保管理员更新的原子性
+	//   - 支持部分更新（只修改指定字段）
+	UpdateOrganization(ctx context.Context, req *core.UpdateOrganizationRequest) error
+
 	// GetRemoteOrgID 查询远程组织ID（内部使用）
 	// 流程：
 	//   1. 优先从缓存获取
@@ -92,6 +113,35 @@ type Manager interface {
 	//   - bool: 是否已同步（true=已同步，false=未同步）
 	//   - error: 错误信息（仅数据库错误，未同步不返回错误）
 	GetOrgSyncStatus(ctx context.Context, tenantID, localOrgID string) (bool, error)
+
+	// ========== 组织成员管理 ==========
+
+	// GetMembers 获取组织成员列表
+	// 流程：
+	//   1. 查询本地组织ID对应的远程组织ID
+	//   2. 优先从缓存获取成员列表
+	//   3. 缓存未命中则调用 Skylark API: GET /api/v4/organizations/:id/members
+	//   4. 回写缓存（TTL 5分钟）
+	// 参数：
+	//   - withDescendants: 是否包含子孙后代组织的成员
+	// 返回：成员列表
+	GetMembers(ctx context.Context, tenantID, localOrgID string, withDescendants bool) ([]*core.OrganizationMember, error)
+
+	// AddMembers 批量增加组织成员
+	// 流程：
+	//   1. 查询本地组织ID对应的远程组织ID
+	//   2. 调用 Skylark API: PUT /api/v4/organizations/:organization_id/members/add
+	//   3. 清除相关缓存（成员列表缓存）
+	// 返回：成功添加的成员ID列表
+	AddMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
+
+	// RemoveMembers 批量移除组织成员
+	// 流程：
+	//   1. 查询本地组织ID对应的远程组织ID
+	//   2. 调用 Skylark API: PUT /api/v4/organizations/:organization_id/members/remove
+	//   3. 清除相关缓存（成员列表缓存）
+	// 返回：成功移除的成员ID列表
+	RemoveMembers(ctx context.Context, tenantID, localOrgID string, memberIDs []int) ([]int, error)
 }
 
 // NewManager 创建组织管理器
@@ -101,8 +151,9 @@ type Manager interface {
 //   - cache: 缓存接口（用于缓存组织ID映射，TTL 30天）
 //   - getPlatformConfig: 获取平台配置的函数（用于获取 API BaseURL 和 Token）
 //   - getRemoteUserIDs: 批量查询远程用户ID的函数（用于转换本地用户ID为远程用户ID）
+//   - fillLocalUserIDMap: 批量反向转换远程用户ID为本地用户ID的函数（用于校验成员映射）
 //
 // 返回：组织管理器实例
-func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc) (Manager, error) {
-	return newOrganizationManager(config, db, cache, getPlatformConfig, getRemoteUserIDs)
+func NewManager(config Config, db sqlx.SqlConn, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc) (Manager, error) {
+	return newOrganizationManager(config, db, cache, getPlatformConfig, getRemoteUserIDs, fillLocalUserIDMap)
 }
