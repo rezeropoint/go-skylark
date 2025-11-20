@@ -48,34 +48,46 @@ func buildDurationStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []str
 	}
 
 	// 构建SQL（使用CTE先按Journey聚合，再统计）
+	// 说明：获取 category='proposed' 的状态来判断流程是否完成
 	query := fmt.Sprintf(`
-		WITH journey_stats AS (
+		WITH journey_proposed_status AS (
 			SELECT
 				slp_journey_id,
-				MIN(slp_created_at) as start_time,
-				MAX(slp_updated_at) as end_time,
-				MAX(slp_status) as final_status
+				slp_status as proposed_status
 			FROM %s
 			WHERE %s
-			GROUP BY slp_journey_id
+			  AND slp_category = '%s'
+		),
+		journey_stats AS (
+			SELECT
+				j.slp_journey_id,
+				MIN(a.slp_created_at) as start_time,
+				MAX(a.slp_updated_at) as end_time,
+				j.proposed_status
+			FROM journey_proposed_status j
+			JOIN %s a ON j.slp_journey_id = a.slp_journey_id
+			WHERE %s
+			GROUP BY j.slp_journey_id, j.proposed_status
 		)
 		SELECT
 			AVG(EXTRACT(EPOCH FROM (end_time - start_time))) as avg_duration,
 			MIN(EXTRACT(EPOCH FROM (end_time - start_time))) as min_duration,
 			MAX(EXTRACT(EPOCH FROM (end_time - start_time))) as max_duration,
 			COUNT(*) as total_count,
-			COUNT(*) FILTER (WHERE final_status = 'completed') as completed_count
+			COUNT(*) FILTER (WHERE proposed_status IN ('%s', '%s')) as completed_count
 		FROM journey_stats
-	`, tableName, whereConditions)
+	`, tableName, whereConditions, core.AssignmentCategoryProposed,
+		tableName, whereConditions,
+		core.AssignmentStatusFinished, core.AssignmentStatusAborted)
 
 	return query, args
 }
 
 // buildStatusStatsSQL 构建状态统计SQL
-// 说明：统计各状态的Journey数量，对于未完成事件按节点数区分待处理和处理中的虚拟状态
+// 说明：统计各状态的Journey数量，支持虚拟状态 pending/processing
 // 虚拟状态定义：
-//   - pending（待处理）：只有1个节点的未完成事件
-//   - processing（处理中）：有多个节点的未完成事件
+//   - pending（待处理）：流程未结束，且没有任何 category='processed' AND status='approved' 的节点
+//   - processing（处理中）：流程未结束，且有至少一个 category='processed' AND status='approved' 的节点
 //
 // 返回：SQL语句、参数列表
 func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
@@ -114,32 +126,40 @@ func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []strin
 		whereConditions = "1=1"
 	}
 
-	// 构建SQL（先聚合Journey，计算节点数和最新状态，再根据节点数区分虚拟状态）
+	// 构建SQL（获取流程状态 + 判断是否有 approved 节点）
 	query := fmt.Sprintf(`
-		WITH journey_aggregated AS (
+		WITH journey_proposed_status AS (
+			-- 获取每个 journey 的流程状态（来自 category='proposed' 的 assignment）
 			SELECT
 				slp_journey_id,
-				COUNT(DISTINCT slp_vertex_id) as node_count,
-				MAX(slp_status) as final_status
+				slp_status as proposed_status
+			FROM %s
+			WHERE %s
+			  AND slp_category = '%s'
+		),
+		journey_has_approved AS (
+			-- 判断每个 journey 是否有审批通过的节点
+			SELECT
+				slp_journey_id,
+				BOOL_OR(slp_category = '%s' AND slp_status = '%s') as has_approved
 			FROM %s
 			WHERE %s
 			GROUP BY slp_journey_id
 		),
 		journey_virtual_status AS (
 			SELECT
-				slp_journey_id,
-				node_count,
-				final_status,
+				p.slp_journey_id,
+				p.proposed_status,
+				COALESCE(a.has_approved, false) as has_approved,
 				CASE
-					-- 未完成事件：根据节点数区分虚拟状态
-					WHEN final_status NOT IN ('completed', 'rejected')
-						AND node_count = 1 THEN 'pending'
-					WHEN final_status NOT IN ('completed', 'rejected')
-						AND node_count > 1 THEN 'processing'
-					-- 已完成事件：保持原状态
-					ELSE final_status
+					-- 流程未结束：根据是否有 approved 区分虚拟状态
+					WHEN p.proposed_status NOT IN ('%s', '%s') AND NOT COALESCE(a.has_approved, false) THEN 'pending'
+					WHEN p.proposed_status NOT IN ('%s', '%s') AND COALESCE(a.has_approved, false) THEN 'processing'
+					-- 流程已结束：保持原状态
+					ELSE p.proposed_status
 				END as virtual_status
-			FROM journey_aggregated
+			FROM journey_proposed_status p
+			LEFT JOIN journey_has_approved a ON p.slp_journey_id = a.slp_journey_id
 		)
 		SELECT
 			virtual_status as slp_status,
@@ -147,7 +167,10 @@ func buildStatusStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []strin
 		FROM journey_virtual_status
 		GROUP BY virtual_status
 		ORDER BY count DESC
-	`, tableName, whereConditions)
+	`, tableName, whereConditions, core.AssignmentCategoryProposed,
+		core.AssignmentCategoryProcessed, core.AssignmentStatusApproved, tableName, whereConditions,
+		core.AssignmentStatusFinished, core.AssignmentStatusAborted,
+		core.AssignmentStatusFinished, core.AssignmentStatusAborted)
 
 	return query, args
 }
@@ -202,32 +225,35 @@ func buildTrendStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string
 		whereConditions = "1=1"
 	}
 
-	// 构建SQL（先聚合Journey，再按时间统计）
+	// 构建SQL（先获取 proposed 状态，再按时间统计）
+	// 说明：基于 category='proposed' 的状态判断流程是否完成
 	query := fmt.Sprintf(`
-		WITH journey_latest AS (
-			SELECT DISTINCT ON (slp_journey_id)
+		WITH journey_proposed_status AS (
+			SELECT
 				slp_journey_id,
-				slp_status,
+				slp_status as proposed_status,
 				slp_created_at
 			FROM %s
 			WHERE %s
-			ORDER BY slp_journey_id, slp_created_at DESC
+			  AND slp_category = '%s'
 		),
 		daily_stats AS (
 			SELECT
 				%s as date,
 				slp_journey_id,
-				slp_status
-			FROM journey_latest
+				proposed_status
+			FROM journey_proposed_status
 		)
 		SELECT
 			date::TEXT,
 			COUNT(*) as total_count,
-			COUNT(*) FILTER (WHERE slp_status = 'completed') as completed_count
+			COUNT(*) FILTER (WHERE proposed_status IN ('%s', '%s')) as completed_count
 		FROM daily_stats
 		GROUP BY date
 		ORDER BY date
-	`, tableName, whereConditions, dateFormat)
+	`, tableName, whereConditions, core.AssignmentCategoryProposed,
+		dateFormat,
+		core.AssignmentStatusFinished, core.AssignmentStatusAborted)
 
 	return query, args
 }
@@ -420,8 +446,11 @@ func buildOrgStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, 
 }
 
 // buildPendingStatsSQL 构建待处理事件统计SQL（实时查询）
-// 说明：按Journey聚合，统计只有1个节点的事件（未开始）和多个节点的事件（处理中）
-// 未开始定义：Journey只有1个不同的vertex_id（即只有发起节点）
+// 说明：统计未完成的流程，区分 pending（待处理）和 processing（处理中）
+// 分类标准：
+//   - pending（待处理）：流程未结束，且没有任何 category='processed' AND status='approved' 的节点
+//   - processing（处理中）：流程未结束，且有至少一个 category='processed' AND status='approved' 的节点
+//
 // 返回：SQL语句、参数列表
 func buildPendingStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []string, req *core.StatsCriteria) (string, []interface{}) {
 	tableName := eventConfig.GetRemoteTableName()
@@ -459,28 +488,40 @@ func buildPendingStatsSQL(eventConfig *core.EventConfig, allowedOrgValues []stri
 		whereConditions = "1=1"
 	}
 
-	// 构建SQL（使用CTE先按Journey聚合节点数，再统计）
-	// 排除已完成和已拒绝的事件，只统计待处理的
-	// 返回包含事件配置ID和事件名称的结果
+	// 构建SQL（获取未完成流程 + 判断是否有 approved 节点）
 	query := fmt.Sprintf(`
-		WITH journey_nodes AS (
+		WITH journey_proposed_status AS (
+			-- 获取未完成的 journey（基于 proposed 的状态）
 			SELECT
 				slp_journey_id,
-				COUNT(DISTINCT slp_vertex_id) as node_count,
-				MAX(slp_status) as final_status
+				slp_status as proposed_status
 			FROM %s
 			WHERE %s
-			  AND slp_status NOT IN ('completed', 'rejected')
+			  AND slp_category = '%s'
+			  AND slp_status NOT IN ('%s', '%s')
+		),
+		journey_has_approved AS (
+			-- 判断每个 journey 是否有审批通过的节点
+			SELECT
+				slp_journey_id,
+				BOOL_OR(slp_category = '%s' AND slp_status = '%s') as has_approved
+			FROM %s
+			WHERE %s
+			  AND slp_journey_id IN (SELECT slp_journey_id FROM journey_proposed_status)
 			GROUP BY slp_journey_id
 		)
 		SELECT
 			'%s' as event_config_id,
 			'%s' as event_name,
-			COUNT(*) FILTER (WHERE node_count = 1) as pending_count,
-			COUNT(*) FILTER (WHERE node_count > 1) as processing_count,
+			COUNT(*) FILTER (WHERE NOT COALESCE(a.has_approved, false)) as pending_count,
+			COUNT(*) FILTER (WHERE COALESCE(a.has_approved, false)) as processing_count,
 			COUNT(*) as total
-		FROM journey_nodes
-	`, tableName, whereConditions, eventConfig.ID, eventConfig.Name)
+		FROM journey_proposed_status p
+		LEFT JOIN journey_has_approved a ON p.slp_journey_id = a.slp_journey_id
+	`, tableName, whereConditions, core.AssignmentCategoryProposed,
+		core.AssignmentStatusFinished, core.AssignmentStatusAborted,
+		core.AssignmentCategoryProcessed, core.AssignmentStatusApproved, tableName, whereConditions,
+		eventConfig.ID, eventConfig.Name)
 
 	return query, args
 }

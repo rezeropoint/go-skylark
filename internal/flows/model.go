@@ -119,7 +119,7 @@ func (u *UserInfo) ToDomain(userIDMapping map[int]string) *core.FlowUser {
 type AssignmentResponse struct {
 	ID                       int64                  `json:"id"`                         // 任务ID
 	AssigneeID               int64                  `json:"assignee_id"`                // 处理人ID
-	Status                   string                 `json:"status"`                     // 任务状态（processing, completed）
+	Status                   string                 `json:"status"`                     // 任务状态（processing, finished, aborted, approved 等）
 	Category                 string                 `json:"category"`                   // 任务类型（proposed, processed, cc）
 	Read                     bool                   `json:"read"`                       // 是否已读
 	CurrentDurationThreshold *string                `json:"current_duration_threshold"` // 当前持续时间阈值

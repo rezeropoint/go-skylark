@@ -148,7 +148,7 @@ func (m *queryManager) buildQuerySQLWithConfig(req *core.QueryRequest, eventConf
 		argIndex++
 	}
 
-	// 状态筛选
+	// 状态筛选（支持虚拟状态 pending/processing 和 Skylark 原生状态）
 	if len(req.Status) > 0 {
 		hasPending := false
 		hasProcessing := false
@@ -164,8 +164,13 @@ func (m *queryManager) buildQuerySQLWithConfig(req *core.QueryRequest, eventConf
 			}
 		}
 
+		// 处理虚拟状态 pending/processing
 		if hasPending || hasProcessing {
-			subWhereParts := []string{"slp_status NOT IN ('completed', 'rejected')"}
+			// 构建子查询条件：流程未结束（基于 proposed 的 status）
+			subWhereParts := []string{
+				fmt.Sprintf("%s = '%s'", quoteFieldName("slp_category"), core.AssignmentCategoryProposed),
+				fmt.Sprintf("%s NOT IN ('%s', '%s')", quoteFieldName("slp_status"), core.AssignmentStatusFinished, core.AssignmentStatusAborted),
+			}
 			if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
 				subWhereParts = append(subWhereParts, fmt.Sprintf("%s = ANY($%d)", quoteFieldName(*eventConfig.OrgFieldName), argIndex))
 				args = append(args, pq.Array(allowedOrgValues))
@@ -173,28 +178,48 @@ func (m *queryManager) buildQuerySQLWithConfig(req *core.QueryRequest, eventConf
 			}
 
 			subWhereClause := strings.Join(subWhereParts, " AND ")
-			var havingClause string
-			if hasPending && hasProcessing {
-				havingClause = ""
-			} else if hasPending {
-				havingClause = "HAVING COUNT(DISTINCT slp_vertex_id) = 1"
-			} else {
-				havingClause = "HAVING COUNT(DISTINCT slp_vertex_id) > 1"
-			}
 
-			if havingClause != "" {
-				subQuery := fmt.Sprintf(`a.%s IN (
-					SELECT slp_journey_id FROM %s WHERE %s GROUP BY slp_journey_id %s
-				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause, havingClause)
-				whereClauses = append(whereClauses, subQuery)
-			} else {
+			// pending/processing 判断逻辑
+			if hasPending && hasProcessing {
+				// 查询所有未完成的（pending + processing）
 				subQuery := fmt.Sprintf(`a.%s IN (
 					SELECT DISTINCT slp_journey_id FROM %s WHERE %s
 				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause)
 				whereClauses = append(whereClauses, subQuery)
+			} else if hasPending {
+				// pending：无 category='processed' AND status='approved'
+				subQuery := fmt.Sprintf(`a.%s IN (
+					SELECT j.slp_journey_id
+					FROM %s j
+					WHERE %s
+					  AND NOT EXISTS (
+						SELECT 1 FROM %s p
+						WHERE p.slp_journey_id = j.slp_journey_id
+						  AND p.slp_category = '%s'
+						  AND p.slp_status = '%s'
+					  )
+				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause,
+					eventConfig.GetRemoteTableName(), core.AssignmentCategoryProcessed, core.AssignmentStatusApproved)
+				whereClauses = append(whereClauses, subQuery)
+			} else { // hasProcessing
+				// processing：有 category='processed' AND status='approved'
+				subQuery := fmt.Sprintf(`a.%s IN (
+					SELECT j.slp_journey_id
+					FROM %s j
+					WHERE %s
+					  AND EXISTS (
+						SELECT 1 FROM %s p
+						WHERE p.slp_journey_id = j.slp_journey_id
+						  AND p.slp_category = '%s'
+						  AND p.slp_status = '%s'
+					  )
+				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause,
+					eventConfig.GetRemoteTableName(), core.AssignmentCategoryProcessed, core.AssignmentStatusApproved)
+				whereClauses = append(whereClauses, subQuery)
 			}
 		}
 
+		// 处理 Skylark 原生状态（基于 proposed 的 status）
 		if len(realStatuses) > 0 {
 			whereClauses = append(whereClauses, fmt.Sprintf("a.%s = ANY($%d)", quoteFieldName("slp_status"), argIndex))
 			args = append(args, pq.Array(realStatuses))
@@ -284,7 +309,7 @@ func (m *queryManager) countJourneysWithConfig(ctx context.Context, remoteDB sql
 		argIndex++
 	}
 
-	// 状态筛选（支持虚拟状态 pending/processing 和实际状态）
+	// 状态筛选（支持虚拟状态 pending/processing 和 Skylark 原生状态）
 	if len(req.Status) > 0 {
 		// 检测是否包含虚拟状态 'pending' 或 'processing'
 		hasPending := false
@@ -301,10 +326,13 @@ func (m *queryManager) countJourneysWithConfig(ctx context.Context, remoteDB sql
 			}
 		}
 
-		// 如果包含虚拟状态，使用子查询（基于 node_count）
+		// 处理虚拟状态 pending/processing
 		if hasPending || hasProcessing {
-			// 构建子查询的WHERE条件
-			subWhereParts := []string{"slp_status NOT IN ('completed', 'rejected')"}
+			// 构建子查询条件：流程未结束（基于 proposed 的 status）
+			subWhereParts := []string{
+				fmt.Sprintf("%s = '%s'", quoteFieldName("slp_category"), core.AssignmentCategoryProposed),
+				fmt.Sprintf("%s NOT IN ('%s', '%s')", quoteFieldName("slp_status"), core.AssignmentStatusFinished, core.AssignmentStatusAborted),
+			}
 
 			// 子查询也需要应用组织权限过滤
 			if eventConfig.OrgFieldName != nil && len(allowedOrgValues) > 0 {
@@ -315,39 +343,47 @@ func (m *queryManager) countJourneysWithConfig(ctx context.Context, remoteDB sql
 
 			subWhereClause := strings.Join(subWhereParts, " AND ")
 
-			// 构建 HAVING 子句
-			var havingClause string
+			// pending/processing 判断逻辑
 			if hasPending && hasProcessing {
-				// 查询所有未完成的（不需要 HAVING）
-				havingClause = ""
-			} else if hasPending {
-				havingClause = "HAVING COUNT(DISTINCT slp_vertex_id) = 1"
-			} else { // hasProcessing
-				havingClause = "HAVING COUNT(DISTINCT slp_vertex_id) > 1"
-			}
-
-			// 构建子查询
-			if havingClause != "" {
+				// 查询所有未完成的（pending + processing）
 				subQuery := fmt.Sprintf(`%s IN (
-					SELECT slp_journey_id
-					FROM %s
-					WHERE %s
-					GROUP BY slp_journey_id
-					%s
-				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause, havingClause)
-				whereClauses = append(whereClauses, subQuery)
-			} else {
-				// pending + processing 的情况，等价于所有未完成的事件
-				subQuery := fmt.Sprintf(`%s IN (
-					SELECT DISTINCT slp_journey_id
-					FROM %s
-					WHERE %s
+					SELECT DISTINCT slp_journey_id FROM %s WHERE %s
 				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause)
+				whereClauses = append(whereClauses, subQuery)
+			} else if hasPending {
+				// pending：无 category='processed' AND status='approved'
+				subQuery := fmt.Sprintf(`%s IN (
+					SELECT j.slp_journey_id
+					FROM %s j
+					WHERE %s
+					  AND NOT EXISTS (
+						SELECT 1 FROM %s p
+						WHERE p.slp_journey_id = j.slp_journey_id
+						  AND p.slp_category = '%s'
+						  AND p.slp_status = '%s'
+					  )
+				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause,
+					eventConfig.GetRemoteTableName(), core.AssignmentCategoryProcessed, core.AssignmentStatusApproved)
+				whereClauses = append(whereClauses, subQuery)
+			} else { // hasProcessing
+				// processing：有 category='processed' AND status='approved'
+				subQuery := fmt.Sprintf(`%s IN (
+					SELECT j.slp_journey_id
+					FROM %s j
+					WHERE %s
+					  AND EXISTS (
+						SELECT 1 FROM %s p
+						WHERE p.slp_journey_id = j.slp_journey_id
+						  AND p.slp_category = '%s'
+						  AND p.slp_status = '%s'
+					  )
+				)`, quoteFieldName("slp_journey_id"), eventConfig.GetRemoteTableName(), subWhereClause,
+					eventConfig.GetRemoteTableName(), core.AssignmentCategoryProcessed, core.AssignmentStatusApproved)
 				whereClauses = append(whereClauses, subQuery)
 			}
 		}
 
-		// 如果还有实际的 Skylark 状态，添加状态过滤
+		// 处理 Skylark 原生状态（基于 proposed 的 status）
 		if len(realStatuses) > 0 {
 			whereClauses = append(whereClauses, fmt.Sprintf("%s = ANY($%d)", quoteFieldName("slp_status"), argIndex))
 			args = append(args, pq.Array(realStatuses))

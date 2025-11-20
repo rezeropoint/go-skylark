@@ -39,7 +39,7 @@ type StatsCriteria struct {
 	// 通用筛选参数
 	DateFrom *time.Time // 开始日期（可选，基于slp_created_at筛选）
 	DateTo   *time.Time // 结束日期（可选，基于slp_created_at筛选）
-	Status   string     // 按状态筛选（可选，英文状态值如"completed"）
+	Status   string     // 按状态筛选（可选，英文状态值如"finished"、"aborted"、"processing"或虚拟状态"pending"）
 
 	// 特定统计参数
 	GroupBy string // 聚合维度：day/week/month（趋势统计使用）

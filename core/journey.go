@@ -9,7 +9,7 @@ package core
 type Journey struct {
 	ID              int64     // 流程记录ID
 	SN              string    // 流程编号
-	Status          string    // 流程状态（processing, completed, aborted, stashed）
+	Status          string    // 流程状态（processing,  aborted, stashed）
 	CurrentVertexID int64     // 当前节点ID
 	FlowID          int64     // 流程ID
 	CreatedAt       string    // 创建时间
@@ -34,7 +34,7 @@ type JourneyDetail struct {
 	// 基础信息
 	ID              int64  // 流程记录ID
 	SN              string // 流程编号
-	Status          string // 流程状态（processing, completed, aborted, stashed）
+	Status          string // 流程状态（processing, aborted, stashed）
 	CurrentVertexID int64  // 当前节点ID
 	FlowID          int64  // 流程ID
 	CreatedAt       string // 创建时间（ISO 8601 格式）
@@ -69,11 +69,17 @@ type Attachment struct {
 // 流程状态常量
 // 说明：
 // - Journey.Status 使用这些常量表示流程整体状态
-// - Assignment.Status 使用 StatusProcessing/StatusCompleted 表示任务处理状态
-// - Assignment.moments[].status 使用操作状态表示每次变化的具体操作
+// - Assignment 中 category='proposed' 的 status 也使用这些常量（与 Journey 状态一致）
+// - Assignment 中 category='processed' 的 status 使用节点状态常量（见 assignment.go）
+// - Assignment.moments[].status 使用操作状态常量（StatusProposed/StatusApproved 等）
 // - Assignment 是 Journey 的变化记录，它们共用同一套状态体系
+//
+// 关键区分：
+// - slp_category='proposed' 的 assignment 代表整个流程的状态（与 Journey 相同）
+// - slp_category='processed' 的 assignment 代表单个节点的处理状态
 const (
 	// Journey 整体状态（API 返回的 journey.status）
+	// 同时也用于 Assignment（category='proposed'）的 slp_status
 	StatusStashed    = "stashed"    // 草稿（未提交）
 	StatusProcessing = "processing" // 进行中
 	StatusFinished   = "finished"   // 已完成
