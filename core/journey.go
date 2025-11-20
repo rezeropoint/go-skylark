@@ -168,19 +168,19 @@ type JourneySearchResponse struct {
 //   - Assignment 表示任务（可能有多个待处理人）
 //   - Moment 表示历史记录（某个人在某个时间点执行的操作）
 type Moment struct {
-	ID               int64   // 记录ID
-	AssignmentID     int64   // 任务ID
-	JourneyID        int64   // 流程记录ID
-	VertexID         int64   // 节点ID
-	VertexName       *string // 节点名称（可为空）
-	Status           string  // 操作状态（approved/refused/transferred/cancelled等）
-	StatusTranslated string  // 操作状态中文翻译
-	OperatorID       string  // 操作人ID（本地用户ID）
-	OperatorName     *string // 操作人姓名（可为空）
-	Comment          *string // 处理意见（可为空）
-	CreatedAt        string  // 创建时间（ISO 8601格式）
-	UpdatedAt        string  // 更新时间（ISO 8601格式）
-	Duration         *int    // 处理时长（秒，可为空）
+	ID           int64   // 记录ID
+	AssignmentID int64   // 任务ID
+	JourneyID    int64   // 流程记录ID
+	VertexID     int64   // 节点ID
+	VertexName   *string // 节点名称（可为空）
+	Status       string  // 操作状态中文显示名称（如 "处理中"）
+	StatusKey    string  // 操作状态英文键值（如 "processing"，对应 StatusProcessing/StatusApproved 等常量）
+	OperatorID   string  // 操作人ID（本地用户ID）
+	OperatorName *string // 操作人姓名（可为空）
+	Comment      *string // 处理意见（可为空）
+	CreatedAt    string  // 创建时间（ISO 8601格式）
+	UpdatedAt    string  // 更新时间（ISO 8601格式）
+	Duration     *int    // 处理时长（秒，可为空）
 }
 
 // ProcessingUser 当前处理人信息（领域模型）

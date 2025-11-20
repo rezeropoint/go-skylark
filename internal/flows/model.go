@@ -430,14 +430,14 @@ type MomentUserInfo struct {
 //   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
 func (m *MomentResponse) ToDomain(userIDMapping map[int]string) *core.Moment {
 	moment := &core.Moment{
-		ID:               m.ID,
-		JourneyID:        m.JourneyID,
-		VertexID:         m.VertexID,
-		Status:           m.Status,
-		StatusTranslated: core.TranslateStatus(m.Status), // 翻译状态为中文
-		Comment:          m.Comment,
-		CreatedAt:        m.CreatedAt,
-		UpdatedAt:        m.UpdatedAt,
+		ID:        m.ID,
+		JourneyID: m.JourneyID,
+		VertexID:  m.VertexID,
+		Status:    core.TranslateStatus(m.Status), // 中文显示名称
+		StatusKey: m.Status,                       // 英文键值
+		Comment:   m.Comment,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
 	}
 
 	// 从 assignment 中提取 AssignmentID
