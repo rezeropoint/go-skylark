@@ -254,7 +254,7 @@ func (m *queryManager) buildQuerySQLWithConfig(req *core.QueryRequest, eventConf
 	sqlBuilder.WriteString(fmt.Sprintf("    a.%s,\n", quoteFieldName("slp_assignment_id")))
 	sqlBuilder.WriteString(fmt.Sprintf("    a.%s,\n", quoteFieldName("slp_status")))
 	sqlBuilder.WriteString(fmt.Sprintf("    a.%s,\n", quoteFieldName("slp_vertex_id")))
-	sqlBuilder.WriteString("    COALESCE(v.alias_name, v.name, '') as vertex_name,\n")
+	sqlBuilder.WriteString("    COALESCE(v.name, '') as vertex_name,\n")
 	sqlBuilder.WriteString(fmt.Sprintf("    a.%s,\n", quoteFieldName("slp_created_at")))
 	sqlBuilder.WriteString("    row_to_json(a)::text as business_data\n")
 	sqlBuilder.WriteString(fmt.Sprintf("FROM %s a\n", eventConfig.GetRemoteTableName()))
