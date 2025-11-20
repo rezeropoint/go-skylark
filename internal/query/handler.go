@@ -302,7 +302,7 @@ func (m *queryManager) QueryEventData(ctx context.Context, req *core.QueryReques
 		}, nil
 	}
 
-	// 7. 构建动态 SQL（DISTINCT ON Journey聚合）
+	// 7. 构建动态 SQL（CTE两阶段查询：分页 + 聚合业务数据）
 	querySQL, queryArgs, err := m.buildQuerySQLWithConfig(req, &eventConfigWithFields.EventConfig, visibleFields, allowedOrgValues)
 	if err != nil {
 		return nil, err
@@ -314,8 +314,8 @@ func (m *queryManager) QueryEventData(ctx context.Context, req *core.QueryReques
 		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
 	}
 
-	// 9. 执行查询并解析结果
-	records, err := m.executeQueryAndParse(ctx, remoteDB, querySQL, queryArgs)
+	// 9. 执行查询并聚合业务数据（合并每个 journey 的所有 assignment）
+	records, err := m.executeQueryAndAggregate(ctx, remoteDB, querySQL, queryArgs, visibleFields)
 	if err != nil {
 		return nil, fmt.Errorf("查询远程事件数据失败: %w", err)
 	}
