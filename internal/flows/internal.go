@@ -239,6 +239,7 @@ func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.Sk
 func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 	ctx context.Context,
 	skylarkFlowAddress core.SkylarkAPIContext,
+	remoteUserID int,
 	originalData map[string]core.TypedValue,
 	fieldMappings map[string]core.FieldMapping,
 ) (UpdateJourneyStatusRequest, error) {
@@ -256,7 +257,7 @@ func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 				"entries_attributes": entries,
 			},
 		},
-		Method: "patch",
+		UserID: remoteUserID,
 		Token:  skylarkFlowAddress.AuthHeader,
 	}, nil
 }
@@ -264,6 +265,7 @@ func (f *skylarkFlowRegistry) buildRouteRequestForUpdate(
 // buildOperationRequest 构建第二次请求：执行操作（approve/refuse/transfer/cancel）
 func (f *skylarkFlowRegistry) buildOperationRequest(
 	skylarkFlowAddress core.SkylarkAPIContext,
+	remoteUserID int,
 	operation string,
 	nextVertexID int,
 	comment string,
@@ -277,12 +279,15 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 	// 创建符合第二次请求的数据结构
 	return UpdateJourneyStatusRequest{
 		Assignment: UpdateAssignment{
+			ResponseAttributes: map[string]any{
+				"entries_attributes": []any{},
+			},
 			Operation:         operation,
 			NextVertexID:      nextVertexID,
 			Comment:           comment,
 			CarbonCopyUserIDs: carbonCopyUserIDs,
 		},
-		Method: "patch",
+		UserID: remoteUserID,
 		Token:  skylarkFlowAddress.AuthHeader,
 	}, nil
 }

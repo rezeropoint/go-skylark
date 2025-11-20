@@ -541,12 +541,11 @@ type NextVertices struct {
 	NextVerticesID int `json:"id"` // 下一个节点ID
 }
 
-// UpdateJourneyStatusRequest 表示更新流程任务状态请求
+// UpdateJourneyStatusRequest 表示更新流程任务状态请求（第一次和第二次请求共用）
 type UpdateJourneyStatusRequest struct {
-	Assignment UpdateAssignment `json:"assignment"`        // 任务更新信息
-	Method     string           `json:"_method"`           // HTTP方法覆盖，固定为 "patch"
-	UserID     int              `json:"user_id,omitempty"` // 用户ID（仅在第二次请求时需要）
-	Token      string           `header:"Authorization"`   // 认证令牌
+	Assignment UpdateAssignment `json:"assignment"`          // 任务更新信息
+	UserID     int              `json:"user_id"`             // 用户ID（操作人ID）
+	Token      string           `header:"Authorization"`     // 认证令牌
 }
 
 // UpdateAssignment 表示任务更新分配信息

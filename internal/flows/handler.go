@@ -243,6 +243,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	routeRequest, err := f.buildRouteRequestForUpdate(
 		ctx,
 		skylarkFlowAddress,
+		remoteUserID,
 		options.Data,
 		fieldMappings,
 	)
@@ -251,7 +252,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 
 	// 发送第一次请求
-	routeResult, err := httpc.Do(ctx, http.MethodPost, apiURL, routeRequest)
+	routeResult, err := httpc.Do(ctx, http.MethodPut, apiURL, routeRequest)
 	if err != nil {
 		return fmt.Errorf("%w: 第一次请求失败: %v", core.ErrHTTPRequestFailed, err)
 	}
@@ -275,7 +276,8 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 
 	operationRequest, err := f.buildOperationRequest(
 		skylarkFlowAddress,
-		string(operation), // 转换为字符串
+		remoteUserID,        // 操作人的远程用户ID
+		string(operation),   // 转换为字符串
 		options.NextVertexID,
 		options.Comment,
 		carbonCopyRemoteUserIDs, // 使用远程用户ID
@@ -285,7 +287,7 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 
 	// 发送第二次请求
-	operationResult, err := httpc.Do(ctx, http.MethodPost, apiURL, operationRequest)
+	operationResult, err := httpc.Do(ctx, http.MethodPut, apiURL, operationRequest)
 	if err != nil {
 		return fmt.Errorf("%w: 第二次请求失败: %v", core.ErrHTTPRequestFailed, err)
 	}
