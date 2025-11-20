@@ -1,6 +1,8 @@
 package flows
 
 import (
+	"fmt"
+
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
 
@@ -206,26 +208,49 @@ type AttachmentDetail struct {
 // 参数：
 //   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
 func (j *JourneyDetailResponse) ToDomain(userIDMapping map[int]string) *core.JourneyDetail {
+	return j.ToDomainWithFieldNames(userIDMapping, nil)
+}
+
+// ToDomainWithFieldNames 将 API 响应转换为领域模型（使用字段名作为键）
+// 参数：
+//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
+//   - fieldMappings: 字段映射（字段名 → 字段信息），用于将字段ID转换为字段名
+func (j *JourneyDetailResponse) ToDomainWithFieldNames(userIDMapping map[int]string, fieldMappings map[string]core.FieldMapping) *core.JourneyDetail {
+	// 构建字段ID到字段名的反向映射
+	fieldIDToName := make(map[string]string)
+	if fieldMappings != nil {
+		for fieldName, fieldInfo := range fieldMappings {
+			fieldIDToName[fmt.Sprintf("%d", fieldInfo.ID)] = fieldName
+		}
+	}
+
 	// 构建业务数据（优先级：ExportedValue > TextValue > Value）
 	businessData := make(map[string]interface{})
 	for fieldID, fieldValue := range j.Response.CachedValues {
+		// 确定使用的键（优先使用字段名，如果没有映射则使用字段ID）
+		key := fieldID
+		if fieldName, ok := fieldIDToName[fieldID]; ok && fieldName != "" {
+			key = fieldName
+		}
+
+		// 提取值
 		if len(fieldValue.ExportedValue) > 0 {
 			if len(fieldValue.ExportedValue) == 1 {
-				businessData[fieldID] = fieldValue.ExportedValue[0]
+				businessData[key] = fieldValue.ExportedValue[0]
 			} else {
-				businessData[fieldID] = fieldValue.ExportedValue
+				businessData[key] = fieldValue.ExportedValue
 			}
 		} else if len(fieldValue.TextValue) > 0 {
 			if len(fieldValue.TextValue) == 1 {
-				businessData[fieldID] = fieldValue.TextValue[0]
+				businessData[key] = fieldValue.TextValue[0]
 			} else {
-				businessData[fieldID] = fieldValue.TextValue
+				businessData[key] = fieldValue.TextValue
 			}
 		} else if len(fieldValue.Value) > 0 {
 			if len(fieldValue.Value) == 1 {
-				businessData[fieldID] = fieldValue.Value[0]
+				businessData[key] = fieldValue.Value[0]
 			} else {
-				businessData[fieldID] = fieldValue.Value
+				businessData[key] = fieldValue.Value
 			}
 		}
 	}
@@ -373,33 +398,31 @@ type JourneySearchAPIResponse []JourneyResponse
 
 // MomentResponse Skylark API 返回的审批历史记录结构体
 // 职责：处理 GET /api/v4/yaw/journeys/:id/moments 响应的 JSON 反序列化
+// 说明：实际 API 返回的数据结构（与文档不一致）
 type MomentResponse struct {
-	ID           int64         `json:"id"`            // 记录ID
-	AssignmentID int64         `json:"assignment_id"` // 任务ID
-	JourneyID    int64         `json:"journey_id"`    // 流程记录ID
-	VertexID     int64         `json:"vertex_id"`     // 节点ID
-	Status       string        `json:"status"`        // 操作状态（approved/refused/transferred/cancelled等）
-	OperatorID   int64         `json:"operator_id"`   // 操作人ID
-	Comment      *string       `json:"comment"`       // 处理意见（可为空）
-	CreatedAt    string        `json:"created_at"`    // 创建时间（ISO 8601格式）
-	UpdatedAt    string        `json:"updated_at"`    // 更新时间（ISO 8601格式）
-	Duration     *int          `json:"duration"`      // 处理时长（秒，可为空）
-	Vertex       *VertexInfo   `json:"vertex"`        // 节点信息（可为空）
-	Operator     *OperatorInfo `json:"operator"`      // 操作人信息（可为空）
+	ID         int64                `json:"id"`          // 记录ID
+	JourneyID  int64                `json:"journey_id"`  // 流程记录ID
+	VertexID   int64                `json:"vertex_id"`   // 节点ID
+	Status     string               `json:"status"`      // 操作状态（proposed/approved/step_in/refused等）
+	Comment    *string              `json:"comment"`     // 处理意见（可为空）
+	CreatedAt  string               `json:"created_at"`  // 创建时间（ISO 8601格式）
+	UpdatedAt  string               `json:"updated_at"`  // 更新时间（ISO 8601格式）
+	Assignment *MomentAssignmentInfo `json:"assignment"` // 关联的任务信息（可为空）
+	User       *MomentUserInfo      `json:"user"`        // 操作人信息（可为空）
 }
 
-// VertexInfo API 返回的节点信息结构体
+// MomentAssignmentInfo API 返回的 Moment 关联任务信息结构体
 // 说明：用于 MomentResponse 的嵌套对象
-type VertexInfo struct {
-	ID   int64  `json:"id"`   // 节点ID
-	Name string `json:"name"` // 节点名称
+type MomentAssignmentInfo struct {
+	ID       int64 `json:"id"`        // 任务ID
+	VertexID int64 `json:"vertex_id"` // 节点ID
 }
 
-// OperatorInfo API 返回的操作人信息结构体
+// MomentUserInfo API 返回的 Moment 操作人信息结构体
 // 说明：用于 MomentResponse 的嵌套对象
-type OperatorInfo struct {
-	ID   int64  `json:"id"`   // 操作人ID
-	Name string `json:"name"` // 操作人姓名
+type MomentUserInfo struct {
+	ID   int64  `json:"id"`   // 用户ID
+	Name string `json:"name"` // 用户名称
 }
 
 // ToDomain 将 API 响应转换为领域模型
@@ -407,28 +430,28 @@ type OperatorInfo struct {
 //   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
 func (m *MomentResponse) ToDomain(userIDMapping map[int]string) *core.Moment {
 	moment := &core.Moment{
-		ID:           m.ID,
-		AssignmentID: m.AssignmentID,
-		JourneyID:    m.JourneyID,
-		VertexID:     m.VertexID,
-		Status:       m.Status,
-		OperatorID:   userIDMapping[int(m.OperatorID)], // 直接使用本地用户ID（找不到为空字符串）
-		Comment:      m.Comment,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
-		Duration:     m.Duration,
+		ID:               m.ID,
+		JourneyID:        m.JourneyID,
+		VertexID:         m.VertexID,
+		Status:           m.Status,
+		StatusTranslated: core.TranslateStatus(m.Status), // 翻译状态为中文
+		Comment:          m.Comment,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
 	}
 
-	// 转换节点信息
-	if m.Vertex != nil {
-		moment.VertexName = &m.Vertex.Name
+	// 从 assignment 中提取 AssignmentID
+	if m.Assignment != nil {
+		moment.AssignmentID = m.Assignment.ID
 	}
 
-	// 转换操作人信息
-	if m.Operator != nil {
-		moment.OperatorName = &m.Operator.Name
+	// 从 user 中提取操作人信息
+	if m.User != nil {
+		moment.OperatorID = userIDMapping[int(m.User.ID)] // 转换为本地用户ID
+		moment.OperatorName = &m.User.Name
 	}
 
+	// 注意：实际 API 不返回 VertexName 和 Duration，保持为空/零值
 	return moment
 }
 

@@ -84,6 +84,7 @@ const (
 
 	// Assignment 操作状态（moments[].status，表示每次变化的具体操作）
 	StatusProposed    = "proposed"    // 提议（发起）
+	StatusStepIn      = "step_in"     // 介入
 	StatusApproved    = "approved"    // 已通过
 	StatusRefused     = "refused"     // 已回退
 	StatusTransferred = "transferred" // 已转交
@@ -105,6 +106,8 @@ var StatusTranslationMap = map[string]string{
 	StatusFinished:    "已完成",
 	StatusAborted:     "已终止",
 	StatusCompleted:   "已完成",
+	StatusProposed:    "已发起",
+	StatusStepIn:      "已介入",
 	StatusApproved:    "已通过",
 	StatusRefused:     "已回退",
 	StatusTransferred: "已转交",
@@ -165,18 +168,19 @@ type JourneySearchResponse struct {
 //   - Assignment 表示任务（可能有多个待处理人）
 //   - Moment 表示历史记录（某个人在某个时间点执行的操作）
 type Moment struct {
-	ID           int64   // 记录ID
-	AssignmentID int64   // 任务ID
-	JourneyID    int64   // 流程记录ID
-	VertexID     int64   // 节点ID
-	VertexName   *string // 节点名称（可为空）
-	Status       string  // 操作状态（approved/refused/transferred/cancelled等）
-	OperatorID   string  // 操作人ID（本地用户ID）
-	OperatorName *string // 操作人姓名（可为空）
-	Comment      *string // 处理意见（可为空）
-	CreatedAt    string  // 创建时间（ISO 8601格式）
-	UpdatedAt    string  // 更新时间（ISO 8601格式）
-	Duration     *int    // 处理时长（秒，可为空）
+	ID               int64   // 记录ID
+	AssignmentID     int64   // 任务ID
+	JourneyID        int64   // 流程记录ID
+	VertexID         int64   // 节点ID
+	VertexName       *string // 节点名称（可为空）
+	Status           string  // 操作状态（approved/refused/transferred/cancelled等）
+	StatusTranslated string  // 操作状态中文翻译
+	OperatorID       string  // 操作人ID（本地用户ID）
+	OperatorName     *string // 操作人姓名（可为空）
+	Comment          *string // 处理意见（可为空）
+	CreatedAt        string  // 创建时间（ISO 8601格式）
+	UpdatedAt        string  // 更新时间（ISO 8601格式）
+	Duration         *int    // 处理时长（秒，可为空）
 }
 
 // ProcessingUser 当前处理人信息（领域模型）

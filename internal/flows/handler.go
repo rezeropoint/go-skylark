@@ -471,18 +471,24 @@ func (f *skylarkFlowRegistry) GetJourneyDetail(
 		return nil, err
 	}
 
-	// 6. 提取远程用户ID（发起人）
+	// 6. 获取字段映射（用于将字段ID转换为字段名）
+	fieldMappings, err := f.getFlowFieldMappings(ctx, skylarkAddress, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("获取字段映射失败: %w", err)
+	}
+
+	// 7. 提取远程用户ID（发起人）
 	userIDMapping := map[int]string{
 		int(journeyDetailResp.User.ID): "",
 	}
 
-	// 7. 批量转换（远程ID → 本地ID），填充映射
+	// 8. 批量转换（远程ID → 本地ID），填充映射
 	if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
 		return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
 	}
 
-	// 8. 使用映射转换为领域模型
-	journeyDetail := journeyDetailResp.ToDomain(userIDMapping)
+	// 9. 使用映射转换为领域模型（传入字段映射）
+	journeyDetail := journeyDetailResp.ToDomainWithFieldNames(userIDMapping, fieldMappings)
 
 	return journeyDetail, nil
 }
@@ -899,7 +905,10 @@ func (f *skylarkFlowRegistry) GetJourneyMoments(
 
 	// 8. 提取所有唯一的远程用户ID（使用通用函数）
 	userIDMapping := core.ExtractUserIDsToMap(momentResponses, func(mr MomentResponse) int {
-		return int(mr.OperatorID)
+		if mr.User != nil {
+			return int(mr.User.ID)
+		}
+		return 0
 	})
 
 	// 9. 批量转换（远程ID → 本地ID），填充映射
@@ -971,11 +980,14 @@ func (f *skylarkFlowRegistry) GetCurrentProcessingUsers(
 		return nil, core.ErrJourneyNotFound
 	}
 
-	// 7. 解析响应
-	var userResponses []ProcessingUserResponse
-	if err := httputils.ReadJSONResponse(resp, &userResponses); err != nil {
+	// 7. 解析响应（返回单个用户对象）
+	var singleUser ProcessingUserResponse
+	if err := httputils.ReadJSONResponse(resp, &singleUser); err != nil {
 		return nil, err
 	}
+
+	// 转为数组格式以便后续处理
+	userResponses := []ProcessingUserResponse{singleUser}
 
 	// 8. 提取所有唯一的远程用户ID（使用通用函数）
 	userIDMapping := core.ExtractUserIDsToMap(userResponses, func(ur ProcessingUserResponse) int {
