@@ -199,10 +199,10 @@ type ProcessingUser struct {
 
 // UpdateJourneyStatusOptions 更新流程状态选项（领域模型）
 // 说明：用于更新流程任务状态时提供的可选参数
-// 用途：UpdateJourneyStatus 接口的参数，支持审批意见、下一节点、抄送等
+// 用途：UpdateJourneyStatus 接口的参数，支持审批意见、抄送等
+// 注意：下一个节点ID会从第一次请求的响应中自动获取（类似 CreateFlow）
 type UpdateJourneyStatusOptions struct {
 	Comment           string                // 处理意见
-	NextVertexID      int                   // 下一个节点ID
 	CarbonCopyUserIDs []string              // 抄送者ID列表（本地用户ID）
 	Data              map[string]TypedValue // 字段数据
 }

@@ -16,13 +16,13 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	config               Config                          // 配置
-	cache                core.CacheInterface              // 缓存接口
-	getPlatformConfig    core.GetPlatformConfigFunc       // 获取平台配置的函数（依赖注入）
-	getRemoteUserIDs     core.GetRemoteUserIDsFunc        // 获取远程用户ID的函数（依赖注入，用于入参转换）
-	fillLocalUserIDMap   core.FillLocalUserIDMapFunc      // 批量反向转换函数（依赖注入，用于出参转换）
-	getRemoteDB          core.GetRemoteDBFunc             // 获取远程数据库连接的函数（依赖注入，用于性能优化）
-	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc  // 获取已配置事件的flow_id列表的函数（依赖注入，用于筛选流程实例）
+	config                Config                         // 配置
+	cache                 core.CacheInterface            // 缓存接口
+	getPlatformConfig     core.GetPlatformConfigFunc     // 获取平台配置的函数（依赖注入）
+	getRemoteUserIDs      core.GetRemoteUserIDsFunc      // 获取远程用户ID的函数（依赖注入，用于入参转换）
+	fillLocalUserIDMap    core.FillLocalUserIDMapFunc    // 批量反向转换函数（依赖注入，用于出参转换）
+	getRemoteDB           core.GetRemoteDBFunc           // 获取远程数据库连接的函数（依赖注入，用于性能优化）
+	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc // 获取已配置事件的flow_id列表的函数（依赖注入，用于筛选流程实例）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
@@ -53,12 +53,12 @@ func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatfor
 	}
 
 	return &skylarkFlowRegistry{
-		config:               config,
-		cache:                cache,
-		getPlatformConfig:    getPlatformConfig,
-		getRemoteUserIDs:     getRemoteUserIDs,
-		fillLocalUserIDMap:   fillLocalUserIDMap,
-		getRemoteDB:          getRemoteDB,
+		config:                config,
+		cache:                 cache,
+		getPlatformConfig:     getPlatformConfig,
+		getRemoteUserIDs:      getRemoteUserIDs,
+		fillLocalUserIDMap:    fillLocalUserIDMap,
+		getRemoteDB:           getRemoteDB,
 		listConfiguredFlowIDs: listConfiguredFlowIDs,
 	}, nil
 }
@@ -258,10 +258,19 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	}
 	defer routeResult.Body.Close()
 
-	// 使用 httputils 统一处理第一次请求的响应（route 请求无需解析响应体）
-	if err := httputils.ReadJSONResponse(routeResult, nil); err != nil {
+	// 解析第一次请求的响应，获取 next_vertices
+	var routeResp FlowRouteResponse
+	if err := httputils.ReadJSONResponse(routeResult, &routeResp); err != nil {
 		return fmt.Errorf("第一次请求失败: %w", err)
 	}
+
+	// 检查 NextVertices 是否为空
+	if len(routeResp.NextVertices) == 0 {
+		return fmt.Errorf("%w: 响应为: %+v", core.ErrNoNextVertices, routeResp)
+	}
+
+	// 从响应中获取下一个节点ID
+	nextVertexID := routeResp.NextVertices[0].NextVerticesID
 
 	// 第二次请求：执行操作（approve/refuse/transfer/cancel）
 	// 转换抄送者本地用户ID为远程用户ID
@@ -276,9 +285,9 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 
 	operationRequest, err := f.buildOperationRequest(
 		skylarkFlowAddress,
-		remoteUserID,        // 操作人的远程用户ID
-		string(operation),   // 转换为字符串
-		options.NextVertexID,
+		remoteUserID,      // 操作人的远程用户ID
+		string(operation), // 转换为字符串
+		nextVertexID,      // 使用第一次响应中的 next_vertex_id
 		options.Comment,
 		carbonCopyRemoteUserIDs, // 使用远程用户ID
 	)

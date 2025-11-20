@@ -257,10 +257,9 @@ if err != nil {
 ### 更新流程状态
 
 ```go
-// 1. 准备更新选项
+// 1. 准备更新选项（注意：NextVertexID 会从第一次请求的响应中自动获取，无需手动指定）
 options := flows.UpdateJourneyStatusOptions{
     Comment:      "审批通过",
-    NextVertexID: 789,
     Data: map[string]core.TypedValue{
         "approval_result": {
             Type:  "string",

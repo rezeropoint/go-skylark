@@ -9,14 +9,14 @@ import (
 // SearchJourneysRequest 搜索流程记录请求结构体
 // 说明：用于 POST /api/v4/yaw/flows/:id/journeys/search 请求体
 type SearchJourneysRequest struct {
-	Page        int     `json:"page"`                   // 页码
-	PerPage     int     `json:"per_page"`               // 每页数量
-	Status      string  `json:"status,omitempty"`       // 状态过滤（可选）
-	Keyword     string  `json:"keyword,omitempty"`      // 关键词搜索（可选）
-	InitiatorID *int64  `json:"initiator_id,omitempty"` // 发起人ID（可选）
-	CreatedFrom string  `json:"created_from,omitempty"` // 创建时间起始（可选）
-	CreatedTo   string  `json:"created_to,omitempty"`   // 创建时间结束（可选）
-	Token       string  `header:"Authorization"`        // 认证令牌
+	Page        int    `json:"page"`                   // 页码
+	PerPage     int    `json:"per_page"`               // 每页数量
+	Status      string `json:"status,omitempty"`       // 状态过滤（可选）
+	Keyword     string `json:"keyword,omitempty"`      // 关键词搜索（可选）
+	InitiatorID *int64 `json:"initiator_id,omitempty"` // 发起人ID（可选）
+	CreatedFrom string `json:"created_from,omitempty"` // 创建时间起始（可选）
+	CreatedTo   string `json:"created_to,omitempty"`   // 创建时间结束（可选）
+	Token       string `header:"Authorization"`        // 认证令牌
 }
 
 // FlowInfoModel 是数据库查询专用结构体（基础设施层）
@@ -400,15 +400,15 @@ type JourneySearchAPIResponse []JourneyResponse
 // 职责：处理 GET /api/v4/yaw/journeys/:id/moments 响应的 JSON 反序列化
 // 说明：实际 API 返回的数据结构（与文档不一致）
 type MomentResponse struct {
-	ID         int64                `json:"id"`          // 记录ID
-	JourneyID  int64                `json:"journey_id"`  // 流程记录ID
-	VertexID   int64                `json:"vertex_id"`   // 节点ID
-	Status     string               `json:"status"`      // 操作状态（proposed/approved/step_in/refused等）
-	Comment    *string              `json:"comment"`     // 处理意见（可为空）
-	CreatedAt  string               `json:"created_at"`  // 创建时间（ISO 8601格式）
-	UpdatedAt  string               `json:"updated_at"`  // 更新时间（ISO 8601格式）
+	ID         int64                 `json:"id"`         // 记录ID
+	JourneyID  int64                 `json:"journey_id"` // 流程记录ID
+	VertexID   int64                 `json:"vertex_id"`  // 节点ID
+	Status     string                `json:"status"`     // 操作状态（proposed/approved/step_in/refused等）
+	Comment    *string               `json:"comment"`    // 处理意见（可为空）
+	CreatedAt  string                `json:"created_at"` // 创建时间（ISO 8601格式）
+	UpdatedAt  string                `json:"updated_at"` // 更新时间（ISO 8601格式）
 	Assignment *MomentAssignmentInfo `json:"assignment"` // 关联的任务信息（可为空）
-	User       *MomentUserInfo      `json:"user"`        // 操作人信息（可为空）
+	User       *MomentUserInfo       `json:"user"`       // 操作人信息（可为空）
 }
 
 // MomentAssignmentInfo API 返回的 Moment 关联任务信息结构体
@@ -543,9 +543,9 @@ type NextVertices struct {
 
 // UpdateJourneyStatusRequest 表示更新流程任务状态请求（第一次和第二次请求共用）
 type UpdateJourneyStatusRequest struct {
-	Assignment UpdateAssignment `json:"assignment"`          // 任务更新信息
-	UserID     int              `json:"user_id"`             // 用户ID（操作人ID）
-	Token      string           `header:"Authorization"`     // 认证令牌
+	Assignment UpdateAssignment `json:"assignment"`      // 任务更新信息
+	UserID     int              `json:"user_id"`         // 用户ID（操作人ID）
+	Token      string           `header:"Authorization"` // 认证令牌
 }
 
 // UpdateAssignment 表示任务更新分配信息

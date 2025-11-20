@@ -41,9 +41,9 @@ func (m *fieldMetadataModel) ToDomain() *core.FieldMetadata {
 // flowInfoModel 用于扫描 Flow 信息查询结果（数据库模型）
 // 对应远程 Skylark 数据库 flows 表
 type flowInfoModel struct {
-	ID          int `db:"id"`           // 流程ID
-	Title       string `db:"title"`      // 流程名称
-	NamespaceID int `db:"namespace_id"` // 命名空间ID
+	ID          int    `db:"id"`           // 流程ID
+	Title       string `db:"title"`        // 流程名称
+	NamespaceID int    `db:"namespace_id"` // 命名空间ID
 }
 
 // ToDomain 转换为领域模型
