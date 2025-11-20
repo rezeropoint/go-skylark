@@ -85,7 +85,7 @@ type QueryRequest struct {
 	Keyword   string   // 关键词搜索
 	SortField string   // 排序字段
 	SortOrder string   // 排序方向：asc/desc
-	Status    []string // 状态筛选（可选，支持多个状态：processing/finished/cancelled等）
+	Status    []string // 流程状态筛选（可选）：支持流程状态（processing/finished/aborted）和虚拟状态（pending/processing）；注意：不支持节点状态（如 approved/refused 等）
 }
 
 // QueryResponse 事件数据查询响应

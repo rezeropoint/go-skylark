@@ -30,6 +30,9 @@ go mod tidy                             # 整理依赖
 - ❌ Flows 模块依赖注入不完整（需要 getPlatformConfig、getRemoteUserIDs、getRemoteDB）
 - ❌ **将系统管理功能暴露在 Engine 层**（组织/用户管理应在 Admin 层）
 - ❌ **将业务流程功能暴露在 Admin 层**（流程/查询/统计应在 Engine 层）
+- ❌ **混淆 slp_status 和 slp_category**（状态判断必须结合 category 字段）
+- ❌ **使用不存在的状态值**（如 `completed`/`rejected`，应使用 `finished`/`aborted`）
+- ❌ **基于节点数判断虚拟状态**（应基于是否有 `category='processed' AND status='approved'`）
 
 ## 项目简介
 
@@ -201,7 +204,9 @@ SDK 提供两个对外入口，职责明确分离：
 - 构建 Skylark PostgreSQL 查询（`assignments_{flow_id}` 表）
 - **Journey 聚合**：使用 `DISTINCT ON (slp_journey_id)` 获取最新 Assignment
 - **组织权限过滤**：通过 OrgMapping 计算用户可见的远程组织值，构建 `WHERE org_field = ANY($1)` 条件
-- **虚拟状态支持**：`pending`（只有1个节点）、`processing`（多个节点）
+- **虚拟状态支持**：
+  - `pending`（待处理）：流程未结束 + 无 `category='processed' AND status='approved'` 的节点
+  - `processing`（处理中）：流程未结束 + 有 `category='processed' AND status='approved'` 的节点
 - **用户名批量转换**：Redis 批量查询远程 users 表（TTL 24h）
 
 #### internal/stats（统计分析）
@@ -440,7 +445,8 @@ type Config struct {
 assignments_123
 ├─ slp_assignment_id    # 主键
 ├─ slp_journey_id       # 流程实例ID（聚合键）
-├─ slp_status           # 状态
+├─ slp_category         # 类别（proposed/processed/cc）⭐ 关键字段
+├─ slp_status           # 状态（processing/finished/aborted/approved/refused 等）⭐ 关键字段
 ├─ slp_vertex_id        # 节点ID
 ├─ slp_user_id          # 处理人ID
 └─ 业务字段...
@@ -456,6 +462,73 @@ users
 ├─ id
 └─ name                 # 用户姓名
 ```
+
+**关键字段说明**：
+- **`slp_category`**（类别）：
+  - `proposed`：发起任务，代表**整个流程的状态**
+  - `processed`：处理任务，代表**单个节点的状态**
+  - `cc`：抄送任务
+- **`slp_status`**（状态）：
+  - 当 `category='proposed'` 时：`processing`（进行中）、`finished`（已完成）、`aborted`（已终止）
+  - 当 `category='processed'` 时：`processing`（处理中）、`approved`（已同意）、`refused`（已拒绝）、`transferred`（已转交）等
+
+### Skylark 数据模型与状态常量
+
+#### 数据模型核心理解
+
+```
+一个 Journey（流程实例）包含多个 Assignment（任务记录）：
+
+┌─ Assignment（发起节点）
+│  ├─ slp_category: 'proposed'   ← 代表整个流程的状态
+│  └─ slp_status: 'processing' | 'finished' | 'aborted'
+│
+├─ Assignment（审批/处理节点）
+│  ├─ slp_category: 'processed'  ← 只代表单个节点的状态
+│  └─ slp_status: 'approved' | 'refused' | 'transferred' | 'processing' | ...
+│
+└─ ...（更多 processed 节点）
+```
+
+#### 状态常量定义
+
+**Category 常量**（`core/assignment.go`）：
+```go
+AssignmentCategoryProposed  = "proposed"   // 发起任务
+AssignmentCategoryProcessed = "processed"  // 处理任务
+AssignmentCategoryCC        = "cc"         // 抄送任务
+```
+
+**流程状态常量**（`core/journey.go`，用于 Journey 和 `category='proposed'` 的 Assignment）：
+```go
+StatusProcessing = "processing"  // 流程进行中
+StatusFinished   = "finished"    // 流程已完成
+StatusAborted    = "aborted"     // 流程已终止
+```
+
+**节点状态常量**（`core/assignment.go`，仅用于 `category='processed'`）：
+```go
+AssignmentStatusApproved     = "approved"      // 审批同意
+AssignmentStatusRefused      = "refused"       // 审批拒绝
+AssignmentStatusTransferred  = "transferred"   // 转交
+AssignmentStatusWithdrawn    = "withdrawn"     // 撤回
+AssignmentStatusResubmitted  = "resubmitted"   // 重新提交
+AssignmentStatusAutoApproved = "auto_approved" // 自动审批通过
+```
+
+#### 虚拟状态判断规则
+
+**pending（待处理）**：
+- 条件：`category='proposed'` 的 `status NOT IN ('finished', 'aborted')`
+- 且：不存在 `category='processed' AND status='approved'` 的 assignment
+
+**processing（处理中）**：
+- 条件：`category='proposed'` 的 `status NOT IN ('finished', 'aborted')`
+- 且：存在至少一个 `category='processed' AND status='approved'` 的 assignment
+
+**关键原则**：
+- ❌ **错误**：基于节点数判断（`COUNT(DISTINCT slp_vertex_id)`）
+- ✅ **正确**：基于是否有审批通过的节点（`category='processed' AND status='approved'`）
 
 ### 缓存键设计（所有键定义在 core/*.go）
 
