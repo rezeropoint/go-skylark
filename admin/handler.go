@@ -22,10 +22,7 @@ type adminEngine struct {
 }
 
 // newAdminEngine 创建新的系统管理引擎实例
-func newAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (*adminEngine, error) {
-	if config == nil {
-		return nil, core.ErrConfigNil
-	}
+func newAdminEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) (*adminEngine, error) {
 	if db == nil {
 		return nil, core.ErrLocalDBNil
 	}
@@ -35,15 +32,11 @@ func newAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (
 
 	// 1. 初始化平台管理器（核心依赖，最先初始化）
 	// 平台管理器为组织和用户管理提供 API 配置能力
-	platformConfig := platform.Config{}
-	if config.Platform != nil {
-		platformConfig = *config.Platform
-	}
 	// 设置默认值
-	if platformConfig.PlatformConfigCacheTTL == 0 {
-		platformConfig.PlatformConfigCacheTTL = 30 * time.Minute
+	if config.Platform.PlatformConfigCacheTTL == 0 {
+		config.Platform.PlatformConfigCacheTTL = 30 * time.Minute
 	}
-	platformMgr, err := platform.NewManager(platformConfig, db, cache)
+	platformMgr, err := platform.NewManager(config.Platform, db, cache)
 	if err != nil {
 		return nil, err
 	}

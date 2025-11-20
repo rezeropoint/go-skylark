@@ -518,6 +518,6 @@ type SkylarkEngine interface {
 //   - config: 配置信息（包含 Cache、Query、Stats 配置）
 //   - db: 本地数据库连接（用于存储配置数据）
 //   - redisClient: Redis 客户端（用于缓存）
-func NewSkylarkEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (SkylarkEngine, error) {
+func NewSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) (SkylarkEngine, error) {
 	return newSkylarkEngine(config, db, redisClient)
 }

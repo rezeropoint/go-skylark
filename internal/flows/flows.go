@@ -153,6 +153,6 @@ type SkylarkFlowRegistry interface {
 //   - fillLocalUserIDMap: 批量反向转换函数（通过依赖注入，用于出参转换）
 //   - getRemoteDB: 获取远程数据库连接的函数（通过依赖注入，用于性能优化）
 //   - listConfiguredFlowIDs: 获取已配置事件的flow_id列表的函数（通过依赖注入，用于筛选流程实例）
-func NewSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc) (SkylarkFlowRegistry, error) {
+func NewSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc) (SkylarkFlowRegistry, error) {
 	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs, fillLocalUserIDMap, getRemoteDB, listConfiguredFlowIDs)
 }

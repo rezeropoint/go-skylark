@@ -316,6 +316,6 @@ type AdminEngine interface {
 //   - 在使用 admin 包之前，系统管理微服务需要先配置平台信息
 //   - 平台配置存储在数据库的 skylark_platform_configs 表中
 //   - admin 包内部会初始化 platform.Manager 为组织和用户管理提供能力
-func NewAdminEngine(config *Config, db sqlx.SqlConn, redisClient *redis.Redis) (AdminEngine, error) {
+func NewAdminEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) (AdminEngine, error) {
 	return newAdminEngine(config, db, redisClient)
 }

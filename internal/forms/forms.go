@@ -16,6 +16,6 @@ type SkylarkFormRegistry interface {
 // 参数:
 //   - config: 配置信息
 //   - cache: 缓存接口
-func NewSkylarkFormRegistry(config *Config, cache core.CacheInterface) (SkylarkFormRegistry, error) {
+func NewSkylarkFormRegistry(config Config, cache core.CacheInterface) (SkylarkFormRegistry, error) {
 	return newSkylarkFormRegistry(config, cache)
 }

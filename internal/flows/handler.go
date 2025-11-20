@@ -16,7 +16,7 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	config               *Config                          // 配置
+	config               Config                          // 配置
 	cache                core.CacheInterface              // 缓存接口
 	getPlatformConfig    core.GetPlatformConfigFunc       // 获取平台配置的函数（依赖注入）
 	getRemoteUserIDs     core.GetRemoteUserIDsFunc        // 获取远程用户ID的函数（依赖注入，用于入参转换）
@@ -26,11 +26,7 @@ type skylarkFlowRegistry struct {
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config *Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc) (*skylarkFlowRegistry, error) {
-	if config == nil {
-		return nil, core.ErrConfigNil
-	}
-
+func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc) (*skylarkFlowRegistry, error) {
 	if getPlatformConfig == nil {
 		return nil, fmt.Errorf("getPlatformConfig 不能为 nil")
 	}

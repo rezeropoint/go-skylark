@@ -14,17 +14,15 @@ import (
 
 // skylarkFormRegistry 流程注册表结构
 type skylarkFormRegistry struct {
-	cache core.CacheInterface
+	config Config
+	cache  core.CacheInterface
 }
 
 // newSkylarkFormRegistry 创建新的流程注册表
-func newSkylarkFormRegistry(config *Config, cache core.CacheInterface) (*skylarkFormRegistry, error) {
-	if config == nil {
-		return nil, core.ErrConfigNil
-	}
-
+func newSkylarkFormRegistry(config Config, cache core.CacheInterface) (*skylarkFormRegistry, error) {
 	return &skylarkFormRegistry{
-		cache: cache,
+		config: config,
+		cache:  cache,
 	}, nil
 }
 

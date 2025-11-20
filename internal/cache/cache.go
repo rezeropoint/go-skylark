@@ -8,6 +8,6 @@ import (
 // 参数:
 //   - redisClient: Redis 客户端
 //   - config: 缓存配置
-func NewSkylarkCache(redisClient *redis.Redis, config *Config) *SkylarkCache {
+func NewSkylarkCache(redisClient *redis.Redis, config Config) *SkylarkCache {
 	return newSkylarkCache(redisClient, config)
 }
