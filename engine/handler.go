@@ -106,6 +106,7 @@ func newSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) 
 		eventMgr.GetWithFields,
 		mappingMgr.ListOrgMappings,
 		userMgr.FillLocalUserIDMap,
+		eventMgr.ListConfiguredFlowIDs,
 		cache,
 	)
 	if err != nil {

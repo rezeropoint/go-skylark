@@ -25,6 +25,7 @@ type Manager interface {
 //   - getEventConfig: 获取事件配置（含字段）的函数（由 Event Manager 提供）
 //   - listOrgMappings: 获取组织映射列表的函数（由 Mapping Manager 提供）
 //   - fillLocalUserIDMap: 批量反向转换远程用户ID为本地用户ID的函数（由 User Manager 提供）
+//   - listConfiguredFlowIDs: 获取已配置事件的flow_id列表的函数（由 Event Manager 提供）
 //   - cache: 缓存接口（必须提供，用于缓存）
 func NewManager(
 	config Config,
@@ -33,7 +34,8 @@ func NewManager(
 	getEventConfig core.GetEventConfigWithFieldsFunc,
 	listOrgMappings core.ListOrgMappingsFunc,
 	fillLocalUserIDMap core.FillLocalUserIDMapFunc,
+	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc,
 	cache core.CacheInterface,
 ) (Manager, error) {
-	return newQueryManager(config, db, getRemoteDB, getEventConfig, listOrgMappings, fillLocalUserIDMap, cache)
+	return newQueryManager(config, db, getRemoteDB, getEventConfig, listOrgMappings, fillLocalUserIDMap, listConfiguredFlowIDs, cache)
 }

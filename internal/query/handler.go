@@ -13,13 +13,14 @@ import (
 
 // queryManager 远程查询管理器实现
 type queryManager struct {
-	config             Config                            // 配置参数
-	dbConn             sqlx.SqlConn                      // 本地数据库连接（查询事件配置、字段配置、组织映射）
-	getRemoteDB        core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
-	getEventConfig     core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
-	listOrgMappings    core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
-	fillLocalUserIDMap core.FillLocalUserIDMapFunc       // 批量反向转换远程用户ID为本地用户ID的函数（由 User Manager 提供）
-	cache              core.CacheInterface               // 缓存接口（统一缓存管理）
+	config                Config                            // 配置参数
+	dbConn                sqlx.SqlConn                      // 本地数据库连接（查询事件配置、字段配置、组织映射）
+	getRemoteDB           core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
+	getEventConfig        core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
+	listOrgMappings       core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
+	fillLocalUserIDMap    core.FillLocalUserIDMapFunc       // 批量反向转换远程用户ID为本地用户ID的函数（由 User Manager 提供）
+	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc    // 获取已配置事件的flow_id列表的函数（由 Event Manager 提供）
+	cache                 core.CacheInterface               // 缓存接口（统一缓存管理）
 }
 
 // newQueryManager 创建远程查询管理器
@@ -30,6 +31,7 @@ func newQueryManager(
 	getEventConfig core.GetEventConfigWithFieldsFunc,
 	listOrgMappings core.ListOrgMappingsFunc,
 	fillLocalUserIDMap core.FillLocalUserIDMapFunc,
+	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc,
 	cache core.CacheInterface,
 ) (*queryManager, error) {
 	// 验证必填参数
@@ -44,6 +46,9 @@ func newQueryManager(
 	}
 	if fillLocalUserIDMap == nil {
 		return nil, fmt.Errorf("fillLocalUserIDMap 函数不能为空")
+	}
+	if listConfiguredFlowIDs == nil {
+		return nil, fmt.Errorf("listConfiguredFlowIDs 函数不能为空")
 	}
 
 	// 缓存接口必须提供
@@ -73,13 +78,14 @@ func newQueryManager(
 	}
 
 	manager := &queryManager{
-		config:             config,
-		dbConn:             db,
-		getRemoteDB:        getRemoteDB,
-		getEventConfig:     getEventConfig,
-		listOrgMappings:    listOrgMappings,
-		fillLocalUserIDMap: fillLocalUserIDMap,
-		cache:              cache,
+		config:                config,
+		dbConn:                db,
+		getRemoteDB:           getRemoteDB,
+		getEventConfig:        getEventConfig,
+		listOrgMappings:       listOrgMappings,
+		fillLocalUserIDMap:    fillLocalUserIDMap,
+		listConfiguredFlowIDs: listConfiguredFlowIDs,
+		cache:                 cache,
 	}
 
 	return manager, nil
@@ -87,7 +93,7 @@ func newQueryManager(
 
 // 远程流程查询
 
-// GetFlowList 获取远程flows列表（供前端配置使用）
+// GetFlowList 获取远程flows列表（只返回已配置事件的flows）
 func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error) {
 	// 1. 获取远程数据库连接
 	remoteDB, err := m.getRemoteDB(ctx, tenantID)
@@ -110,15 +116,22 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 	var flows []*core.FlowInfo
 	flows, err = m.cache.GetFlowList(ctx, tenantID, namespaceID)
 	if err == nil && flows != nil {
+		// 筛选：只保留已配置事件的flows（从缓存获取也需要筛选）
+		filteredFlows, err := m.filterConfiguredFlows(ctx, tenantID, flows)
+		if err != nil {
+			return nil, fmt.Errorf("筛选已配置flows失败: %w", err)
+		}
+
 		logx.WithContext(ctx).WithFields(
 			logx.Field("module", "query_manager"),
 			logx.Field("operation", "get_flow_list"),
 			logx.Field("tenant_id", tenantID),
 			logx.Field("namespace_id", namespaceID),
 			logx.Field("source", "cache"),
-			logx.Field("count", len(flows)),
-		).Info("从缓存获取 flows 列表成功")
-		return flows, nil
+			logx.Field("total_count", len(flows)),
+			logx.Field("filtered_count", len(filteredFlows)),
+		).Info("从缓存获取并筛选 flows 列表成功")
+		return filteredFlows, nil
 	}
 
 	// 4. 查询远程数据库（移除 flow_version 字段，排除 flow_version = '0' 的记录）
@@ -146,9 +159,15 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		flows = []*core.FlowInfo{}
 	}
 
-	// 6. 写入缓存
+	// 6. 写入缓存（缓存所有flows，不筛选）
 	if len(flows) > 0 {
 		_ = m.cache.SetFlowList(ctx, tenantID, namespaceID, flows, int(m.config.FlowListCacheTTL.Seconds()))
+	}
+
+	// 7. 筛选：只保留已配置事件的flows
+	filteredFlows, err := m.filterConfiguredFlows(ctx, tenantID, flows)
+	if err != nil {
+		return nil, fmt.Errorf("筛选已配置flows失败: %w", err)
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -157,10 +176,11 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		logx.Field("tenant_id", tenantID),
 		logx.Field("namespace_id", namespaceID),
 		logx.Field("source", "database"),
-		logx.Field("count", len(flows)),
-	).Info("查询远程 flows 列表成功")
+		logx.Field("total_count", len(flows)),
+		logx.Field("filtered_count", len(filteredFlows)),
+	).Info("查询并筛选远程 flows 列表成功")
 
-	return flows, nil
+	return filteredFlows, nil
 }
 
 // GetFlowFields 获取远程flow字段列表（供前端配置使用）
