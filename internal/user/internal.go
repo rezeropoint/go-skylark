@@ -161,20 +161,26 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 	// 1. 遍历查询反向缓存
 	for _, remoteUserID := range remoteUserIDs {
 		localUserID, err := m.cache.GetUserIDMappingReverse(ctx, tenantID, remoteUserID)
-		if err == nil {
-			// 缓存命中
+		if err == nil && localUserID != "" {
+			// 缓存命中且值有效
 			tempMap[remoteUserID] = localUserID
 			logx.WithContext(ctx).WithFields(
 				logx.Field("remote_user_id", remoteUserID),
 				logx.Field("local_user_id", localUserID),
 			).Info("反向缓存命中")
 		} else {
-			// 缓存未命中，记录
+			// 缓存未命中或值为空，需要查询数据库
 			missedRemoteUserIDs = append(missedRemoteUserIDs, remoteUserID)
-			logx.WithContext(ctx).WithFields(
-				logx.Field("remote_user_id", remoteUserID),
-				logx.Field("error", err.Error()),
-			).Info("反向缓存未命中")
+			if err != nil {
+				logx.WithContext(ctx).WithFields(
+					logx.Field("remote_user_id", remoteUserID),
+					logx.Field("error", err.Error()),
+				).Info("反向缓存未命中")
+			} else {
+				logx.WithContext(ctx).WithFields(
+					logx.Field("remote_user_id", remoteUserID),
+				).Info("反向缓存值为空,需查询数据库")
+			}
 		}
 	}
 

@@ -46,6 +46,10 @@ func (c *SkylarkCache) GetOrgIDMappingReverse(ctx context.Context, tenantID stri
 		return "", err
 	}
 
+	if val == "" {
+		return "", fmt.Errorf("缓存值为空")
+	}
+
 	return val, nil
 }
 

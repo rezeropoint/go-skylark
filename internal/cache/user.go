@@ -19,6 +19,10 @@ func (f *SkylarkCache) GetUserName(ctx context.Context, tenantID string, userID 
 		return "", err
 	}
 
+	if val == "" {
+		return "", fmt.Errorf("缓存值为空")
+	}
+
 	return val, nil
 }
 
@@ -63,6 +67,10 @@ func (c *SkylarkCache) GetUserIDMappingReverse(ctx context.Context, tenantID str
 	val, err := c.redisClient.GetCtx(ctx, key)
 	if err != nil {
 		return "", err
+	}
+
+	if val == "" {
+		return "", fmt.Errorf("缓存值为空")
 	}
 
 	return val, nil
