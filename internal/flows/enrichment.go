@@ -191,14 +191,14 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 }
 
 // fetchFlowInfoFromAPI 从 Skylark API 获取 flow 信息
-// 说明：调用已封装的 GetFlowDetail 接口，只提取必要字段
+// 说明：调用已封装的 getFlowDetail 接口，只提取必要字段
 func (f *skylarkFlowRegistry) fetchFlowInfoFromAPI(
 	ctx context.Context,
 	tenantID string,
 	flowID int64,
 ) (*core.FlowInfo, error) {
-	// 调用已实现的 GetFlowDetail 接口
-	flowDetail, err := f.GetFlowDetail(ctx, tenantID, flowID)
+	// 调用已实现的 getFlowDetail 接口
+	flowDetail, err := f.getFlowDetail(ctx, tenantID, flowID)
 	if err != nil {
 		return nil, err
 	}

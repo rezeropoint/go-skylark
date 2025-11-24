@@ -3,6 +3,7 @@ package flows
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 	"github.com/rezeropoint/go-skylark/v2/internal/httputils"
 	"github.com/rezeropoint/go-skylark/v2/internal/images"
 
+	"github.com/zeromicro/go-zero/core/collection"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpc"
 )
 
@@ -124,7 +127,11 @@ func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkF
 	fieldMappings, found, err := f.cache.GetFieldMappingsFromCache(ctx, cacheKey)
 	if err != nil {
 		// 缓存查询出错，记录错误但继续执行，不影响正常流程
-		fmt.Printf("从缓存获取字段映射时发生错误: %v\n", err)
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_field_mappings"),
+			logx.Field("cache_key", cacheKey),
+			logx.Field("error", err.Error()),
+		).Error("从缓存获取字段映射时发生错误")
 	} else if found {
 		// 缓存命中，直接返回
 		return fieldMappings, nil
@@ -152,7 +159,11 @@ func (f *skylarkFlowRegistry) getFlowFieldMappings(ctx context.Context, skylarkF
 	// 将结果存入缓存
 	if cacheErr := f.cache.SaveFieldMappingsToCache(ctx, cacheKey, fieldMappings); cacheErr != nil {
 		// 缓存保存失败只记录错误，不影响正常流程
-		fmt.Printf("保存字段映射到缓存时发生错误: %v\n", cacheErr)
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_field_mappings"),
+			logx.Field("cache_key", cacheKey),
+			logx.Field("error", cacheErr.Error()),
+		).Error("保存字段映射到缓存时发生错误")
 	}
 
 	return fieldMappings, nil
@@ -290,4 +301,475 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 		UserID: remoteUserID,
 		Token:  skylarkFlowAddress.AuthHeader,
 	}, nil
+}
+
+// extractPendingNodes 从 assignments 中提取待处理节点（内部方法）
+// 说明：
+//   - 筛选条件：category='processed' AND status='processing'
+//   - 自动补充节点名称（通过 vertices 映射）
+//   - 自动补充处理人姓名（通过用户映射）
+//
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID
+//   - flowID: 流程ID
+//   - assignments: 任务列表
+//   - vertices: 节点信息映射（用于补充节点名称）
+//
+// 返回:
+//   - []*core.PendingNode: 待处理节点列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) extractPendingNodes(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	assignments []*core.Assignment,
+	vertices map[int64]*core.FlowVertex,
+) ([]*core.PendingNode, error) {
+	// 1. 筛选待处理任务
+	// 条件：category='processed' AND status='processing'
+	pendingAssignments := make([]*core.Assignment, 0)
+	for _, a := range assignments {
+		if a.Category == core.AssignmentCategoryProcessed && a.Status == core.AssignmentStatusProcessing {
+			pendingAssignments = append(pendingAssignments, a)
+		}
+	}
+
+	// 2. 快速返回：没有待处理任务
+	if len(pendingAssignments) == 0 {
+		return []*core.PendingNode{}, nil
+	}
+
+	// 3. 按节点聚合（一个节点可能有多个待处理人）
+	// 键：vertexID，值：任务列表
+	vertexAssignmentsMap := make(map[int64][]*core.Assignment)
+	for _, a := range pendingAssignments {
+		vertexAssignmentsMap[a.VertexID] = append(vertexAssignmentsMap[a.VertexID], a)
+	}
+
+	// 4. 批量查询用户名
+	// 4.1 收集所有唯一的用户ID
+	uniqueUserIDs := collection.NewSet[string]()
+	for _, nodeAssignments := range vertexAssignmentsMap {
+		for _, a := range nodeAssignments {
+			uniqueUserIDs.Add(a.AssigneeID)
+		}
+	}
+
+	// 4.2 转换为数组
+	userIDList := uniqueUserIDs.Keys()
+
+	// 4.3 批量查询用户名（优先从缓存获取，未命中时查询远程数据库）
+	remoteDB, err := f.getRemoteDB(ctx, tenantID)
+	if err != nil {
+		// 远程数据库连接失败不影响主流程，只记录日志
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_pending_nodes"),
+			logx.Field("tenant_id", tenantID),
+			logx.Field("error", err.Error()),
+		).Error("获取远程数据库连接失败，无法查询用户名")
+	}
+
+	var userNameMap map[string]string
+	if remoteDB != nil {
+		userNameMap, err = f.cache.BatchGetUserNames(ctx, remoteDB, tenantID, userIDList, 86400) // TTL: 24小时
+		if err != nil {
+			// 查询用户名失败不影响主流程，只记录日志
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "flows_pending_nodes"),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("user_count", len(userIDList)),
+				logx.Field("error", err.Error()),
+			).Error("批量查询用户名失败")
+			userNameMap = make(map[string]string) // 使用空映射
+		}
+	} else {
+		userNameMap = make(map[string]string) // 使用空映射
+	}
+
+	// 5. 构建待处理节点列表
+	pendingNodes := make([]*core.PendingNode, 0, len(vertexAssignmentsMap))
+	for vertexID, nodeAssignments := range vertexAssignmentsMap {
+		// 提取处理人ID列表
+		assigneeIDs := make([]string, len(nodeAssignments))
+		for i, a := range nodeAssignments {
+			assigneeIDs[i] = a.AssigneeID
+		}
+
+		// 构建处理人姓名列表
+		assigneeNames := make([]string, len(nodeAssignments))
+		for i, a := range nodeAssignments {
+			if name, ok := userNameMap[a.AssigneeID]; ok {
+				assigneeNames[i] = name // 使用真实姓名
+			} else {
+				assigneeNames[i] = a.AssigneeID // 降级：使用用户ID
+			}
+		}
+
+		// 获取节点名称（从传入的 vertices 映射）
+		vertexName := ""
+		if vertex, ok := vertices[vertexID]; ok {
+			vertexName = vertex.Name
+		}
+
+		// 构建待处理节点
+		pendingNode := &core.PendingNode{
+			VertexID:      vertexID,
+			VertexName:    vertexName,
+			AssigneeIDs:   assigneeIDs,
+			AssigneeNames: assigneeNames, // 使用批量查询的用户名
+			CreatedAt:     nodeAssignments[0].CreatedAt,
+		}
+
+		pendingNodes = append(pendingNodes, pendingNode)
+	}
+
+	return pendingNodes, nil
+}
+
+// getJourneyAssignments 获取流程节点处理信息列表（内部方法）
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - []*core.Assignment: 任务列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) getJourneyAssignments(
+	ctx context.Context,
+	tenantID string,
+	journeyID int64,
+) ([]*core.Assignment, error) {
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 构建 SkylarkAddress
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/journeys/:journey_id/assignments
+	apiURL := core.BuildJourneyAPIURL(skylarkAddress, journeyID, "assignments")
+
+	// 4. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 5. 解析响应
+	var assignmentResponses []AssignmentResponse
+	if err := httputils.ReadJSONResponse(resp, &assignmentResponses); err != nil {
+		return nil, err
+	}
+
+	// 6. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(assignmentResponses, func(ar AssignmentResponse) int {
+		return int(ar.AssigneeID)
+	})
+
+	// 7. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
+	}
+
+	// 8. 使用映射转换为领域模型
+	assignments := make([]*core.Assignment, len(assignmentResponses))
+	for i, ar := range assignmentResponses {
+		assignments[i] = ar.ToDomain(userIDMapping)
+	}
+
+	return assignments, nil
+}
+
+// getJourneyDetail 获取流程记录详情（内部方法）
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - *core.JourneyDetail: 流程记录详情（包含字段值和附件）
+//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
+func (f *skylarkFlowRegistry) getJourneyDetail(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	journeyID int64,
+) (*core.JourneyDetail, error) {
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 构建 SkylarkAddress
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/:journey_id
+	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "journeys", fmt.Sprintf("%d", journeyID))
+
+	// 4. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 5. 解析响应
+	var journeyDetailResp JourneyDetailResponse
+	if err := httputils.ReadJSONResponse(resp, &journeyDetailResp); err != nil {
+		// 如果是 404 错误，转换为 ErrJourneyNotFound
+		if errors.Is(err, core.ErrSkylarkAPINotFound) {
+			return nil, core.ErrJourneyNotFound
+		}
+		return nil, err
+	}
+
+	// 6. 获取字段映射（用于将字段ID转换为字段名）
+	fieldMappings, err := f.getFlowFieldMappings(ctx, skylarkAddress, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("获取字段映射失败: %w", err)
+	}
+
+	// 7. 提取远程用户ID（发起人）
+	userIDMapping := map[int]string{
+		int(journeyDetailResp.User.ID): "",
+	}
+
+	// 8. 批量转换（远程ID → 本地ID），填充映射
+	if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+		return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+	}
+
+	// 9. 使用映射转换为领域模型（传入字段映射）
+	journeyDetail := journeyDetailResp.ToDomainWithFieldNames(userIDMapping, fieldMappings)
+
+	return journeyDetail, nil
+}
+
+// getFlowDetail 获取流程详情（内部方法）
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//
+// 返回:
+//   - *core.FlowDetail: 流程详情（包含字段、节点、边信息）
+//   - error: 错误信息（如果不存在返回 core.ErrFlowNotFound）
+func (f *skylarkFlowRegistry) getFlowDetail(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+) (*core.FlowDetail, error) {
+	// 1. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 构建 SkylarkAddress
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id
+	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID)
+
+	// 4. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 5. 解析响应
+	var flowDetailResp FlowDetailResponse
+	if err := httputils.ReadJSONResponse(resp, &flowDetailResp); err != nil {
+		// 如果是 404 错误，转换为 ErrFlowNotFound
+		if errors.Is(err, core.ErrSkylarkAPINotFound) {
+			return nil, core.ErrFlowNotFound
+		}
+		return nil, err
+	}
+
+	// 6. 转换为领域模型并返回
+	return flowDetailResp.ToDomain(), nil
+}
+
+// getJourneyMoments 获取流程审批历史（内部方法）
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - []*core.Moment: 审批历史列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) getJourneyMoments(
+	ctx context.Context,
+	tenantID string,
+	journeyID int64,
+) ([]*core.Moment, error) {
+	// 1. 参数校验
+	if journeyID <= 0 {
+		return nil, fmt.Errorf("journeyID 必须大于 0")
+	}
+
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 4. 构建 API URL: GET /api/v4/yaw/journeys/:journey_id/moments
+	apiURL := core.BuildJourneyMomentsAPIURL(skylarkAddress, journeyID)
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 处理 404 错误（流程记录不存在）
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, core.ErrJourneyNotFound
+	}
+
+	// 7. 解析响应
+	var momentResponses []MomentResponse
+	if err := httputils.ReadJSONResponse(resp, &momentResponses); err != nil {
+		return nil, err
+	}
+
+	// 8. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(momentResponses, func(mr MomentResponse) int {
+		if mr.User != nil {
+			return int(mr.User.ID)
+		}
+		return 0
+	})
+
+	// 9. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
+	}
+
+	// 10. 使用映射转换为领域模型
+	moments := make([]*core.Moment, len(momentResponses))
+	for i, mr := range momentResponses {
+		moments[i] = mr.ToDomain(userIDMapping)
+	}
+
+	// 10. 返回结果
+	return moments, nil
+}
+
+// getCurrentProcessingUsers 获取当前流程任务的处理者（内部方法）
+// 参数:
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于获取平台配置）
+//   - flowID: 流程ID
+//   - journeyID: 流程记录ID
+//
+// 返回:
+//   - []*core.ProcessingUser: 当前处理人列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) getCurrentProcessingUsers(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+	journeyID int64,
+) ([]*core.ProcessingUser, error) {
+	// 1. 参数校验
+	if flowID <= 0 {
+		return nil, fmt.Errorf("flowID 必须大于 0")
+	}
+	if journeyID <= 0 {
+		return nil, fmt.Errorf("journeyID 必须大于 0")
+	}
+
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
+	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 构建 SkylarkAPIContext
+	skylarkAddress := core.SkylarkAPIContext{
+		App:        apiCfg.App,
+		UserID:     "",
+		AuthHeader: apiCfg.Token,
+	}
+
+	// 4. 构建 API URL: GET /api/v4/yaw/flows/:flow_id/journeys/:id/current_processing_users
+	apiURL := core.BuildCurrentProcessingUsersURL(skylarkAddress, flowID, journeyID)
+
+	// 5. 发送 HTTP GET 请求
+	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// 6. 处理 404 错误（流程或流程记录不存在）
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, core.ErrJourneyNotFound
+	}
+
+	// 7. 解析响应（返回单个用户对象）
+	var singleUser ProcessingUserResponse
+	if err := httputils.ReadJSONResponse(resp, &singleUser); err != nil {
+		return nil, err
+	}
+
+	// 转为数组格式以便后续处理
+	userResponses := []ProcessingUserResponse{singleUser}
+
+	// 8. 提取所有唯一的远程用户ID（使用通用函数）
+	userIDMapping := core.ExtractUserIDsToMap(userResponses, func(ur ProcessingUserResponse) int {
+		return int(ur.ID)
+	})
+
+	// 9. 批量转换（远程ID → 本地ID），填充映射
+	if len(userIDMapping) > 0 {
+		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
+			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
+		}
+	}
+
+	// 10. 使用映射转换为领域模型
+	users := make([]*core.ProcessingUser, len(userResponses))
+	for i, ur := range userResponses {
+		users[i] = ur.ToDomain(userIDMapping)
+	}
+
+	// 10. 返回结果
+	return users, nil
 }

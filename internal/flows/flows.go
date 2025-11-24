@@ -31,37 +31,6 @@ type SkylarkFlowRegistry interface {
 	//   - options: 可选参数（评论、下一个节点ID、抄送者、字段数据等）
 	UpdateJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options core.UpdateJourneyStatusOptions) error
 
-	// GetJourneyAssignments 获取流程节点处理信息列表
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - []*core.Assignment: 任务列表
-	//   - error: 错误信息
-	GetJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error)
-
-	// GetJourneyDetail 获取流程记录详情
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - *core.JourneyDetail: 流程记录详情（包含字段值和附件）
-	//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
-	GetJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error)
-
-	// GetFlowDetail 获取流程详情
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	// 返回:
-	//   - *core.FlowDetail: 流程详情（包含字段、节点、边信息）
-	//   - error: 错误信息（如果不存在返回 core.ErrFlowNotFound）
-	GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error)
-
 	// GetUserAssignments 获取用户处理的任务列表
 	// 参数:
 	//   - ctx: 上下文
@@ -101,16 +70,6 @@ type SkylarkFlowRegistry interface {
 	//   - error: 错误信息
 	SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
 
-	// GetJourneyMoments 获取流程审批历史
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - []*core.Moment: 审批历史列表
-	//   - error: 错误信息
-	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
-
 	// GetJourneyFullDetail 获取流程完整详情（一站式接口）
 	// 功能：
 	//   - 聚合基础信息、业务数据、审批历史、待处理节点、节点信息
@@ -125,17 +84,6 @@ type SkylarkFlowRegistry interface {
 	//   - *core.JourneyFullDetail: 流程完整详情（包含所有维度信息）
 	//   - error: 错误信息
 	GetJourneyFullDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyFullDetail, error)
-
-	// GetCurrentProcessingUsers 获取当前流程任务的处理者
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - []*core.ProcessingUser: 当前处理人列表
-	//   - error: 错误信息
-	GetCurrentProcessingUsers(ctx context.Context, tenantID string, flowID int64, journeyID int64) ([]*core.ProcessingUser, error)
 
 	// AbortJourney 终止流程任务
 	// 参数:

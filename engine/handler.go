@@ -153,21 +153,6 @@ func (e *skylarkEngine) UpdateFlowJourneyStatus(ctx context.Context, tenantID st
 	return e.flows.UpdateJourneyStatus(ctx, tenantID, flowID, journeyID, assignmentID, localUserID, operation, options)
 }
 
-// GetFlowJourneyAssignments 获取流程节点处理信息列表
-func (e *skylarkEngine) GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error) {
-	return e.flows.GetJourneyAssignments(ctx, tenantID, journeyID)
-}
-
-// GetFlowJourneyDetail 获取流程记录详情（包含字段值和附件）
-func (e *skylarkEngine) GetFlowJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error) {
-	return e.flows.GetJourneyDetail(ctx, tenantID, flowID, journeyID)
-}
-
-// GetFlowDetail 获取流程详情（包含字段、节点、边信息）
-func (e *skylarkEngine) GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error) {
-	return e.flows.GetFlowDetail(ctx, tenantID, flowID)
-}
-
 // GetUserAssignments 获取用户处理的任务列表
 func (e *skylarkEngine) GetUserAssignments(ctx context.Context, tenantID string, localUserID string, category string, page, pageSize int) ([]*core.Assignment, int, error) {
 	return e.flows.GetUserAssignments(ctx, tenantID, localUserID, category, page, pageSize)
@@ -183,19 +168,9 @@ func (e *skylarkEngine) SearchJourneys(ctx context.Context, tenantID string, req
 	return e.flows.SearchJourneys(ctx, tenantID, req)
 }
 
-// GetJourneyMoments 获取流程审批历史
-func (e *skylarkEngine) GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error) {
-	return e.flows.GetJourneyMoments(ctx, tenantID, journeyID)
-}
-
 // GetJourneyFullDetail 获取流程完整详情（一站式接口）
 func (e *skylarkEngine) GetJourneyFullDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyFullDetail, error) {
 	return e.flows.GetJourneyFullDetail(ctx, tenantID, flowID, journeyID)
-}
-
-// GetCurrentProcessingUsers 获取当前流程任务的处理者
-func (e *skylarkEngine) GetCurrentProcessingUsers(ctx context.Context, tenantID string, flowID int64, journeyID int64) ([]*core.ProcessingUser, error) {
-	return e.flows.GetCurrentProcessingUsers(ctx, tenantID, flowID, journeyID)
 }
 
 // AbortJourney 终止流程任务

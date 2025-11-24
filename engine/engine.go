@@ -101,34 +101,6 @@ type SkylarkEngine interface {
 	//   - operation: 操作类型（使用 core.OperationApprove 等常量）
 	//   - options: 可选参数（评论、下一个节点ID、抄送者、字段数据等）
 	UpdateFlowJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options core.UpdateJourneyStatusOptions) error
-	// GetFlowJourneyAssignments 获取流程节点处理信息列表
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - []*core.Assignment: 节点处理信息列表（包含处理人、状态、时间等）
-	//   - error: 错误信息
-	GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error)
-	// GetFlowJourneyDetail 获取流程记录详情（包含字段值和附件）
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - *core.JourneyDetail: 流程记录详情（包含所有字段值和附件信息）
-	//   - error: 错误信息
-	GetFlowJourneyDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyDetail, error)
-	// GetFlowDetail 获取流程详情（包含字段、节点、边信息）
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	// 返回:
-	//   - *core.FlowDetail: 流程详情（包含字段定义、节点配置、边关系等）
-	//   - error: 错误信息
-	GetFlowDetail(ctx context.Context, tenantID string, flowID int64) (*core.FlowDetail, error)
 	// GetUserAssignments 获取用户处理的任务列表
 	// 参数:
 	//   - ctx: 上下文
@@ -174,20 +146,6 @@ type SkylarkEngine interface {
 	//   }
 	//   journeys, total, err := engine.SearchJourneys(ctx, "tenant-001", req)
 	SearchJourneys(ctx context.Context, tenantID string, req *core.JourneySearchRequest) ([]*core.Journey, int, error)
-	// GetJourneyMoments 获取流程审批历史
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - []*core.Moment: 审批历史列表（按时间正序排列）
-	//   - error: 错误信息
-	// 示例:
-	//   moments, err := engine.GetJourneyMoments(ctx, "tenant-001", 12345)
-	//   for _, moment := range moments {
-	//       fmt.Printf("%s %s %s\n", moment.CreatedAt, moment.OperatorName, core.TranslateStatus(moment.Status))
-	//   }
-	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
 	// GetJourneyFullDetail 获取流程完整详情（一站式接口）
 	// 功能：
 	//   - 聚合基础信息、业务数据、审批历史、待处理节点、节点信息
@@ -210,21 +168,6 @@ type SkylarkEngine interface {
 	//   fmt.Printf("审批历史: %d 条\n", len(fullDetail.History))
 	//   fmt.Printf("待处理节点: %d 个\n", len(fullDetail.PendingNodes))
 	GetJourneyFullDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyFullDetail, error)
-	// GetCurrentProcessingUsers 获取当前流程任务的处理者
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	//   - journeyID: 流程记录ID
-	// 返回:
-	//   - []*core.ProcessingUser: 当前处理人列表
-	//   - error: 错误信息
-	// 示例:
-	//   users, err := engine.GetCurrentProcessingUsers(ctx, "tenant-001", 123, 456)
-	//   for _, user := range users {
-	//       fmt.Printf("处理人: %s (ID: %d)\n", user.Name, user.ID)
-	//   }
-	GetCurrentProcessingUsers(ctx context.Context, tenantID string, flowID int64, journeyID int64) ([]*core.ProcessingUser, error)
 	// AbortJourney 终止流程任务
 	// 参数:
 	//   - ctx: 上下文
