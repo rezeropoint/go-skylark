@@ -44,7 +44,7 @@
 //
 // # 核心功能模块
 //
-//   - 流程管理（13个方法）：CreateFlow、UpdateFlowJourneyStatus、GetUserAssignments、SearchJourneys 等
+//   - 流程管理（14个方法）：CreateFlow、UpdateFlowJourneyStatus、GetUserAssignments、GetJourneyFullDetail 等
 //   - 平台配置（5个方法）：CreatePlatformConfig、GetPlatformConfig、ValidatePlatformConfig 等
 //   - 事件配置（5个方法）：CreateEventWithFields、UpdateEventWithFields、ListEventWithFields 等
 //   - 组织映射（5个方法）：CreateOrgMapping、GetOrgMapping、UpdateOrgMapping 等
@@ -188,6 +188,28 @@ type SkylarkEngine interface {
 	//       fmt.Printf("%s %s %s\n", moment.CreatedAt, moment.OperatorName, core.TranslateStatus(moment.Status))
 	//   }
 	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
+	// GetJourneyFullDetail 获取流程完整详情（一站式接口）
+	// 功能：
+	//   - 聚合基础信息、业务数据、审批历史、待处理节点、节点信息
+	//   - 减少前端调用次数（4次 → 1次）
+	//   - 自动补充节点名称、处理人姓名
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - *core.JourneyFullDetail: 流程完整详情（包含所有维度信息）
+	//   - error: 错误信息
+	// 示例:
+	//   fullDetail, err := engine.GetJourneyFullDetail(ctx, "tenant-001", 123, 456)
+	//   if err != nil {
+	//       log.Fatal(err)
+	//   }
+	//   fmt.Printf("流程编号: %s\n", fullDetail.BasicInfo.SN)
+	//   fmt.Printf("审批历史: %d 条\n", len(fullDetail.History))
+	//   fmt.Printf("待处理节点: %d 个\n", len(fullDetail.PendingNodes))
+	GetJourneyFullDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyFullDetail, error)
 	// GetCurrentProcessingUsers 获取当前流程任务的处理者
 	// 参数:
 	//   - ctx: 上下文

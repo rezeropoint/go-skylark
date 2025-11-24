@@ -111,6 +111,21 @@ type SkylarkFlowRegistry interface {
 	//   - error: 错误信息
 	GetJourneyMoments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Moment, error)
 
+	// GetJourneyFullDetail 获取流程完整详情（一站式接口）
+	// 功能：
+	//   - 聚合基础信息、业务数据、审批历史、待处理节点、节点信息
+	//   - 减少前端调用次数（4次 → 1次）
+	//   - 自动补充节点名称、处理人姓名
+	// 参数:
+	//   - ctx: 上下文
+	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - flowID: 流程ID
+	//   - journeyID: 流程记录ID
+	// 返回:
+	//   - *core.JourneyFullDetail: 流程完整详情（包含所有维度信息）
+	//   - error: 错误信息
+	GetJourneyFullDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyFullDetail, error)
+
 	// GetCurrentProcessingUsers 获取当前流程任务的处理者
 	// 参数:
 	//   - ctx: 上下文
