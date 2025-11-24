@@ -43,7 +43,19 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 		return nil, fmt.Errorf("获取流程基础信息失败: %w", err)
 	}
 
-	// 3. 获取审批历史（GetJourneyMoments）
+	// 3. 获取流程详情（节点信息）- 提前获取，用于后续填充节点名称
+	flowDetail, err := f.GetFlowDetail(ctx, tenantID, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("获取流程详情失败: %w", err)
+	}
+
+	// 4. 构建节点信息映射
+	vertices := make(map[int64]*core.FlowVertex, len(flowDetail.Vertices))
+	for _, vertex := range flowDetail.Vertices {
+		vertices[vertex.ID] = vertex
+	}
+
+	// 5. 获取审批历史（GetJourneyMoments）
 	history, err := f.GetJourneyMoments(ctx, tenantID, journeyID)
 	if err != nil {
 		// 审批历史失败不影响整体流程，只记录日志
@@ -55,14 +67,33 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 		history = []*core.Moment{} // 返回空列表
 	}
 
-	// 4. 获取任务列表（GetJourneyAssignments）
+	// 6. 过滤并补充审批历史
+	// 说明：
+	//   - 只保留已处理的记录（排除 status="processing" 的待处理节点）
+	//   - 自动补充节点名称（vertexName）
+	filteredHistory := make([]*core.Moment, 0, len(history))
+	for _, moment := range history {
+		// 过滤：只保留已处理的记录
+		if moment.StatusKey == core.StatusProcessing {
+			continue // 跳过待处理节点（这些节点应该在 PendingNodes 中）
+		}
+
+		// 补充节点名称
+		if vertex, ok := vertices[moment.VertexID]; ok {
+			moment.VertexName = &vertex.Name
+		}
+
+		filteredHistory = append(filteredHistory, moment)
+	}
+
+	// 7. 获取任务列表（GetJourneyAssignments）
 	assignments, err := f.GetJourneyAssignments(ctx, tenantID, journeyID)
 	if err != nil {
 		return nil, fmt.Errorf("获取任务列表失败: %w", err)
 	}
 
-	// 5. 提取待处理节点
-	pendingNodes, err := f.extractPendingNodes(ctx, tenantID, assignments)
+	// 8. 提取待处理节点
+	pendingNodes, err := f.extractPendingNodes(ctx, tenantID, flowID, assignments, vertices)
 	if err != nil {
 		// 待处理节点提取失败不影响整体流程，只记录日志
 		logx.WithContext(ctx).WithFields(
@@ -73,22 +104,10 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 		pendingNodes = []*core.PendingNode{} // 返回空列表
 	}
 
-	// 6. 获取流程详情（节点信息）
-	flowDetail, err := f.GetFlowDetail(ctx, tenantID, flowID)
-	if err != nil {
-		return nil, fmt.Errorf("获取流程详情失败: %w", err)
-	}
-
-	// 7. 构建节点信息映射
-	vertices := make(map[int64]*core.FlowVertex, len(flowDetail.Vertices))
-	for _, vertex := range flowDetail.Vertices {
-		vertices[vertex.ID] = vertex
-	}
-
-	// 8. 返回完整详情
+	// 9. 返回完整详情
 	return &core.JourneyFullDetail{
 		BasicInfo:    basicInfo,
-		History:      history,
+		History:      filteredHistory, // 使用过滤并补充后的历史记录
 		PendingNodes: pendingNodes,
 		Vertices:     vertices,
 	}, nil
@@ -97,13 +116,15 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 // extractPendingNodes 从 assignments 中提取待处理节点
 // 说明：
 //   - 筛选条件：category='processed' AND status='processing'
-//   - 自动补充节点名称（通过 GetFlowDetail）
+//   - 自动补充节点名称（通过 vertices 映射）
 //   - 自动补充处理人姓名（通过用户映射）
 //
 // 参数:
 //   - ctx: 上下文
 //   - tenantID: 租户ID
+//   - flowID: 流程ID
 //   - assignments: 任务列表
+//   - vertices: 节点信息映射（用于补充节点名称）
 //
 // 返回:
 //   - []*core.PendingNode: 待处理节点列表
@@ -111,7 +132,9 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 func (f *skylarkFlowRegistry) extractPendingNodes(
 	ctx context.Context,
 	tenantID string,
+	flowID int64,
 	assignments []*core.Assignment,
+	vertices map[int64]*core.FlowVertex,
 ) ([]*core.PendingNode, error) {
 	// 1. 筛选待处理任务
 	// 条件：category='processed' AND status='processing'
@@ -134,34 +157,7 @@ func (f *skylarkFlowRegistry) extractPendingNodes(
 		vertexAssignmentsMap[a.VertexID] = append(vertexAssignmentsMap[a.VertexID], a)
 	}
 
-	// 4. 提取所有唯一的 flowID（用于批量查询节点名称）
-	flowIDSet := make(map[int64]bool)
-	for _, a := range pendingAssignments {
-		if a.FlowID != nil {
-			flowIDSet[*a.FlowID] = true
-		}
-	}
-
-	// 5. 批量查询节点名称（通过缓存优化）
-	vertexNameMap := make(map[int64]string)
-	for flowID := range flowIDSet {
-		flowDetail, err := f.GetFlowDetail(ctx, tenantID, flowID)
-		if err != nil {
-			logx.WithContext(ctx).WithFields(
-				logx.Field("module", "flows_extract_pending"),
-				logx.Field("flow_id", flowID),
-				logx.Field("error", err.Error()),
-			).Error("查询 flow 详情失败")
-			continue
-		}
-
-		// 构建节点名称映射
-		for _, vertex := range flowDetail.Vertices {
-			vertexNameMap[vertex.ID] = vertex.Name
-		}
-	}
-
-	// 6. 构建待处理节点列表
+	// 4. 构建待处理节点列表
 	pendingNodes := make([]*core.PendingNode, 0, len(vertexAssignmentsMap))
 	for vertexID, nodeAssignments := range vertexAssignmentsMap {
 		// 提取处理人ID列表
@@ -170,10 +166,16 @@ func (f *skylarkFlowRegistry) extractPendingNodes(
 			assigneeIDs[i] = a.AssigneeID
 		}
 
+		// 获取节点名称（从传入的 vertices 映射）
+		vertexName := ""
+		if vertex, ok := vertices[vertexID]; ok {
+			vertexName = vertex.Name
+		}
+
 		// 构建待处理节点
 		pendingNode := &core.PendingNode{
 			VertexID:      vertexID,
-			VertexName:    vertexNameMap[vertexID], // 可能为空字符串（查询失败）
+			VertexName:    vertexName, // 从 vertices 映射获取节点名称
 			AssigneeIDs:   assigneeIDs,
 			AssigneeNames: assigneeIDs, // 目前直接使用 ID，后续可增强为批量查询用户名
 			CreatedAt:     nodeAssignments[0].CreatedAt,
