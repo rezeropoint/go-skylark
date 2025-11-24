@@ -48,34 +48,3 @@ func convertJourneyResponsesToDomain(ctx context.Context, journeyResponses []Jou
 
 	return journeys, nil
 }
-
-// convertJourneyUserID 转换单个 Journey 的用户ID（用于 GetJourneyBySN）
-//
-// 流程：
-//  1. 提取远程用户ID
-//  2. 批量查询本地用户ID（调用 fillLocalUserIDMap 填充映射）
-//  3. 使用本地用户ID映射调用 ToDomain 转换
-//
-// 参数：
-//   - ctx: 上下文
-//   - journeyResponse: API 响应
-//   - fillLocalUserIDMap: 批量反向转换函数
-//   - tenantID: 租户ID
-//
-// 返回：
-//   - *core.Journey: 领域模型（用户ID已转换为本地ID）
-//   - error: 如果远程ID无映射，返回 core.ErrUserMappingNotFound
-func convertJourneyUserID(ctx context.Context, journeyResponse *JourneyResponse, fillLocalUserIDMap core.FillLocalUserIDMapFunc, tenantID string) (*core.Journey, error) {
-	// 1. 提取远程用户ID
-	userIDMapping := map[int]string{
-		int(journeyResponse.User.ID): "",
-	}
-
-	// 2. 批量转换（远程ID → 本地ID），填充映射
-	if err := fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
-		return nil, fmt.Errorf("获取流程详情失败: 流程发起人（远程用户ID %d）未同步到本地，无法转换为本地用户ID (%w)", journeyResponse.User.ID, err)
-	}
-
-	// 3. 使用映射转换为领域模型
-	return journeyResponse.ToDomain(userIDMapping), nil
-}

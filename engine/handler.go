@@ -153,11 +153,6 @@ func (e *skylarkEngine) UpdateFlowJourneyStatus(ctx context.Context, tenantID st
 	return e.flows.UpdateJourneyStatus(ctx, tenantID, flowID, journeyID, assignmentID, localUserID, operation, options)
 }
 
-// GetFlowJourneyBySN 根据流程编号查询流程记录
-func (e *skylarkEngine) GetFlowJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error) {
-	return e.flows.GetJourneyBySN(ctx, tenantID, flowID, sn)
-}
-
 // GetFlowJourneyAssignments 获取流程节点处理信息列表
 func (e *skylarkEngine) GetFlowJourneyAssignments(ctx context.Context, tenantID string, journeyID int64) ([]*core.Assignment, error) {
 	return e.flows.GetJourneyAssignments(ctx, tenantID, journeyID)

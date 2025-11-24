@@ -31,17 +31,6 @@ type SkylarkFlowRegistry interface {
 	//   - options: 可选参数（评论、下一个节点ID、抄送者、字段数据等）
 	UpdateJourneyStatus(ctx context.Context, tenantID string, flowID int64, journeyID int64, assignmentID int64, localUserID string, operation core.JourneyOperation, options core.UpdateJourneyStatusOptions) error
 
-	// GetJourneyBySN 根据流程编号查询流程记录
-	// 参数:
-	//   - ctx: 上下文
-	//   - tenantID: 租户ID（用于获取平台配置）
-	//   - flowID: 流程ID
-	//   - sn: 流程编号
-	// 返回:
-	//   - *core.Journey: 流程记录信息
-	//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
-	GetJourneyBySN(ctx context.Context, tenantID string, flowID int64, sn string) (*core.Journey, error)
-
 	// GetJourneyAssignments 获取流程节点处理信息列表
 	// 参数:
 	//   - ctx: 上下文

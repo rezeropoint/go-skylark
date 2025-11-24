@@ -310,65 +310,6 @@ func (f *skylarkFlowRegistry) UpdateJourneyStatus(
 	return nil
 }
 
-// GetJourneyBySN 根据流程编号查询流程记录
-// 参数:
-//   - ctx: 上下文
-//   - tenantID: 租户ID（用于获取平台配置）
-//   - flowID: 流程ID
-//   - sn: 流程编号
-//
-// 返回:
-//   - *core.Journey: 流程记录信息
-//   - error: 错误信息（如果不存在返回 core.ErrJourneyNotFound）
-func (f *skylarkFlowRegistry) GetJourneyBySN(
-	ctx context.Context,
-	tenantID string,
-	flowID int64,
-	sn string,
-) (*core.Journey, error) {
-	// 1. 获取API配置（已验证APIBaseURL、APIToken）
-	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 构建 SkylarkAddress
-	skylarkAddress := core.SkylarkAPIContext{
-		App:        apiCfg.App,
-		UserID:     "",
-		AuthHeader: apiCfg.Token,
-	}
-
-	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id/journeys/find_by_sn?sn=xxx
-	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "journeys", "find_by_sn")
-	apiURL = fmt.Sprintf("%s?sn=%s", apiURL, sn)
-
-	// 4. 发送 HTTP GET 请求
-	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
-	}
-	defer resp.Body.Close()
-
-	// 5. 解析响应
-	var journeyResp JourneyResponse
-	if err := httputils.ReadJSONResponse(resp, &journeyResp); err != nil {
-		// 如果是 404 错误，转换为 ErrJourneyNotFound
-		if errors.Is(err, core.ErrSkylarkAPINotFound) {
-			return nil, core.ErrJourneyNotFound
-		}
-		return nil, err
-	}
-
-	// 6. 转换为领域模型（包含用户ID转换）
-	journey, err := convertJourneyUserID(ctx, &journeyResp, f.fillLocalUserIDMap, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	return journey, nil
-}
-
 // GetJourneyAssignments 获取流程节点处理信息列表
 // 参数:
 //   - ctx: 上下文
