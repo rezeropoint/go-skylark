@@ -34,10 +34,12 @@ type CacheInterface interface {
 	// Flow 信息缓存（flows 模块 - API 数据）
 	GetFlowInfoAPI(ctx context.Context, tenantID string, flowID int64) (*FlowInfo, error)
 	SetFlowInfoAPI(ctx context.Context, tenantID string, flowInfo *FlowInfo, ttl int) error
+	SetFlowInfoAPINull(ctx context.Context, tenantID string, flowID int64) error // 缓存空值标记（缓存穿透防护）
 
 	// Flow 详情缓存（flows 模块 - API 数据）
 	GetFlowDetailAPI(ctx context.Context, tenantID string, flowID int64) (*FlowDetail, error)
 	SetFlowDetailAPI(ctx context.Context, tenantID string, flowDetail *FlowDetail, ttl int) error
+	SetFlowDetailAPINull(ctx context.Context, tenantID string, flowID int64) error // 缓存空值标记（缓存穿透防护）
 
 	// 用户名缓存（query/stats 模块）
 	GetUserName(ctx context.Context, tenantID string, userID string) (string, error)

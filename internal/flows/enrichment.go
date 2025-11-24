@@ -2,6 +2,7 @@ package flows
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -175,8 +176,12 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 		if err == nil && flowInfo != nil {
 			// 缓存命中
 			result[flowID] = flowInfo
+		} else if err != nil && errors.Is(err, core.ErrFlowNotFound) {
+			// 缓存中已有空值标记（缓存穿透防护），跳过该 flowID
+			// 不添加到 missedFlowIDs，避免重复查询不存在的资源
+			continue
 		} else {
-			// 缓存未命中
+			// 缓存未命中或其他错误
 			missedFlowIDs = append(missedFlowIDs, flowID)
 		}
 	}
@@ -199,6 +204,10 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 
 				flowInfo, err := f.fetchFlowInfoFromAPI(ctx, tenantID, id)
 				if err != nil {
+					// 如果是 ErrFlowNotFound，缓存空值标记（缓存穿透防护）
+					if errors.Is(err, core.ErrFlowNotFound) {
+						go f.cacheFlowInfoNull(context.Background(), tenantID, id)
+					}
 					// 部分失败时只记录日志，不影响主流程
 					logx.WithContext(ctx).WithFields(
 						logx.Field("module", "flows_enrichment"),
@@ -258,5 +267,17 @@ func (f *skylarkFlowRegistry) cacheFlowInfo(
 
 	if err := f.cache.SetFlowInfoAPI(ctx, tenantID, flowInfo, ttl); err != nil {
 		logx.Errorf("[enrichment] 缓存 flow 信息失败: %v", err)
+	}
+}
+
+// cacheFlowInfoNull 异步缓存空值标记（用于缓存穿透防护）
+// 说明：当 flow 不存在时，缓存空值标记以避免重复查询
+func (f *skylarkFlowRegistry) cacheFlowInfoNull(
+	ctx context.Context,
+	tenantID string,
+	flowID int64,
+) {
+	if err := f.cache.SetFlowInfoAPINull(ctx, tenantID, flowID); err != nil {
+		logx.Errorf("[enrichment] 缓存 flow 空值标记失败: %v", err)
 	}
 }

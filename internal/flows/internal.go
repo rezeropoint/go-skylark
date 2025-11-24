@@ -582,6 +582,10 @@ func (f *skylarkFlowRegistry) getFlowDetail(
 		// 缓存命中，直接返回
 		return flowDetail, nil
 	}
+	// 如果缓存返回 ErrFlowNotFound，说明缓存中已有空值标记，直接返回错误（缓存穿透防护）
+	if errors.Is(err, core.ErrFlowNotFound) {
+		return nil, core.ErrFlowNotFound
+	}
 	// 缓存未命中或出错，继续执行，不影响正常流程
 	if err != nil {
 		logx.WithContext(ctx).WithFields(
@@ -618,8 +622,19 @@ func (f *skylarkFlowRegistry) getFlowDetail(
 	// 6. 解析响应
 	var flowDetailResp FlowDetailResponse
 	if err := httputils.ReadJSONResponse(resp, &flowDetailResp); err != nil {
-		// 如果是 404 错误，转换为 ErrFlowNotFound
+		// 如果是 404 错误，转换为 ErrFlowNotFound 并缓存空值（缓存穿透防护）
 		if errors.Is(err, core.ErrSkylarkAPINotFound) {
+			// 异步缓存空值标记（不阻塞主流程）
+			go func() {
+				if cacheErr := f.cache.SetFlowDetailAPINull(context.Background(), tenantID, flowID); cacheErr != nil {
+					logx.WithContext(context.Background()).WithFields(
+						logx.Field("module", "flows_flow_detail"),
+						logx.Field("tenant_id", tenantID),
+						logx.Field("flow_id", flowID),
+						logx.Field("error", cacheErr.Error()),
+					).Error("缓存空值标记失败")
+				}
+			}()
 			return nil, core.ErrFlowNotFound
 		}
 		return nil, err
