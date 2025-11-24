@@ -188,6 +188,11 @@ func (e *skylarkEngine) GetJourneyMoments(ctx context.Context, tenantID string, 
 	return e.flows.GetJourneyMoments(ctx, tenantID, journeyID)
 }
 
+// GetJourneyFullDetail 获取流程完整详情（一站式接口）
+func (e *skylarkEngine) GetJourneyFullDetail(ctx context.Context, tenantID string, flowID int64, journeyID int64) (*core.JourneyFullDetail, error) {
+	return e.flows.GetJourneyFullDetail(ctx, tenantID, flowID, journeyID)
+}
+
 // GetCurrentProcessingUsers 获取当前流程任务的处理者
 func (e *skylarkEngine) GetCurrentProcessingUsers(ctx context.Context, tenantID string, flowID int64, journeyID int64) ([]*core.ProcessingUser, error) {
 	return e.flows.GetCurrentProcessingUsers(ctx, tenantID, flowID, journeyID)
