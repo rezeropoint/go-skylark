@@ -3,6 +3,7 @@ package flows
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/lib/pq"
 	"github.com/rezeropoint/go-skylark/v2/core"
@@ -64,25 +65,44 @@ func (f *skylarkFlowRegistry) enrichAssignmentsWithFlowInfo(
 	}
 
 	// Step 4: 批量获取 flow 信息（带缓存）
+	// 注意：部分 flow 获取失败时不会返回错误，只记录日志
 	flowInfoMap, err := f.batchGetFlowInfo(ctx, tenantID, flowIDs)
 	if err != nil {
+		// batchGetFlowInfo 现在不会返回错误，但保留错误处理以防未来变化
 		return fmt.Errorf("补充流程信息失败: 批量获取 flow 信息时发生错误 (%w)", err)
 	}
 
 	// Step 5: 合并数据，填充 flow_id 和 flow_title
+	// 重要：即使 flow 信息获取失败，也要填充 FlowID（避免后续筛选时被误删）
+	// FlowTitle 作为可选字段，仅在获取成功时填充
+	missingFlowIDs := make([]int64, 0)
 	for _, a := range assignments {
 		flowID, ok := journeyToFlowMap[a.JourneyID]
 		if !ok {
 			continue
 		}
-		flowInfo, ok := flowInfoMap[flowID]
-		if !ok {
-			continue
-		}
 
-		// 填充可选字段
+		// 总是填充 FlowID（从 journeyToFlowMap 获取，确保后续筛选不会误删）
 		a.FlowID = &flowID
-		a.FlowTitle = &flowInfo.Title
+
+		// 仅在 flow 信息获取成功时填充 FlowTitle（可选字段）
+		if flowInfo, ok := flowInfoMap[flowID]; ok {
+			a.FlowTitle = &flowInfo.Title
+		} else {
+			// 记录缺失的 flow ID（用于日志）
+			missingFlowIDs = append(missingFlowIDs, flowID)
+		}
+	}
+
+	// 如果部分 flow 信息缺失，记录警告日志（但不影响主流程）
+	if len(missingFlowIDs) > 0 {
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_enrichment"),
+			logx.Field("tenant_id", tenantID),
+			logx.Field("missing_flow_ids", missingFlowIDs),
+			logx.Field("missing_count", len(missingFlowIDs)),
+			logx.Field("total_flow_ids", len(flowIDs)),
+		).Errorf("部分 flow 信息获取失败，FlowID 已填充但 FlowTitle 缺失（共 %d 个）", len(missingFlowIDs))
 	}
 
 	return nil
@@ -134,8 +154,9 @@ func (f *skylarkFlowRegistry) getJourneyFlowMapping(
 // batchGetFlowInfo 批量获取 flow 信息（带缓存）
 // 策略：
 //  1. 优先从 Redis 缓存获取
-//  2. 缓存未命中时调用 Skylark API
+//  2. 缓存未命中时并发调用 Skylark API（控制并发数）
 //  3. 异步回写缓存（TTL 1小时）
+//  4. 部分失败时降级处理（只记录日志，不影响主流程）
 func (f *skylarkFlowRegistry) batchGetFlowInfo(
 	ctx context.Context,
 	tenantID string,
@@ -160,33 +181,48 @@ func (f *skylarkFlowRegistry) batchGetFlowInfo(
 		}
 	}
 
-	// Step 2: 批量调用 API 获取未命中的 flow 信息
+	// Step 2: 并发调用 API 获取未命中的 flow 信息
 	if len(missedFlowIDs) > 0 {
-		var failedFlowIDs []int64
+		const maxConcurrency = 5 // 最大并发数
+		semaphore := make(chan struct{}, maxConcurrency)
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+
 		for _, flowID := range missedFlowIDs {
-			flowInfo, err := f.fetchFlowInfoFromAPI(ctx, tenantID, flowID)
-			if err != nil {
-				failedFlowIDs = append(failedFlowIDs, flowID)
-				logx.WithContext(ctx).WithFields(
-					logx.Field("module", "flows_enrichment"),
-					logx.Field("flow_id", flowID),
-					logx.Field("error", err.Error()),
-				).Error("获取 flow 信息失败")
-				continue
-			}
+			wg.Add(1)
+			go func(id int64) {
+				defer wg.Done()
 
-			result[flowID] = flowInfo
+				// 获取信号量（控制并发数）
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
 
-			// 异步回写缓存（不阻塞主流程）
-			go f.cacheFlowInfo(context.Background(), tenantID, flowInfo)
+				flowInfo, err := f.fetchFlowInfoFromAPI(ctx, tenantID, id)
+				if err != nil {
+					// 部分失败时只记录日志，不影响主流程
+					logx.WithContext(ctx).WithFields(
+						logx.Field("module", "flows_enrichment"),
+						logx.Field("flow_id", id),
+						logx.Field("error", err.Error()),
+					).Error("获取 flow 信息失败")
+					return
+				}
+
+				// 并发安全地写入结果
+				mu.Lock()
+				result[id] = flowInfo
+				mu.Unlock()
+
+				// 异步回写缓存（不阻塞主流程）
+				go f.cacheFlowInfo(context.Background(), tenantID, flowInfo)
+			}(flowID)
 		}
 
-		// 如果有失败的 flow，返回错误
-		if len(failedFlowIDs) > 0 {
-			return nil, fmt.Errorf("补充流程信息失败: 以下 flow ID 获取信息失败 %v", failedFlowIDs)
-		}
+		// 等待所有 goroutine 完成
+		wg.Wait()
 	}
 
+	// 返回部分成功的结果（即使部分 flow 获取失败，也不影响主流程）
 	return result, nil
 }
 

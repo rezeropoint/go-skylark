@@ -576,30 +576,46 @@ func (f *skylarkFlowRegistry) getFlowDetail(
 	tenantID string,
 	flowID int64,
 ) (*core.FlowDetail, error) {
-	// 1. 获取API配置（已验证APIBaseURL、APIToken）
+	// 1. 尝试从缓存获取
+	flowDetail, err := f.cache.GetFlowDetailAPI(ctx, tenantID, flowID)
+	if err == nil && flowDetail != nil {
+		// 缓存命中，直接返回
+		return flowDetail, nil
+	}
+	// 缓存未命中或出错，继续执行，不影响正常流程
+	if err != nil {
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_flow_detail"),
+			logx.Field("tenant_id", tenantID),
+			logx.Field("flow_id", flowID),
+			logx.Field("error", err.Error()),
+		).Error("从缓存获取流程详情时发生错误")
+	}
+
+	// 2. 获取API配置（已验证APIBaseURL、APIToken）
 	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 构建 SkylarkAddress
+	// 3. 构建 SkylarkAddress
 	skylarkAddress := core.SkylarkAPIContext{
 		App:        apiCfg.App,
 		UserID:     "",
 		AuthHeader: apiCfg.Token,
 	}
 
-	// 3. 构建 API URL: /api/v4/yaw/flows/:flow_id
+	// 4. 构建 API URL: /api/v4/yaw/flows/:flow_id
 	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID)
 
-	// 4. 发送 HTTP GET 请求
+	// 5. 发送 HTTP GET 请求
 	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
 	defer resp.Body.Close()
 
-	// 5. 解析响应
+	// 6. 解析响应
 	var flowDetailResp FlowDetailResponse
 	if err := httputils.ReadJSONResponse(resp, &flowDetailResp); err != nil {
 		// 如果是 404 错误，转换为 ErrFlowNotFound
@@ -609,8 +625,23 @@ func (f *skylarkFlowRegistry) getFlowDetail(
 		return nil, err
 	}
 
-	// 6. 转换为领域模型并返回
-	return flowDetailResp.ToDomain(), nil
+	// 7. 转换为领域模型
+	flowDetail = flowDetailResp.ToDomain()
+
+	// 8. 异步回写缓存（不阻塞主流程）
+	go func() {
+		ttl := f.config.FlowInfoCacheTTL
+		if cacheErr := f.cache.SetFlowDetailAPI(context.Background(), tenantID, flowDetail, ttl); cacheErr != nil {
+			logx.WithContext(context.Background()).WithFields(
+				logx.Field("module", "flows_flow_detail"),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("flow_id", flowID),
+				logx.Field("error", cacheErr.Error()),
+			).Error("保存流程详情到缓存时发生错误")
+		}
+	}()
+
+	return flowDetail, nil
 }
 
 // getJourneyMoments 获取流程审批历史（内部方法）

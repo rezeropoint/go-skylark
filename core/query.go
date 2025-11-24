@@ -31,6 +31,12 @@ const (
 	// 使用者: flows 模块
 	CacheFlowInfoAPIKeyPrefix = "skylark:flow:api:"
 
+	// CacheFlowDetailAPIKeyPrefix flow 详情缓存键前缀 (API 数据)
+	// 完整格式：skylark:flow_detail:api:{tenant_id}:{flow_id}
+	// 数据源: Skylark REST API (实时数据)
+	// 使用者: flows 模块
+	CacheFlowDetailAPIKeyPrefix = "skylark:flow_detail:api:"
+
 	// CacheUserNameKeyPrefix 用户名缓存键前缀
 	// 完整格式：skylark:users:{tenant_id}:{user_id}
 	CacheUserNameKeyPrefix = "skylark:users:"
