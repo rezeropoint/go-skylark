@@ -14,28 +14,37 @@ import (
 // GetUserName 从缓存获取用户名
 func (f *SkylarkCache) GetUserName(ctx context.Context, tenantID string, userID string) (string, error) {
 	key := fmt.Sprintf("%s%s:%s", core.CacheUserNameKeyPrefix, tenantID, userID)
-	val, err := f.redisClient.GetCtx(ctx, key)
-	if err != nil {
-		return "", err
-	}
-
-	if val == "" {
-		return "", fmt.Errorf("缓存值为空")
-	}
-
-	return val, nil
+	return getStringWithNullCheck(
+		ctx,
+		f.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrUserNotFound,
+	)
 }
 
 // SetUserName 缓存用户名
 func (f *SkylarkCache) SetUserName(ctx context.Context, tenantID string, userID string, name string, ttl int) error {
 	key := fmt.Sprintf("%s%s:%s", core.CacheUserNameKeyPrefix, tenantID, userID)
-	return f.redisClient.SetexCtx(ctx, key, name, ttl)
+	return setStringWithJitter(ctx, f.redisClient, key, name, ttl)
+}
+
+// SetUserNameNull 缓存空值标记（用于缓存穿透防护）
+func (f *SkylarkCache) SetUserNameNull(ctx context.Context, tenantID string, userID string) error {
+	key := fmt.Sprintf("%s%s:%s", core.CacheUserNameKeyPrefix, tenantID, userID)
+	return setNullValue(ctx, f.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // GetUserIDMapping 从缓存获取用户ID映射（正向：local_user_id -> remote_user_id）
 func (c *SkylarkCache) GetUserIDMapping(ctx context.Context, tenantID, localUserID string) (int, error) {
 	key := fmt.Sprintf("%s:%s:%s", core.CacheUserIDMappingKeyPrefix, tenantID, localUserID)
-	val, err := c.redisClient.GetCtx(ctx, key)
+	val, err := getStringWithNullCheck(
+		ctx,
+		c.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrUserMappingNotFound,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -51,7 +60,13 @@ func (c *SkylarkCache) GetUserIDMapping(ctx context.Context, tenantID, localUser
 // SetUserIDMapping 缓存用户ID映射（正向：local_user_id -> remote_user_id）
 func (c *SkylarkCache) SetUserIDMapping(ctx context.Context, tenantID, localUserID string, remoteUserID int, ttl int) error {
 	key := fmt.Sprintf("%s:%s:%s", core.CacheUserIDMappingKeyPrefix, tenantID, localUserID)
-	return c.redisClient.SetexCtx(ctx, key, strconv.Itoa(remoteUserID), ttl)
+	return setStringWithJitter(ctx, c.redisClient, key, strconv.Itoa(remoteUserID), ttl)
+}
+
+// SetUserIDMappingNull 缓存空值标记（用于缓存穿透防护）
+func (c *SkylarkCache) SetUserIDMappingNull(ctx context.Context, tenantID, localUserID string) error {
+	key := fmt.Sprintf("%s:%s:%s", core.CacheUserIDMappingKeyPrefix, tenantID, localUserID)
+	return setNullValue(ctx, c.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // DeleteUserIDMapping 删除用户ID映射缓存（正向）
@@ -64,22 +79,25 @@ func (c *SkylarkCache) DeleteUserIDMapping(ctx context.Context, tenantID, localU
 // GetUserIDMappingReverse 从缓存获取用户ID映射（反向：remote_user_id -> local_user_id）
 func (c *SkylarkCache) GetUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int) (string, error) {
 	key := fmt.Sprintf("%s:%s:%d", core.CacheUserIDMappingReverseKeyPrefix, tenantID, remoteUserID)
-	val, err := c.redisClient.GetCtx(ctx, key)
-	if err != nil {
-		return "", err
-	}
-
-	if val == "" {
-		return "", fmt.Errorf("缓存值为空")
-	}
-
-	return val, nil
+	return getStringWithNullCheck(
+		ctx,
+		c.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrUserMappingNotFound,
+	)
 }
 
 // SetUserIDMappingReverse 缓存用户ID映射（反向：remote_user_id -> local_user_id）
 func (c *SkylarkCache) SetUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int, localUserID string, ttl int) error {
 	key := fmt.Sprintf("%s:%s:%d", core.CacheUserIDMappingReverseKeyPrefix, tenantID, remoteUserID)
-	return c.redisClient.SetexCtx(ctx, key, localUserID, ttl)
+	return setStringWithJitter(ctx, c.redisClient, key, localUserID, ttl)
+}
+
+// SetUserIDMappingReverseNull 缓存空值标记（用于缓存穿透防护）
+func (c *SkylarkCache) SetUserIDMappingReverseNull(ctx context.Context, tenantID string, remoteUserID int) error {
+	key := fmt.Sprintf("%s:%s:%d", core.CacheUserIDMappingReverseKeyPrefix, tenantID, remoteUserID)
+	return setNullValue(ctx, c.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // DeleteUserIDMappingReverse 删除用户ID映射缓存（反向）
@@ -158,3 +176,4 @@ func (f *SkylarkCache) BatchGetUserNames(
 
 	return userNames, nil
 }
+

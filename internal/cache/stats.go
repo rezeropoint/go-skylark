@@ -21,5 +21,5 @@ func (f *SkylarkCache) GetStats(ctx context.Context, key string) (string, error)
 
 // SetStats 缓存统计结果（JSON 字符串）
 func (f *SkylarkCache) SetStats(ctx context.Context, key string, jsonData string, ttl int) error {
-	return f.redisClient.SetexCtx(ctx, key, jsonData, ttl)
+	return setStringWithJitter(ctx, f.redisClient, key, jsonData, ttl)
 }

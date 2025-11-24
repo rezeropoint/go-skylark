@@ -49,6 +49,7 @@ type CacheInterface interface {
 	// 组织映射缓存（mapping 模块 - 业务字段值映射）
 	GetOrgMapping(ctx context.Context, id string) (*OrgMapping, error)
 	SetOrgMapping(ctx context.Context, mapping *OrgMapping, ttl int) error
+	SetOrgMappingNull(ctx context.Context, id string) error // 缓存空值标记（缓存穿透防护）
 	DeleteOrgMapping(ctx context.Context, id string) error
 	GetOrgMappingList(ctx context.Context, tenantID string) ([]*OrgMapping, error)
 	SetOrgMappingList(ctx context.Context, tenantID string, mappings []*OrgMapping, ttl int) error
@@ -57,9 +58,11 @@ type CacheInterface interface {
 	// 组织ID映射缓存（organization 模块 - 组织ID双向映射）
 	GetOrgIDMapping(ctx context.Context, tenantID, localOrgID string) (int, error)
 	SetOrgIDMapping(ctx context.Context, tenantID, localOrgID string, remoteOrgID int, ttl int) error
+	SetOrgIDMappingNull(ctx context.Context, tenantID, localOrgID string) error // 缓存空值标记（缓存穿透防护）
 	DeleteOrgIDMapping(ctx context.Context, tenantID, localOrgID string) error
 	GetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int) (string, error)
 	SetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int, localOrgID string, ttl int) error
+	SetOrgIDMappingReverseNull(ctx context.Context, tenantID string, remoteOrgID int) error // 缓存空值标记（缓存穿透防护）
 	DeleteOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int) error
 
 	// 组织成员缓存（organization 模块 - 成员列表）
@@ -75,10 +78,15 @@ type CacheInterface interface {
 	// 用户ID映射缓存（user 模块 - 用户ID双向映射）
 	GetUserIDMapping(ctx context.Context, tenantID, localUserID string) (int, error)
 	SetUserIDMapping(ctx context.Context, tenantID, localUserID string, remoteUserID int, ttl int) error
+	SetUserIDMappingNull(ctx context.Context, tenantID, localUserID string) error // 缓存空值标记（缓存穿透防护）
 	DeleteUserIDMapping(ctx context.Context, tenantID, localUserID string) error
 	GetUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int) (string, error)
 	SetUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int, localUserID string, ttl int) error
+	SetUserIDMappingReverseNull(ctx context.Context, tenantID string, remoteUserID int) error // 缓存空值标记（缓存穿透防护）
 	DeleteUserIDMappingReverse(ctx context.Context, tenantID string, remoteUserID int) error
+
+	// 用户名缓存（user 模块）
+	SetUserNameNull(ctx context.Context, tenantID string, userID string) error // 缓存空值标记（缓存穿透防护）
 
 	// 统计结果缓存（stats 模块）
 	GetStats(ctx context.Context, key string) (string, error)
@@ -87,11 +95,13 @@ type CacheInterface interface {
 	// 平台配置缓存（platform 模块）
 	GetPlatformConfig(ctx context.Context, tenantID string) (*PlatformConfig, error)
 	SetPlatformConfig(ctx context.Context, config *PlatformConfig, ttl int) error
+	SetPlatformConfigNull(ctx context.Context, tenantID string) error // 缓存空值标记（缓存穿透防护）
 	DeletePlatformConfig(ctx context.Context, tenantID string) error
 
 	// 事件配置缓存（event 模块）
 	GetEventConfig(ctx context.Context, tenantID, id string) (*EventAggregate, error)
 	SetEventConfig(ctx context.Context, config *EventAggregate, ttl int) error
+	SetEventConfigNull(ctx context.Context, tenantID, id string) error // 缓存空值标记（缓存穿透防护）
 	DeleteEventConfig(ctx context.Context, tenantID, id string) error
 	GetEventConfigList(ctx context.Context, tenantID string, enabled *bool) ([]*EventAggregate, error)
 	SetEventConfigList(ctx context.Context, tenantID string, enabled *bool, configs []*EventAggregate, ttl int) error

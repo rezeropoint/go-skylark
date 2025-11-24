@@ -11,17 +11,13 @@ import (
 // GetPlatformConfig 从缓存获取平台配置
 func (f *SkylarkCache) GetPlatformConfig(ctx context.Context, tenantID string) (*core.PlatformConfig, error) {
 	key := core.CachePlatformConfigKeyPrefix + tenantID
-	val, err := f.redisClient.GetCtx(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	var config core.PlatformConfig
-	if err := json.Unmarshal([]byte(val), &config); err != nil {
-		return nil, fmt.Errorf("反序列化平台配置缓存失败: %w", err)
-	}
-
-	return &config, nil
+	return getJSONWithNullCheck[core.PlatformConfig](
+		ctx,
+		f.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrPlatformConfigNotFound,
+	)
 }
 
 // SetPlatformConfig 缓存平台配置
@@ -32,7 +28,13 @@ func (f *SkylarkCache) SetPlatformConfig(ctx context.Context, config *core.Platf
 		return fmt.Errorf("序列化平台配置失败: %w", err)
 	}
 
-	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
+	return setJSONWithJitter(ctx, f.redisClient, key, data, ttl)
+}
+
+// SetPlatformConfigNull 缓存空值标记（用于缓存穿透防护）
+func (f *SkylarkCache) SetPlatformConfigNull(ctx context.Context, tenantID string) error {
+	key := core.CachePlatformConfigKeyPrefix + tenantID
+	return setNullValue(ctx, f.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // DeletePlatformConfig 删除平台配置缓存

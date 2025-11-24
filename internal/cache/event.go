@@ -11,17 +11,13 @@ import (
 // GetEventConfig 从缓存获取事件配置（含字段）
 func (f *SkylarkCache) GetEventConfig(ctx context.Context, tenantID, id string) (*core.EventAggregate, error) {
 	key := fmt.Sprintf("%s%s:%s", core.CacheEventConfigKeyPrefix, tenantID, id)
-	val, err := f.redisClient.GetCtx(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	var config core.EventAggregate
-	if err := json.Unmarshal([]byte(val), &config); err != nil {
-		return nil, fmt.Errorf("反序列化事件配置缓存失败: %w", err)
-	}
-
-	return &config, nil
+	return getJSONWithNullCheck[core.EventAggregate](
+		ctx,
+		f.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrEventConfigNotFound,
+	)
 }
 
 // SetEventConfig 缓存事件配置（含字段）
@@ -32,7 +28,13 @@ func (f *SkylarkCache) SetEventConfig(ctx context.Context, config *core.EventAgg
 		return fmt.Errorf("序列化事件配置失败: %w", err)
 	}
 
-	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
+	return setJSONWithJitter(ctx, f.redisClient, key, data, ttl)
+}
+
+// SetEventConfigNull 缓存空值标记（用于缓存穿透防护）
+func (f *SkylarkCache) SetEventConfigNull(ctx context.Context, tenantID, id string) error {
+	key := fmt.Sprintf("%s%s:%s", core.CacheEventConfigKeyPrefix, tenantID, id)
+	return setNullValue(ctx, f.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // DeleteEventConfig 删除事件配置缓存
@@ -82,7 +84,7 @@ func (f *SkylarkCache) SetEventConfigList(ctx context.Context, tenantID string, 
 		return fmt.Errorf("序列化事件配置列表失败: %w", err)
 	}
 
-	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
+	return setJSONWithJitter(ctx, f.redisClient, key, data, ttl)
 }
 
 // DeleteEventConfigList 删除事件配置列表缓存
@@ -140,7 +142,7 @@ func (f *SkylarkCache) SetConfiguredFlowIDsList(ctx context.Context, tenantID st
 		return fmt.Errorf("序列化 flow_id 列表失败: %w", err)
 	}
 
-	return f.redisClient.SetexCtx(ctx, key, string(data), ttl)
+	return setJSONWithJitter(ctx, f.redisClient, key, data, ttl)
 }
 
 // DeleteConfiguredFlowIDsList 删除已配置的 flow_id 列表缓存

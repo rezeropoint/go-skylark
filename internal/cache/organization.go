@@ -12,7 +12,13 @@ import (
 // GetOrgIDMapping 从缓存获取组织ID映射（正向：local_org_id -> remote_org_id）
 func (c *SkylarkCache) GetOrgIDMapping(ctx context.Context, tenantID, localOrgID string) (int, error) {
 	key := fmt.Sprintf("%s:%s:%s", core.CacheOrgIDMappingKeyPrefix, tenantID, localOrgID)
-	val, err := c.redisClient.GetCtx(ctx, key)
+	val, err := getStringWithNullCheck(
+		ctx,
+		c.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrOrgMappingNotFound,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -28,7 +34,13 @@ func (c *SkylarkCache) GetOrgIDMapping(ctx context.Context, tenantID, localOrgID
 // SetOrgIDMapping 缓存组织ID映射（正向：local_org_id -> remote_org_id）
 func (c *SkylarkCache) SetOrgIDMapping(ctx context.Context, tenantID, localOrgID string, remoteOrgID int, ttl int) error {
 	key := fmt.Sprintf("%s:%s:%s", core.CacheOrgIDMappingKeyPrefix, tenantID, localOrgID)
-	return c.redisClient.SetexCtx(ctx, key, strconv.Itoa(remoteOrgID), ttl)
+	return setStringWithJitter(ctx, c.redisClient, key, strconv.Itoa(remoteOrgID), ttl)
+}
+
+// SetOrgIDMappingNull 缓存空值标记（用于缓存穿透防护）
+func (c *SkylarkCache) SetOrgIDMappingNull(ctx context.Context, tenantID, localOrgID string) error {
+	key := fmt.Sprintf("%s:%s:%s", core.CacheOrgIDMappingKeyPrefix, tenantID, localOrgID)
+	return setNullValue(ctx, c.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // DeleteOrgIDMapping 删除组织ID映射缓存（正向）
@@ -41,22 +53,25 @@ func (c *SkylarkCache) DeleteOrgIDMapping(ctx context.Context, tenantID, localOr
 // GetOrgIDMappingReverse 从缓存获取组织ID映射（反向：remote_org_id -> local_org_id）
 func (c *SkylarkCache) GetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int) (string, error) {
 	key := fmt.Sprintf("%s:%s:%d", core.CacheOrgIDMappingReverseKeyPrefix, tenantID, remoteOrgID)
-	val, err := c.redisClient.GetCtx(ctx, key)
-	if err != nil {
-		return "", err
-	}
-
-	if val == "" {
-		return "", fmt.Errorf("缓存值为空")
-	}
-
-	return val, nil
+	return getStringWithNullCheck(
+		ctx,
+		c.redisClient,
+		key,
+		nullValueMarker,
+		core.ErrOrgMappingNotFound,
+	)
 }
 
 // SetOrgIDMappingReverse 缓存组织ID映射（反向：remote_org_id -> local_org_id）
 func (c *SkylarkCache) SetOrgIDMappingReverse(ctx context.Context, tenantID string, remoteOrgID int, localOrgID string, ttl int) error {
 	key := fmt.Sprintf("%s:%s:%d", core.CacheOrgIDMappingReverseKeyPrefix, tenantID, remoteOrgID)
-	return c.redisClient.SetexCtx(ctx, key, localOrgID, ttl)
+	return setStringWithJitter(ctx, c.redisClient, key, localOrgID, ttl)
+}
+
+// SetOrgIDMappingReverseNull 缓存空值标记（用于缓存穿透防护）
+func (c *SkylarkCache) SetOrgIDMappingReverseNull(ctx context.Context, tenantID string, remoteOrgID int) error {
+	key := fmt.Sprintf("%s:%s:%d", core.CacheOrgIDMappingReverseKeyPrefix, tenantID, remoteOrgID)
+	return setNullValue(ctx, c.redisClient, key, nullValueMarker, nullValueCacheTTL)
 }
 
 // DeleteOrgIDMappingReverse 删除组织ID映射缓存（反向）
@@ -92,7 +107,7 @@ func (c *SkylarkCache) SetOrgMembers(ctx context.Context, tenantID string, remot
 		return fmt.Errorf("序列化组织成员列表失败: %w", err)
 	}
 
-	return c.redisClient.SetexCtx(ctx, key, string(data), ttl)
+	return setJSONWithJitter(ctx, c.redisClient, key, data, ttl)
 }
 
 // DeleteOrgMembers 删除组织成员列表缓存
@@ -128,7 +143,7 @@ func (c *SkylarkCache) SetOrgAdministrators(ctx context.Context, tenantID string
 		return fmt.Errorf("序列化组织管理员列表失败: %w", err)
 	}
 
-	return c.redisClient.SetexCtx(ctx, key, string(data), ttl)
+	return setJSONWithJitter(ctx, c.redisClient, key, data, ttl)
 }
 
 // DeleteOrgAdministrators 删除组织管理员列表缓存
