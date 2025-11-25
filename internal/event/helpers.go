@@ -26,10 +26,12 @@ func convertToNullString(s *string) sql.NullString {
 
 // 字段验证辅助函数
 
-// 字段名验证正则表达式（字母、数字、下划线）
-var fieldNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+// 字段名验证正则表达式（支持中文、字母、数字、下划线）
+// Unicode 范围：\p{L} 匹配所有 Unicode 字母（包括中文），\p{N} 匹配所有 Unicode 数字
+var fieldNameRegex = regexp.MustCompile(`^[\p{L}_][\p{L}\p{N}_]*$`)
 
 // isValidFieldName 验证字段名格式是否有效
+// 允许：中文、英文字母、数字、下划线，必须以字母或下划线开头
 func isValidFieldName(name string) bool {
 	return fieldNameRegex.MatchString(name)
 }

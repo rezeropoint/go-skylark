@@ -10,14 +10,15 @@ import (
 )
 
 // validateFieldName 验证字段名（防SQL注入）
-// 正则：只允许字母、数字、下划线，且必须以字母或下划线开头
+// 正则：支持中文、字母、数字、下划线，且必须以字母或下划线开头
 func validateFieldName(fieldName string) error {
 	if fieldName == "" {
 		return core.ErrInvalidFieldName
 	}
 
-	// 字段名正则验证：^[a-zA-Z_][a-zA-Z0-9_]*$
-	pattern := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	// 字段名正则验证：支持 Unicode 字母（含中文）、数字、下划线
+	// \p{L} 匹配所有 Unicode 字母，\p{N} 匹配所有 Unicode 数字
+	pattern := regexp.MustCompile(`^[\p{L}_][\p{L}\p{N}_]*$`)
 	if !pattern.MatchString(fieldName) {
 		return core.ErrInvalidFieldName
 	}
