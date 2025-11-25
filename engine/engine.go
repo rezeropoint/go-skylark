@@ -378,7 +378,8 @@ type SkylarkEngine interface {
 	//   - error: 错误信息
 	// 说明:
 	//   - 从远程 Skylark 平台获取流程的字段定义
-	//   - 结果会缓存到 Redis（TTL 1小时）
+	//   - 结果会缓存到 Redis（TTL 2分钟，支持管理员快速修改字段名）
+	//   - 该接口仅在配置事件时使用，调用频率低，优先保证数据新鲜度
 	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*core.FieldMetadata, error)
 
 	// 统计分析

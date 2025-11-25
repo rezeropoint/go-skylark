@@ -61,7 +61,7 @@ func newQueryManager(
 		config.FlowListCacheTTL = time.Hour
 	}
 	if config.FlowFieldsCacheTTL <= 0 {
-		config.FlowFieldsCacheTTL = time.Hour
+		config.FlowFieldsCacheTTL = 2 * time.Minute // 降低到2分钟,支持管理员快速修改字段名
 	}
 	if config.UserNameCacheTTL <= 0 {
 		config.UserNameCacheTTL = 24 * time.Hour

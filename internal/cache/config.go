@@ -12,8 +12,8 @@ type Config struct {
 
 	// Query 模块缓存配置
 	FlowListCacheTTL   int `json:"FlowListCacheTTL"`   // Flow 列表缓存 TTL（秒），默认 3600
-	FlowFieldsCacheTTL int `json:"FlowFieldsCacheTTL"` // Flow 字段缓存 TTL（秒），默认 3600
-	UserNameCacheTTL   int `json:"UserNameCacheTTL"`   // 用户名缓存 TTL（秒），默认 3600
+	FlowFieldsCacheTTL int `json:"FlowFieldsCacheTTL"` // Flow 字段缓存 TTL（秒），默认 120（2分钟，支持快速修改字段名）
+	UserNameCacheTTL   int `json:"UserNameCacheTTL"`   // 用户名缓存 TTL（秒），默认 86400
 
 	// Mapping 模块缓存配置
 	OrgMappingCacheTTL     int `json:"OrgMappingCacheTTL"`     // 单个组织映射缓存 TTL（秒），默认 3600

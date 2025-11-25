@@ -14,7 +14,8 @@ type Config struct {
 
 	// FlowFieldsCacheTTL flow字段列表缓存时间
 	// key格式: skylark:flow_fields:{tenant_id}:{flow_id}
-	// 默认值: 1小时
+	// 默认值: 2分钟（降低TTL以支持管理员快速修改字段名）
+	// 说明: 该接口仅在配置事件时使用,调用频率低,查询开销小,优先保证数据新鲜度
 	FlowFieldsCacheTTL time.Duration
 
 	// UserNameCacheTTL 用户名缓存时间
