@@ -455,33 +455,6 @@ func (m *MomentResponse) ToDomain(userIDMapping map[int]string) *core.Moment {
 	return moment
 }
 
-// ProcessingUserResponse Skylark API 返回的处理人结构体
-// 职责：处理 GET /api/v4/yaw/flows/:flow_id/journeys/:id/current_processing_users 响应的 JSON 反序列化
-type ProcessingUserResponse struct {
-	ID         int64    `json:"id"`         // 用户ID
-	Name       string   `json:"name"`       // 用户名称
-	Nickname   *string  `json:"nickname"`   // 昵称（可为空）
-	Phone      *string  `json:"phone"`      // 手机号（可为空）
-	Identifier *string  `json:"identifier"` // 标识符（可为空）
-	Headimgurl *string  `json:"headimgurl"` // 头像URL（可为空）
-	Tags       []string `json:"tags"`       // 标签列表
-}
-
-// ToDomain 将 API 响应转换为领域模型
-// 参数：
-//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
-func (u *ProcessingUserResponse) ToDomain(userIDMapping map[int]string) *core.ProcessingUser {
-	return &core.ProcessingUser{
-		ID:         userIDMapping[int(u.ID)], // 直接使用本地用户ID（找不到为空字符串）
-		Name:       u.Name,
-		Nickname:   u.Nickname,
-		Phone:      u.Phone,
-		Identifier: u.Identifier,
-		Headimgurl: u.Headimgurl,
-		Tags:       u.Tags,
-	}
-}
-
 // AbortJourneyRequest 终止流程请求结构体
 // 说明：用于 PUT /api/v4/yaw/flows/:flow_id/journeys/:id 请求体
 type AbortJourneyRequest struct {
@@ -555,4 +528,72 @@ type UpdateAssignment struct {
 	Operation          string         `json:"operation"`                      // 操作类型: route(第一次) 或 approve/refuse/transfer/cancel(第二次)
 	NextVertexID       int            `json:"next_vertex_id,omitempty"`       // 下一个节点ID（仅第二次请求）
 	CarbonCopyUserIDs  []int          `json:"carbon_copy_user_ids,omitempty"` // 抄送者ID列表（仅第二次请求）
+}
+
+// VertexDetailResponse Skylark API 返回的节点详情结构体
+// 职责：处理 GET /api/v4/yaw/flows/:flow_id/vertices/:id 响应的 JSON 反序列化
+// 说明：包含节点的基础信息和字段列表
+type VertexDetailResponse struct {
+	ID        int64                  `json:"id"`         // 节点ID
+	Name      string                 `json:"name"`       // 节点名称
+	Type      string                 `json:"type"`       // 节点类型（如 YetAnotherWorkflow::Vertex::Normal）
+	AliasName string                 `json:"alias_name"` // 节点别名
+	Fields    []VertexFieldResponse  `json:"fields"`     // 节点字段列表
+}
+
+// VertexFieldResponse 节点字段响应结构体
+// 职责：处理节点详情 API 中的 fields 数组元素
+// 说明：包含字段的基础信息、权限信息和选项列表
+type VertexFieldResponse struct {
+	ID          int64                       `json:"id"`                    // 字段ID
+	IdentityKey string                      `json:"identity_key"`          // 字段唯一标识键
+	Title       string                      `json:"title"`                 // 字段标题
+	Type        string                      `json:"type"`                  // 字段类型（如 Field::RadioButton）
+	Required    bool                        `json:"required"`              // 是否必填
+	Editable    bool                        `json:"editable"`              // 是否可编辑
+	Options     []VertexFieldOptionResponse `json:"options,omitempty"`     // 字段选项列表（仅选项字段有值）
+}
+
+// VertexFieldOptionResponse 节点字段选项响应结构体
+// 职责：处理节点字段中的 options 数组元素
+// 说明：表示选项类型字段的可选值
+type VertexFieldOptionResponse struct {
+	ID       int                    `json:"id"`                 // 选项ID
+	Value    string                 `json:"value"`              // 选项值
+	Settings map[string]interface{} `json:"settings,omitempty"` // 选项设置
+	Position int                    `json:"position"`           // 选项位置
+}
+
+// ToDomain 将 VertexDetailResponse 转换为字段列表
+// 说明：只提取字段信息（节点基础信息已在 FlowVertex 中）
+func (v *VertexDetailResponse) ToDomain() []*core.VertexField {
+	fields := make([]*core.VertexField, len(v.Fields))
+	for i, field := range v.Fields {
+		fields[i] = field.ToDomain()
+	}
+	return fields
+}
+
+// ToDomain 将 VertexFieldResponse 转换为领域模型
+func (vf *VertexFieldResponse) ToDomain() *core.VertexField {
+	// 转换选项列表
+	options := make([]core.FieldOption, len(vf.Options))
+	for i, opt := range vf.Options {
+		options[i] = core.FieldOption{
+			ID:       opt.ID,
+			Value:    opt.Value,
+			Settings: opt.Settings,
+			Position: opt.Position,
+		}
+	}
+
+	return &core.VertexField{
+		ID:          vf.ID,
+		IdentityKey: vf.IdentityKey,
+		Title:       vf.Title,
+		Type:        vf.Type,
+		Required:    vf.Required,
+		Editable:    vf.Editable,
+		Options:     options,
+	}
 }

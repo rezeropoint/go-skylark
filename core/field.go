@@ -132,4 +132,8 @@ const (
 	// CacheFieldMappingKeyPrefix 字段映射缓存键前缀（flows/forms 模块使用）
 	// 完整格式：skylark:field_mapping:{app}:{flowID}
 	CacheFieldMappingKeyPrefix = "skylark:field_mapping:"
+
+	// CacheVertexKeyPrefix 节点字段缓存键前缀（flows 模块使用）
+	// 完整格式：skylark:vertex:{tenantID}:{flowID}:{vertexID}
+	CacheVertexKeyPrefix = "skylark:vertex:"
 )

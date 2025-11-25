@@ -51,6 +51,12 @@ func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatfor
 	if config.FlowInfoCacheTTL <= 0 {
 		config.FlowInfoCacheTTL = 3600 // 默认1小时
 	}
+	if config.VertexInfoCacheTTL <= 0 {
+		config.VertexInfoCacheTTL = 3600 // 默认1小时
+	}
+	if config.VertexFieldCacheTTL <= 0 {
+		config.VertexFieldCacheTTL = 3600 // 默认1小时
+	}
 
 	return &skylarkFlowRegistry{
 		config:                config,
@@ -845,7 +851,36 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 		pendingNodes = []*core.PendingNode{} // 返回空列表
 	}
 
-	// 7. 返回完整详情
+	// 7. 填充待处理节点的字段信息（批量查询优化）
+	// 说明：
+	//   - 从 Skylark API 获取节点字段列表（缓存优先）
+	//   - 用于前端动态渲染表单，构造 UpdateJourneyStatus 的 Data 参数
+	//   - 查询失败不影响主流程（Fields 为 nil）
+	if len(pendingNodes) > 0 {
+		// 7.1 提取唯一的 vertexID
+		vertexIDs := extractUniqueVertexIDs(pendingNodes)
+
+		// 7.2 批量查询节点详情
+		vertexFieldsMap, err := f.batchGetVertexDetails(ctx, tenantID, flowID, vertexIDs)
+		if err != nil {
+			// 批量查询失败，记录日志但不影响主流程
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "flows_full_detail"),
+				logx.Field("flow_id", flowID),
+				logx.Field("journey_id", journeyID),
+				logx.Field("error", err.Error()),
+			).Error("批量查询节点字段失败")
+		} else {
+			// 7.3 填充每个待处理节点的字段信息
+			for _, node := range pendingNodes {
+				if fields, ok := vertexFieldsMap[node.VertexID]; ok {
+					node.Fields = fields
+				}
+			}
+		}
+	}
+
+	// 8. 返回完整详情
 	return &core.JourneyFullDetail{
 		BasicInfo:    basicInfo,
 		History:      filteredHistory, // 使用过滤并补充后的历史记录

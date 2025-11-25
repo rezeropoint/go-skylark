@@ -15,4 +15,10 @@ type Config struct {
 	// 默认值：3600（1小时）
 	// 建议范围：3600-86400（1小时到1天，节点信息变化频率极低）
 	VertexInfoCacheTTL int
+
+	// VertexFieldCacheTTL 节点字段缓存过期时间（秒）
+	// 说明：用于缓存节点的字段列表（从 Skylark API /vertices/:id 获取）
+	// 默认值：3600（1小时）
+	// 建议范围：3600-86400（1小时到1天，节点字段配置变化频率极低）
+	VertexFieldCacheTTL int
 }

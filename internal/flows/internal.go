@@ -2,7 +2,6 @@ package flows
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -198,43 +197,6 @@ func (f *skylarkFlowRegistry) buildFlowRouteRequest(ctx context.Context, skylark
 			ResponseAttributes: map[string]any{
 				"entries_attributes": entries,
 			},
-		},
-		UserID: userID,
-		Webhook: Webhook{
-			PayloadURL:       "",
-			SubscribedEvents: []string{core.EventJourneyStatus},
-		},
-		Token: skylarkFlowAddress.AuthHeader,
-	}, nil
-}
-
-// buildFlowProposeRequest 构建流程提议请求
-// 根据路由流程响应构建提议请求
-func (f *skylarkFlowRegistry) buildFlowProposeRequest(skylarkFlowAddress core.SkylarkAPIContext, routeFlowBody []byte) (FlowProposeRequest, error) {
-	// 解析JSON响应
-	var result FlowRouteResponse
-	if err := json.Unmarshal(routeFlowBody, &result); err != nil {
-		return FlowProposeRequest{}, fmt.Errorf("%w: %v", core.ErrJSONUnmarshalFailed, err)
-	}
-
-	// 检查 NextVertices 是否为空
-	if len(result.NextVertices) == 0 {
-		var resultJSON map[string]any
-		_ = json.Unmarshal(routeFlowBody, &resultJSON)
-		return FlowProposeRequest{}, fmt.Errorf("%w: 响应为: %v", core.ErrNoNextVertices, resultJSON)
-	}
-
-	id := result.NextVertices[0].NextVerticesID
-
-	userID, err := strconv.Atoi(skylarkFlowAddress.UserID)
-	if err != nil {
-		return FlowProposeRequest{}, fmt.Errorf("%w: %v", core.ErrUserIDConversionFailed, err)
-	}
-	return FlowProposeRequest{
-		Assignment: ProposeAssignment{
-			Operation:          string(core.OperationPropose),
-			NextVertexID:       id,
-			DurationThresholds: []map[string]string{},
 		},
 		UserID: userID,
 		Webhook: Webhook{
@@ -737,85 +699,181 @@ func (f *skylarkFlowRegistry) getJourneyMoments(
 	return moments, nil
 }
 
-// getCurrentProcessingUsers 获取当前流程任务的处理者（内部方法）
-// 参数:
+// extractUniqueVertexIDs 从待处理节点列表中提取唯一的 vertexID
+// 参数：
+//   - pendingNodes: 待处理节点列表
+//
+// 返回：
+//   - []int64: 唯一的 vertexID 列表
+func extractUniqueVertexIDs(pendingNodes []*core.PendingNode) []int64 {
+	if len(pendingNodes) == 0 {
+		return nil
+	}
+
+	// 使用 TypedSet 去重
+	vertexIDSet := collection.NewSet[int64]()
+	for _, node := range pendingNodes {
+		vertexIDSet.Add(node.VertexID)
+	}
+
+	return vertexIDSet.Keys()
+}
+
+// batchGetVertexDetails 批量获取节点详情（包含字段信息）
+// 说明：优先从 Redis 缓存获取，未命中则并发调用 API，并异步回写缓存
+// 参数：
 //   - ctx: 上下文
 //   - tenantID: 租户ID（用于获取平台配置）
 //   - flowID: 流程ID
-//   - journeyID: 流程记录ID
+//   - vertexIDs: 节点ID列表
 //
-// 返回:
-//   - []*core.ProcessingUser: 当前处理人列表
-//   - error: 错误信息
-func (f *skylarkFlowRegistry) getCurrentProcessingUsers(
+// 返回：
+//   - map[int64][]*core.VertexField: 节点ID → 字段列表的映射
+//   - error: 错误信息（部分失败不影响整体流程，只记录日志）
+func (f *skylarkFlowRegistry) batchGetVertexDetails(
 	ctx context.Context,
 	tenantID string,
 	flowID int64,
-	journeyID int64,
-) ([]*core.ProcessingUser, error) {
-	// 1. 参数校验
-	if flowID <= 0 {
-		return nil, fmt.Errorf("flowID 必须大于 0")
-	}
-	if journeyID <= 0 {
-		return nil, fmt.Errorf("journeyID 必须大于 0")
+	vertexIDs []int64,
+) (map[int64][]*core.VertexField, error) {
+	if len(vertexIDs) == 0 {
+		return make(map[int64][]*core.VertexField), nil
 	}
 
-	// 2. 获取API配置（已验证APIBaseURL、APIToken）
-	apiCfg, err := f.getPlatformConfig(ctx, tenantID)
+	// 获取平台配置
+	platformConfig, err := f.getPlatformConfig(ctx, tenantID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("获取平台配置失败: %w", err)
 	}
 
-	// 3. 构建 SkylarkAPIContext
+	// 结果映射
+	result := make(map[int64][]*core.VertexField, len(vertexIDs))
+	missedIDs := make([]int64, 0)
+
+	// 1. 批量查询 Redis 缓存
+	for _, vertexID := range vertexIDs {
+		cacheKey := fmt.Sprintf("%s%s:%d:%d", core.CacheVertexKeyPrefix, tenantID, flowID, vertexID)
+
+		fields, found, err := f.cache.GetVertexFieldsFromCache(ctx, cacheKey)
+		if err != nil {
+			// 缓存查询失败，记录日志并加入未命中列表
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "flows_vertex_fields"),
+				logx.Field("cache_key", cacheKey),
+				logx.Field("error", err.Error()),
+			).Error("从缓存获取节点字段时发生错误")
+			missedIDs = append(missedIDs, vertexID)
+		} else if found {
+			// 缓存命中
+			result[vertexID] = fields
+		} else {
+			// 缓存未命中
+			missedIDs = append(missedIDs, vertexID)
+		}
+	}
+
+	// 2. 并发查询未命中的节点详情（使用 errgroup）
+	if len(missedIDs) > 0 {
+		type vertexResult struct {
+			vertexID int64
+			fields   []*core.VertexField
+			err      error
+		}
+
+		resultChan := make(chan vertexResult, len(missedIDs))
+
+		// 并发查询（限制最大并发数为 10）
+		maxConcurrent := 10
+		if len(missedIDs) < maxConcurrent {
+			maxConcurrent = len(missedIDs)
+		}
+
+		semaphore := make(chan struct{}, maxConcurrent)
+		for _, vertexID := range missedIDs {
+			semaphore <- struct{}{} // 获取信号量
+			go func(vID int64) {
+				defer func() { <-semaphore }() // 释放信号量
+
+				fields, err := f.getVertexDetail(ctx, platformConfig, flowID, vID)
+				resultChan <- vertexResult{vertexID: vID, fields: fields, err: err}
+			}(vertexID)
+		}
+
+		// 等待所有查询完成
+		for i := 0; i < len(missedIDs); i++ {
+			res := <-resultChan
+			if res.err != nil {
+				// 查询失败，记录日志但不影响整体流程
+				logx.WithContext(ctx).WithFields(
+					logx.Field("module", "flows_vertex_fields"),
+					logx.Field("flow_id", flowID),
+					logx.Field("vertex_id", res.vertexID),
+					logx.Field("error", res.err.Error()),
+				).Error("查询节点详情失败")
+			} else {
+				// 查询成功，添加到结果
+				result[res.vertexID] = res.fields
+
+				// 3. 异步回写缓存（使用 context.Background() 避免主请求取消影响缓存）
+				go func(vID int64, fields []*core.VertexField) {
+					cacheKey := fmt.Sprintf("%s%s:%d:%d", core.CacheVertexKeyPrefix, tenantID, flowID, vID)
+					ttl := f.config.VertexFieldCacheTTL
+					if err := f.cache.SaveVertexFieldsToCache(context.Background(), cacheKey, fields, ttl); err != nil {
+						logx.WithContext(context.Background()).WithFields(
+							logx.Field("module", "flows_vertex_fields"),
+							logx.Field("cache_key", cacheKey),
+							logx.Field("error", err.Error()),
+						).Error("保存节点字段到缓存时发生错误")
+					}
+				}(res.vertexID, res.fields)
+			}
+		}
+
+		close(resultChan)
+	}
+
+	return result, nil
+}
+
+// getVertexDetail 获取单个节点详情（调用 Skylark API）
+// 参数：
+//   - ctx: 上下文
+//   - apiConfig: API 配置（包含认证信息）
+//   - flowID: 流程ID
+//   - vertexID: 节点ID
+//
+// 返回：
+//   - []*core.VertexField: 节点字段列表
+//   - error: 错误信息
+func (f *skylarkFlowRegistry) getVertexDetail(
+	ctx context.Context,
+	apiConfig *core.SkylarkAPIConfig,
+	flowID int64,
+	vertexID int64,
+) ([]*core.VertexField, error) {
+	// 构建 SkylarkAPIContext
 	skylarkAddress := core.SkylarkAPIContext{
-		App:        apiCfg.App,
+		App:        apiConfig.App,
 		UserID:     "",
-		AuthHeader: apiCfg.Token,
+		AuthHeader: apiConfig.Token,
 	}
 
-	// 4. 构建 API URL: GET /api/v4/yaw/flows/:flow_id/journeys/:id/current_processing_users
-	apiURL := core.BuildCurrentProcessingUsersURL(skylarkAddress, flowID, journeyID)
+	// 构建 API URL: /api/v4/yaw/flows/:flow_id/vertices/:id
+	apiURL := core.BuildFlowAPIURL(skylarkAddress, flowID, "vertices", fmt.Sprintf("%d", vertexID))
 
-	// 5. 发送 HTTP GET 请求
+	// 发起 GET 请求
 	resp, err := httpc.Do(ctx, http.MethodGet, apiURL, core.AuthHeader{Token: skylarkAddress.AuthHeader})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", core.ErrHTTPRequestFailed, err)
 	}
 	defer resp.Body.Close()
 
-	// 6. 处理 404 错误（流程或流程记录不存在）
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, core.ErrJourneyNotFound
-	}
-
-	// 7. 解析响应（返回单个用户对象）
-	var singleUser ProcessingUserResponse
-	if err := httputils.ReadJSONResponse(resp, &singleUser); err != nil {
+	// 解析响应
+	var vertexDetail VertexDetailResponse
+	if err := httputils.ReadJSONResponse(resp, &vertexDetail); err != nil {
 		return nil, err
 	}
 
-	// 转为数组格式以便后续处理
-	userResponses := []ProcessingUserResponse{singleUser}
-
-	// 8. 提取所有唯一的远程用户ID（使用通用函数）
-	userIDMapping := core.ExtractUserIDsToMap(userResponses, func(ur ProcessingUserResponse) int {
-		return int(ur.ID)
-	})
-
-	// 9. 批量转换（远程ID → 本地ID），填充映射
-	if len(userIDMapping) > 0 {
-		if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
-			return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
-		}
-	}
-
-	// 10. 使用映射转换为领域模型
-	users := make([]*core.ProcessingUser, len(userResponses))
-	for i, ur := range userResponses {
-		users[i] = ur.ToDomain(userIDMapping)
-	}
-
-	// 10. 返回结果
-	return users, nil
+	// 转换为领域模型
+	return vertexDetail.ToDomain(), nil
 }

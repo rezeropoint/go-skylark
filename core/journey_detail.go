@@ -43,6 +43,7 @@ type JourneyFullDetail struct {
 //   - 包含处理人列表（支持多人审批）
 //   - 自动转换用户ID（远程ID → 本地ID）
 //   - 自动补充用户姓名（通过用户映射查询）
+//   - 包含节点字段列表（用于前端构造 UpdateJourneyStatus 的 Data 参数）
 //
 // 用途：在 JourneyFullDetail 中表示待处理节点
 // 与 Moment 的区别：
@@ -60,4 +61,36 @@ type PendingNode struct {
 
 	// 时间信息
 	CreatedAt string // 任务创建时间（ISO 8601格式）
+
+	// 节点字段列表（自动补充）
+	// 说明：当前节点要求填写的字段信息（从 Skylark API /vertices/:id 获取）
+	// 用途：前端根据字段元数据动态渲染表单，构造 UpdateJourneyStatus 的 Data 参数
+	// 容错：查询失败时为 nil，前端需检查并使用默认行为
+	Fields []*VertexField
+}
+
+// VertexField 节点字段（领域模型）
+// 说明：表示节点中的单个字段信息（用于前端动态渲染表单）
+// 特点：
+//   - 包含字段基础信息（ID、标识键、标题、类型）
+//   - 包含字段权限信息（是否必填、是否可编辑）
+//   - 包含选项列表（适用于选项类型字段）
+//
+// 用途：在 PendingNode 中描述节点的字段要求
+// 使用场景：前端根据 Type/Options/Required 动态渲染表单控件
+type VertexField struct {
+	// 基础信息
+	ID          int64  // 字段ID
+	IdentityKey string // 字段唯一标识键（用于 UpdateJourneyStatus 的 Data 参数）
+	Title       string // 字段标题（展示名称）
+	Type        string // 字段类型（如 Field::RadioButton, Field::TextField）
+
+	// 权限信息
+	Required bool // 是否必填（前端校验）
+	Editable bool // 是否可编辑（前端控制）
+
+	// 选项列表（仅选项类型字段有值）
+	// 说明：适用于 RadioButton、Checkbox、SelectField、MultipleSelectField
+	// 用途：前端根据 Options 渲染下拉框/单选框等
+	Options []FieldOption // 字段可选项（空数组表示非选项字段）
 }

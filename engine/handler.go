@@ -88,7 +88,17 @@ func newSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) 
 	}
 
 	// 6. 初始化流程和表单管理器（依赖 Platform + User + Event）
-	flows, err := flows.NewSkylarkFlowRegistry(flows.Config{}, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs)
+	// 设置默认值
+	if config.Flows.FlowInfoCacheTTL == 0 {
+		config.Flows.FlowInfoCacheTTL = 3600 // 默认 1 小时
+	}
+	if config.Flows.VertexInfoCacheTTL == 0 {
+		config.Flows.VertexInfoCacheTTL = 3600 // 默认 1 小时
+	}
+	if config.Flows.VertexFieldCacheTTL == 0 {
+		config.Flows.VertexFieldCacheTTL = 3600 // 默认 1 小时
+	}
+	flows, err := flows.NewSkylarkFlowRegistry(config.Flows, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs)
 	if err != nil {
 		return nil, err
 	}
