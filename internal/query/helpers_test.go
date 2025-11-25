@@ -23,9 +23,11 @@ func TestValidateFieldName(t *testing.T) {
 		{"下划线开头+中文", "_文本", false},
 		{"混合中英文", "用户user_name", false},
 		{"Skylark系统字段", "slp_journey_id", false},
+		{"数字开头（Skylark随机字段名）", "9RbfBD", false},
+		{"数字+字母混合", "123field", false},
+		{"字母+数字混合", "C3eib9", false},
 
 		// 无效的字段名
-		{"数字开头", "123field", true},
 		{"空字符串", "", true},
 		{"包含空格", "field name", true},
 		{"包含特殊字符", "field-name", true},
@@ -55,7 +57,8 @@ func TestQuoteFieldName(t *testing.T) {
 	}{
 		{"普通字段", "field", `"field"`},
 		{"中文字段", "文本", `"文本"`},
-		{"大小写混合", "C3eib9", `"C3eib9"`},
+		{"字母+数字混合", "C3eib9", `"C3eib9"`},
+		{"数字开头（Skylark随机字段名）", "9RbfBD", `"9RbfBD"`},
 		{"系统字段", "slp_journey_id", `"slp_journey_id"`},
 		{"下划线字段", "_field_name", `"_field_name"`},
 	}

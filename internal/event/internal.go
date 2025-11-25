@@ -256,7 +256,7 @@ func (m *eventManager) validateFieldConfig(field *core.FieldConfig) error {
 		return fmt.Errorf("%w: 字段名不能为空", core.ErrInvalidFieldName)
 	}
 	if !isValidFieldName(field.FieldName) {
-		return fmt.Errorf("%w: 字段名 '%s' 格式无效（支持中文、字母、数字、下划线，必须以字母或下划线开头）", core.ErrInvalidFieldName, field.FieldName)
+		return fmt.Errorf("%w: 字段名 '%s' 格式无效（支持中文、字母、数字、下划线）", core.ErrInvalidFieldName, field.FieldName)
 	}
 
 	// 验证显示名称

@@ -20,9 +20,11 @@ func TestIsValidFieldName(t *testing.T) {
 		{"下划线开头", "_field", true},
 		{"下划线开头+中文", "_文本", true},
 		{"混合中英文", "用户user_name", true},
+		{"数字开头（Skylark随机字段名）", "9RbfBD", true},
+		{"数字+字母混合", "123field", true},
+		{"字母+数字混合", "C3eib9", true},
 
 		// 无效的字段名
-		{"数字开头", "123field", false},
 		{"空字符串", "", false},
 		{"只有空格", "   ", false},
 		{"包含空格", "field name", false},
