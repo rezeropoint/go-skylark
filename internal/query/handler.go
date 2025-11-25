@@ -58,7 +58,7 @@ func newQueryManager(
 
 	// 验证和设置默认配置
 	if config.FlowListCacheTTL <= 0 {
-		config.FlowListCacheTTL = time.Hour
+		config.FlowListCacheTTL = 2 * time.Minute // 降低到2分钟,支持管理员快速新增流程
 	}
 	if config.FlowFieldsCacheTTL <= 0 {
 		config.FlowFieldsCacheTTL = 2 * time.Minute // 降低到2分钟,支持管理员快速修改字段名

@@ -534,8 +534,8 @@ AssignmentStatusAutoApproved = "auto_approved" // 自动审批通过
 
 | 数据类型 | 缓存键 | TTL | 说明 |
 |---------|--------|-----|------|
-| Flow 列表 | `skylark:flows:{tenant}:{namespace}` | 1h | Forms 模块使用 |
-| Flow 字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 1h | Flows/Forms 模块使用 |
+| Flow 列表 | `skylark:flows:{tenant}:{namespace}` | 2 分钟 | Query 模块使用 |
+| Flow 字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 2 分钟 | Query 模块使用 |
 | **Flow 信息（API）** | `skylark:flow:api:{tenant}:{flow_id}` | **可配置**（默认 1h） | **Flows enrichment 使用** |
 | 用户名 | `skylark:users:{tenant}:{user_id}` | 24h | User 模块使用 |
 | 组织映射 | `skylark:mapping:{id}` | 30 天 | Mapping 模块使用 |

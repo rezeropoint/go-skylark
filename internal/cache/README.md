@@ -178,8 +178,8 @@ const (
 
 | 数据类型 | 推荐 TTL | 配置项 | 原因 |
 |---------|---------|--------|-----|
-| Flow列表 | 1小时 | `FlowListCacheTTL` | 变化不频繁 |
-| Flow字段 | 1小时 | `FlowFieldsCacheTTL` | 变化不频繁 |
+| Flow列表 | 2分钟 | `FlowListCacheTTL` | 支持管理员快速新增流程 |
+| Flow字段 | 2分钟 | `FlowFieldsCacheTTL` | 支持管理员快速修改字段名 |
 | 用户名 | 24小时 | `UserNameCacheTTL` | 基本不变 |
 | 组织映射 | 7天 | `OrgMappingCacheTTL` | 很少变化 |
 | 平台配置 | 30分钟 | `PlatformConfigCacheTTL` | 可能调整 |

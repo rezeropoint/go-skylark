@@ -442,8 +442,8 @@ engineConfig := &engine.Config{
 
 | 数据类型 | 缓存键 | TTL | 使用模块 |
 |---------|--------|-----|---------|
-| Flow 列表 | `skylark:flows:{tenant}:{namespace}` | 1小时 | Forms |
-| Flow 字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 1小时 | Flows/Forms |
+| Flow 列表 | `skylark:flows:{tenant}:{namespace}` | 2分钟 | Query |
+| Flow 字段 | `skylark:flow_fields:{tenant}:{flow_id}` | 2分钟 | Query |
 | Flow 信息（API） | `skylark:flow:api:{tenant}:{flow_id}` | **可配置**（默认1小时） | **Flows Enrichment** |
 | 用户名 | `skylark:users:{tenant}:{user_id}` | 24小时 | User |
 | 组织映射 | `skylark:mapping:{id}` | 30天 | Mapping |
