@@ -93,7 +93,7 @@ func newQueryManager(
 
 // 远程流程查询
 
-// GetFlowList 获取远程flows列表（只返回已配置事件的flows）
+// GetFlowList 获取远程flows列表（返回所有flows，供用户选择创建事件配置）
 func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error) {
 	// 1. 获取远程数据库连接
 	remoteDB, err := m.getRemoteDB(ctx, tenantID)
@@ -116,22 +116,15 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 	var flows []*core.FlowInfo
 	flows, err = m.cache.GetFlowList(ctx, tenantID, namespaceID)
 	if err == nil && flows != nil {
-		// 筛选：只保留已配置事件的flows（从缓存获取也需要筛选）
-		filteredFlows, err := m.filterConfiguredFlows(ctx, tenantID, flows)
-		if err != nil {
-			return nil, fmt.Errorf("筛选已配置flows失败: %w", err)
-		}
-
 		logx.WithContext(ctx).WithFields(
 			logx.Field("module", "query_manager"),
 			logx.Field("operation", "get_flow_list"),
 			logx.Field("tenant_id", tenantID),
 			logx.Field("namespace_id", namespaceID),
 			logx.Field("source", "cache"),
-			logx.Field("total_count", len(flows)),
-			logx.Field("filtered_count", len(filteredFlows)),
-		).Info("从缓存获取并筛选 flows 列表成功")
-		return filteredFlows, nil
+			logx.Field("count", len(flows)),
+		).Info("从缓存获取 flows 列表成功")
+		return flows, nil
 	}
 
 	// 4. 查询远程数据库（移除 flow_version 字段，排除 flow_version = '0' 的记录）
@@ -159,15 +152,9 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		flows = []*core.FlowInfo{}
 	}
 
-	// 6. 写入缓存（缓存所有flows，不筛选）
+	// 6. 写入缓存
 	if len(flows) > 0 {
 		_ = m.cache.SetFlowList(ctx, tenantID, namespaceID, flows, int(m.config.FlowListCacheTTL.Seconds()))
-	}
-
-	// 7. 筛选：只保留已配置事件的flows
-	filteredFlows, err := m.filterConfiguredFlows(ctx, tenantID, flows)
-	if err != nil {
-		return nil, fmt.Errorf("筛选已配置flows失败: %w", err)
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -176,11 +163,10 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		logx.Field("tenant_id", tenantID),
 		logx.Field("namespace_id", namespaceID),
 		logx.Field("source", "database"),
-		logx.Field("total_count", len(flows)),
-		logx.Field("filtered_count", len(filteredFlows)),
-	).Info("查询并筛选远程 flows 列表成功")
+		logx.Field("count", len(flows)),
+	).Info("查询远程 flows 列表成功")
 
-	return filteredFlows, nil
+	return flows, nil
 }
 
 // GetFlowFields 获取远程flow字段列表（供前端配置使用）

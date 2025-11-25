@@ -442,36 +442,3 @@ func (m *queryManager) queryJourneyAssignments(ctx context.Context, remoteDB sql
 	return assignments, nil
 }
 
-// Flow 筛选
-
-// filterConfiguredFlows 筛选已配置事件的 flows
-// 只返回在 event_configs 表中配置且已启用的 flows
-func (m *queryManager) filterConfiguredFlows(ctx context.Context, tenantID string, flows []*core.FlowInfo) ([]*core.FlowInfo, error) {
-	// 1. 获取已配置的 flow_id 列表（只获取已启用的事件）
-	trueVal := true
-	configuredFlowIDs, err := m.listConfiguredFlowIDs(ctx, tenantID, &trueVal)
-	if err != nil {
-		return nil, fmt.Errorf("获取已配置 flow_id 列表失败: %w", err)
-	}
-
-	// 2. 如果没有已配置的 flow_id，返回空数组
-	if len(configuredFlowIDs) == 0 {
-		return []*core.FlowInfo{}, nil
-	}
-
-	// 3. 构建快速查找集合（O(1) 查找复杂度）
-	flowIDSet := make(map[int]bool, len(configuredFlowIDs))
-	for _, flowID := range configuredFlowIDs {
-		flowIDSet[flowID] = true
-	}
-
-	// 4. 过滤 flows，只保留已配置的
-	filteredFlows := make([]*core.FlowInfo, 0, len(flows))
-	for _, flow := range flows {
-		if flowIDSet[flow.ID] {
-			filteredFlows = append(filteredFlows, flow)
-		}
-	}
-
-	return filteredFlows, nil
-}
