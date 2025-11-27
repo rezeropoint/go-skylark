@@ -85,43 +85,43 @@ var (
 
 var (
 	// 组织相关错误
-	ErrOrgNotFound                       = errors.New("organization not found in Skylark")
-	ErrOrgCreateFailed                   = errors.New("failed to create organization in Skylark")
-	ErrOrgDeleteFailed                   = errors.New("failed to delete organization in Skylark")
-	ErrOrgUpdateFailed                   = errors.New("failed to update organization in Skylark")
-	ErrOrganizationUpdateFailed          = errors.New("failed to update organization")
-	ErrOrganizationManagerUpdateFailed   = errors.New("failed to update organization manager")
-	ErrOrganizationManagerUpdateConflict = errors.New("organization manager update conflict, please retry")
-	ErrParentOrgNotFound                 = errors.New("parent organization mapping not found")
-	ErrOrgIDMappingExists                = errors.New("organization ID mapping already exists")
+	ErrOrgNotFound                       = errors.New("组织在 Skylark 中不存在")
+	ErrOrgCreateFailed                   = errors.New("在 Skylark 创建组织失败")
+	ErrOrgDeleteFailed                   = errors.New("在 Skylark 删除组织失败")
+	ErrOrgUpdateFailed                   = errors.New("在 Skylark 更新组织失败")
+	ErrOrganizationUpdateFailed          = errors.New("更新组织失败")
+	ErrOrganizationManagerUpdateFailed   = errors.New("更新组织管理员失败")
+	ErrOrganizationManagerUpdateConflict = errors.New("组织管理员更新冲突，请重试")
+	ErrParentOrgNotFound                 = errors.New("父组织尚未同步到 Skylark，请先同步或绑定父组织")
+	ErrOrgIDMappingExists                = errors.New("组织ID映射已存在")
 
 	// 组织成员相关错误
-	ErrMemberNotFound     = errors.New("member not found in organization")
-	ErrMemberAddFailed    = errors.New("failed to add member to organization")
-	ErrMemberRemoveFailed = errors.New("failed to remove member from organization")
-	ErrInvalidMemberID    = errors.New("invalid member ID")
-	ErrGetMembersFailed   = errors.New("failed to get organization members")
+	ErrMemberNotFound     = errors.New("成员在组织中不存在")
+	ErrMemberAddFailed    = errors.New("添加组织成员失败")
+	ErrMemberRemoveFailed = errors.New("移除组织成员失败")
+	ErrInvalidMemberID    = errors.New("成员ID无效")
+	ErrGetMembersFailed   = errors.New("获取组织成员列表失败")
 
 	// 组织管理员相关错误
-	ErrAdministratorNotFound     = errors.New("administrator not found in organization")
-	ErrAdministratorAddFailed    = errors.New("failed to add organization administrator")
-	ErrAdministratorUpdateFailed = errors.New("failed to update organization administrator")
-	ErrAdministratorDeleteFailed = errors.New("failed to delete organization administrator")
-	ErrGetAdministratorsFailed   = errors.New("failed to get organization administrators")
-	ErrInvalidAccessID           = errors.New("invalid access ID")
+	ErrAdministratorNotFound     = errors.New("管理员在组织中不存在")
+	ErrAdministratorAddFailed    = errors.New("添加组织管理员失败")
+	ErrAdministratorUpdateFailed = errors.New("更新组织管理员失败")
+	ErrAdministratorDeleteFailed = errors.New("删除组织管理员失败")
+	ErrGetAdministratorsFailed   = errors.New("获取组织管理员列表失败")
+	ErrInvalidAccessID           = errors.New("访问ID无效")
 
 	// 用户相关错误
-	ErrUserNotFound        = errors.New("user not found in Skylark")
-	ErrUserMappingNotFound = errors.New("user mapping not found")
-	ErrUserMappingExists   = errors.New("user mapping already exists")
-	ErrUserCreateFailed    = errors.New("failed to create user in Skylark")
+	ErrUserNotFound        = errors.New("用户在 Skylark 中不存在")
+	ErrUserMappingNotFound = errors.New("用户映射不存在")
+	ErrUserMappingExists   = errors.New("用户映射已存在")
+	ErrUserCreateFailed    = errors.New("在 Skylark 创建用户失败")
 )
 
 // Skylark API 错误（调用 Skylark REST API 时的 HTTP 错误）
 
 var (
-	ErrSkylarkAPIUnauthorized = errors.New("Skylark API unauthorized")
-	ErrSkylarkAPINotFound     = errors.New("Skylark API resource not found")
-	ErrSkylarkAPIBadRequest   = errors.New("Skylark API bad request")
-	ErrSkylarkAPIServerError  = errors.New("Skylark API server error")
+	ErrSkylarkAPIUnauthorized = errors.New("Skylark API 认证失败")
+	ErrSkylarkAPINotFound     = errors.New("Skylark API 资源不存在")
+	ErrSkylarkAPIBadRequest   = errors.New("Skylark API 请求参数错误")
+	ErrSkylarkAPIServerError  = errors.New("Skylark API 服务器错误")
 )
