@@ -94,6 +94,12 @@ type RemoveMembersRequest struct {
 	MemberIDs []int `json:"member_ids"` // 成员ID列表
 }
 
+// MembersResponse 组织成员操作响应（增加/移除成员）
+// 说明：Skylark API 返回 {"member_ids":[...]} 格式
+type MembersResponse struct {
+	MemberIDs []int `json:"member_ids"` // 成员ID列表
+}
+
 // ========== UpdateOrganization 内部使用的数据结构 ==========
 
 // UpdateOrganizationBasicInfoRequest 更新组织基本信息请求（内部使用）

@@ -259,12 +259,13 @@ func (c *skylarkHTTPClient) addMembers(ctx context.Context, apiBaseURL, apiToken
 	defer resp.Body.Close()
 
 	// 使用 httputils 处理响应（返回成功添加的成员ID列表）
-	var addedIDs []int
-	if err := httputils.ReadJSONResponse(resp, &addedIDs); err != nil {
+	// 说明：Skylark API 返回 {"member_ids":[...]} 格式
+	var membersResp MembersResponse
+	if err := httputils.ReadJSONResponse(resp, &membersResp); err != nil {
 		return nil, err
 	}
 
-	return addedIDs, nil
+	return membersResp.MemberIDs, nil
 }
 
 // removeMembers 调用 Skylark API 批量移除组织成员
@@ -296,12 +297,13 @@ func (c *skylarkHTTPClient) removeMembers(ctx context.Context, apiBaseURL, apiTo
 	defer resp.Body.Close()
 
 	// 使用 httputils 处理响应（返回成功移除的成员ID列表）
-	var removedIDs []int
-	if err := httputils.ReadJSONResponse(resp, &removedIDs); err != nil {
+	// 说明：Skylark API 返回 {"member_ids":[...]} 格式
+	var membersResp MembersResponse
+	if err := httputils.ReadJSONResponse(resp, &membersResp); err != nil {
 		return nil, err
 	}
 
-	return removedIDs, nil
+	return membersResp.MemberIDs, nil
 }
 
 // ========== UpdateOrganization 内部使用的 HTTP 方法 ==========
