@@ -357,17 +357,19 @@ type SkylarkEngine interface {
 	//   - 返回事件的完整流转历史（所有 Assignment 记录）
 	//   - 自动将远程用户ID转换为用户名（Redis 缓存优化）
 	GetEventDetail(ctx context.Context, req *core.DetailRequest) (*core.DetailResponse, error)
-	// GetFlowList 获取远程flows列表（供前端配置）
+	// GetFlowList 获取远程flows列表
 	// 参数:
 	//   - ctx: 上下文
 	//   - tenantID: 租户ID（用于获取平台配置）
+	//   - configuredOnly: 是否只返回已配置事件的流程（true: 只返回已配置的流程，false: 返回所有流程）
 	// 返回:
 	//   - []*core.FlowInfo: 流程列表（包含流程ID、名称、命名空间等）
 	//   - error: 错误信息
 	// 说明:
 	//   - 从远程 Skylark 平台获取流程列表
-	//   - 结果会缓存到 Redis（TTL 1小时）
-	GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error)
+	//   - configuredOnly=false 时结果会缓存到 Redis（TTL 2分钟）
+	//   - configuredOnly=true 时会通过 ListConfiguredFlowIDs 筛选已配置事件的流程
+	GetFlowList(ctx context.Context, tenantID string, configuredOnly bool) ([]*core.FlowInfo, error)
 	// GetFlowFields 获取远程flow字段列表（供前端配置）
 	// 参数:
 	//   - ctx: 上下文

@@ -272,8 +272,8 @@ func (e *skylarkEngine) GetEventDetail(ctx context.Context, req *core.DetailRequ
 	return e.query.GetEventDetail(ctx, req)
 }
 
-func (e *skylarkEngine) GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error) {
-	return e.query.GetFlowList(ctx, tenantID)
+func (e *skylarkEngine) GetFlowList(ctx context.Context, tenantID string, configuredOnly bool) ([]*core.FlowInfo, error) {
+	return e.query.GetFlowList(ctx, tenantID, configuredOnly)
 }
 
 func (e *skylarkEngine) GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*core.FieldMetadata, error) {

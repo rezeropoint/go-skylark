@@ -13,7 +13,7 @@ import (
 type Manager interface {
 	QueryEventData(ctx context.Context, req *core.QueryRequest) (*core.QueryResponse, error)       // QueryEventData 查询事件数据列表（Journey聚合 + 权限过滤）
 	GetEventDetail(ctx context.Context, req *core.DetailRequest) (*core.DetailResponse, error)     // GetEventDetail 获取事件详情（完整流转历史 + 用户名转换）
-	GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error)                    // GetFlowList 获取远程flows列表（供前端配置）
+	GetFlowList(ctx context.Context, tenantID string, configuredOnly bool) ([]*core.FlowInfo, error) // GetFlowList 获取远程flows列表（configuredOnly=true时只返回已配置事件的流程）
 	GetFlowFields(ctx context.Context, tenantID string, flowID int) ([]*core.FieldMetadata, error) // GetFlowFields 获取远程flow字段列表（供前端配置）
 }
 

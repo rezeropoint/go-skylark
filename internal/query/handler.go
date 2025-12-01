@@ -93,8 +93,10 @@ func newQueryManager(
 
 // 远程流程查询
 
-// GetFlowList 获取远程flows列表（返回所有flows，供用户选择创建事件配置）
-func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*core.FlowInfo, error) {
+// GetFlowList 获取远程flows列表
+// 参数：
+//   - configuredOnly: true 时只返回已配置事件的流程，false 时返回所有流程
+func (m *queryManager) GetFlowList(ctx context.Context, tenantID string, configuredOnly bool) ([]*core.FlowInfo, error) {
 	// 1. 获取远程数据库连接
 	remoteDB, err := m.getRemoteDB(ctx, tenantID)
 	if err != nil {
@@ -112,19 +114,22 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		return nil, fmt.Errorf("读取平台配置失败: %w", err)
 	}
 
-	// 3. 尝试从缓存获取
+	// 3. 尝试从缓存获取（仅当不需要筛选时使用缓存）
 	var flows []*core.FlowInfo
-	flows, err = m.cache.GetFlowList(ctx, tenantID, namespaceID)
-	if err == nil && flows != nil {
-		logx.WithContext(ctx).WithFields(
-			logx.Field("module", "query_manager"),
-			logx.Field("operation", "get_flow_list"),
-			logx.Field("tenant_id", tenantID),
-			logx.Field("namespace_id", namespaceID),
-			logx.Field("source", "cache"),
-			logx.Field("count", len(flows)),
-		).Info("从缓存获取 flows 列表成功")
-		return flows, nil
+	if !configuredOnly {
+		flows, err = m.cache.GetFlowList(ctx, tenantID, namespaceID)
+		if err == nil && flows != nil {
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "query_manager"),
+				logx.Field("operation", "get_flow_list"),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("namespace_id", namespaceID),
+				logx.Field("configured_only", configuredOnly),
+				logx.Field("source", "cache"),
+				logx.Field("count", len(flows)),
+			).Info("从缓存获取 flows 列表成功")
+			return flows, nil
+		}
 	}
 
 	// 4. 查询远程数据库（移除 flow_version 字段，排除 flow_version = '0' 的记录）
@@ -152,9 +157,32 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		flows = []*core.FlowInfo{}
 	}
 
-	// 6. 写入缓存
-	if len(flows) > 0 {
+	// 6. 写入缓存（仅当不筛选时缓存完整列表）
+	if !configuredOnly && len(flows) > 0 {
 		_ = m.cache.SetFlowList(ctx, tenantID, namespaceID, flows, int(m.config.FlowListCacheTTL.Seconds()))
+	}
+
+	// 7. 如果需要筛选已配置的流程，进行过滤
+	if configuredOnly {
+		configuredFlowIDs, err := m.listConfiguredFlowIDs(ctx, tenantID, nil)
+		if err != nil {
+			return nil, fmt.Errorf("获取已配置流程ID列表失败: %w", err)
+		}
+
+		// 构建已配置 flow_id 集合
+		configuredSet := make(map[int]struct{}, len(configuredFlowIDs))
+		for _, flowID := range configuredFlowIDs {
+			configuredSet[flowID] = struct{}{}
+		}
+
+		// 过滤只保留已配置的流程
+		filteredFlows := make([]*core.FlowInfo, 0, len(configuredFlowIDs))
+		for _, flow := range flows {
+			if _, ok := configuredSet[flow.ID]; ok {
+				filteredFlows = append(filteredFlows, flow)
+			}
+		}
+		flows = filteredFlows
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -162,6 +190,7 @@ func (m *queryManager) GetFlowList(ctx context.Context, tenantID string) ([]*cor
 		logx.Field("operation", "get_flow_list"),
 		logx.Field("tenant_id", tenantID),
 		logx.Field("namespace_id", namespaceID),
+		logx.Field("configured_only", configuredOnly),
 		logx.Field("source", "database"),
 		logx.Field("count", len(flows)),
 	).Info("查询远程 flows 列表成功")
