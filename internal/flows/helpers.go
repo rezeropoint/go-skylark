@@ -3,6 +3,7 @@ package flows
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
@@ -47,4 +48,31 @@ func convertJourneyResponsesToDomain(ctx context.Context, journeyResponses []Jou
 	}
 
 	return journeys, nil
+}
+
+// calculateMomentDuration 计算 Moment 的处理时长（秒）
+// 处理时长 = UpdatedAt - CreatedAt
+//
+// 参数：
+//   - createdAt: 创建时间（ISO 8601格式）
+//   - updatedAt: 更新时间（ISO 8601格式）
+//
+// 返回：
+//   - *int: 处理时长（秒），解析失败返回 nil
+func calculateMomentDuration(createdAt, updatedAt string) *int {
+	// 解析创建时间
+	created, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return nil
+	}
+
+	// 解析更新时间
+	updated, err := time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return nil
+	}
+
+	// 计算时间差（秒）
+	duration := int(updated.Sub(created).Seconds())
+	return &duration
 }

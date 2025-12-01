@@ -824,6 +824,7 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 	// 说明：
 	//   - 只保留已处理的记录（排除 status="processing" 的待处理节点）
 	//   - 自动补充节点名称（vertexName）
+	//   - 自动计算处理时长（duration）
 	filteredHistory := make([]*core.Moment, 0, len(history))
 	for _, moment := range history {
 		// 过滤：只保留已处理的记录
@@ -835,6 +836,9 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 		if vertex, ok := vertices[moment.VertexID]; ok {
 			moment.VertexName = &vertex.Name
 		}
+
+		// 计算处理时长（秒）
+		moment.Duration = calculateMomentDuration(moment.CreatedAt, moment.UpdatedAt)
 
 		filteredHistory = append(filteredHistory, moment)
 	}
