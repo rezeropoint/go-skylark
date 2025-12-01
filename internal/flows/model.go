@@ -299,32 +299,46 @@ func (j *JourneyDetailResponse) ToDomainWithFieldNames(userIDMapping map[int]str
 // ToDomainWithFieldConfigs 将 API 响应转换为领域模型（使用事件配置的 DisplayName 作为键）
 // 参数：
 //   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
-//   - fieldConfigs: 事件配置的字段列表，用于将字段ID转换为 DisplayName
+//   - fieldConfigs: 事件配置的字段列表，用于将 identity_key 转换为 DisplayName
+//   - fieldMappings: 流程字段映射（identity_key → FieldMapping），用于获取字段ID和identity_key的关系
 //
 // 说明：
-//   - 如果 fieldConfigs 为空或 nil，则使用字段ID作为键（回退行为）
-//   - 字段ID在 CachedValues 中是字符串类型的数字（如 "12345"）
-//   - FieldConfig.FieldName 对应远程表的列名（如 "field_12345"），需要提取数字部分匹配
-func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]string, fieldConfigs []*core.FieldConfig) *core.JourneyDetail {
-	// 构建字段ID到DisplayName的映射
-	// CachedValues 的 key 是字段ID（如 "12345"），FieldConfig.FieldName 可能是 "field_12345" 或直接是字段名
-	fieldIDToDisplayName := make(map[string]string)
-	if len(fieldConfigs) > 0 {
-		for _, fc := range fieldConfigs {
-			// FieldConfig.FieldName 可能是列名（如 "field_12345"）或自定义名称
-			// 需要根据实际情况处理映射关系
-			// 这里假设 FieldName 就是 CachedValues 中的 key
-			fieldIDToDisplayName[fc.FieldName] = fc.DisplayName
+//   - 转换链：CachedValues[字段ID] → fieldMappings 获取 identity_key → fieldConfigs[field_name] → display_name
+//   - 如果 fieldMappings 或 fieldConfigs 为空，则回退使用字段ID作为键
+//   - 字段ID在 CachedValues 中是字符串类型的数字（如 "110"）
+//   - FieldConfig.FieldName 存储的是 identity_key（如 "DateTime"）
+func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]string, fieldConfigs []*core.FieldConfig, fieldMappings map[string]core.FieldMapping) *core.JourneyDetail {
+	// 1. 构建 字段ID → identity_key 的映射（从 fieldMappings 反向构建）
+	// fieldMappings 的结构是 identity_key → FieldMapping，需要反向
+	fieldIDToIdentityKey := make(map[string]string)
+	if fieldMappings != nil {
+		for identityKey, fm := range fieldMappings {
+			fieldIDToIdentityKey[fmt.Sprintf("%d", fm.ID)] = identityKey
 		}
 	}
 
-	// 构建业务数据（优先级：ExportedValue > TextValue > Value）
+	// 2. 构建 identity_key → display_name 的映射（从 fieldConfigs）
+	// fieldConfigs.FieldName 存储的就是 identity_key
+	identityKeyToDisplayName := make(map[string]string)
+	if len(fieldConfigs) > 0 {
+		for _, fc := range fieldConfigs {
+			identityKeyToDisplayName[fc.FieldName] = fc.DisplayName
+		}
+	}
+
+	// 3. 构建业务数据（优先级：ExportedValue > TextValue > Value）
 	businessData := make(map[string]interface{})
 	for fieldID, fieldValue := range j.Response.CachedValues {
-		// 确定使用的键（优先使用 DisplayName，如果没有映射则使用字段ID）
-		key := fieldID
-		if displayName, ok := fieldIDToDisplayName[fieldID]; ok && displayName != "" {
-			key = displayName
+		// 确定使用的键（转换链：字段ID → identity_key → display_name）
+		key := fieldID // 默认使用字段ID
+		if identityKey, ok := fieldIDToIdentityKey[fieldID]; ok && identityKey != "" {
+			// 找到了 identity_key，尝试获取 display_name
+			if displayName, ok := identityKeyToDisplayName[identityKey]; ok && displayName != "" {
+				key = displayName
+			} else {
+				// 没有配置 display_name，使用 identity_key
+				key = identityKey
+			}
 		}
 
 		// 提取值

@@ -455,14 +455,35 @@ func (f *skylarkFlowRegistry) getJourneyDetail(
 		return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
 	}
 
-	// 8. 获取事件配置的字段名（DisplayName）
-	fieldConfigs, err := f.getFieldConfigsByFlowID(ctx, int(flowID), tenantID)
+	// 8. 获取流程字段映射（identity_key → FieldMapping）
+	fieldMappings, err := f.getFlowFieldMappings(ctx, skylarkAddress, flowID)
 	if err != nil {
-		return nil, fmt.Errorf("获取事件字段配置失败: %w", err)
+		// 字段映射获取失败不影响主流程，只记录日志
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_journey_detail"),
+			logx.Field("flow_id", flowID),
+			logx.Field("journey_id", journeyID),
+			logx.Field("error", err.Error()),
+		).Error("获取流程字段映射失败")
+		fieldMappings = nil
 	}
 
-	// 9. 使用事件配置的 DisplayName 作为键
-	journeyDetail := journeyDetailResp.ToDomainWithFieldConfigs(userIDMapping, fieldConfigs)
+	// 9. 获取事件配置的字段名（DisplayName）
+	fieldConfigs, err := f.getFieldConfigsByFlowID(ctx, int(flowID), tenantID)
+	if err != nil {
+		// 事件配置获取失败不影响主流程，只记录日志
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "flows_journey_detail"),
+			logx.Field("flow_id", flowID),
+			logx.Field("journey_id", journeyID),
+			logx.Field("error", err.Error()),
+		).Error("获取事件字段配置失败")
+		fieldConfigs = nil
+	}
+
+	// 10. 使用事件配置的 DisplayName 作为键
+	// 转换链：CachedValues[字段ID] → fieldMappings[identity_key].ID → fieldConfigs[field_name] → display_name
+	journeyDetail := journeyDetailResp.ToDomainWithFieldConfigs(userIDMapping, fieldConfigs, fieldMappings)
 
 	return journeyDetail, nil
 }
