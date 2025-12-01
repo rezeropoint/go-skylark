@@ -86,8 +86,9 @@ type VertexField struct {
 	Type        string // 字段类型（如 Field::RadioButton, Field::TextField）
 
 	// 权限信息
-	Required bool // 是否必填（前端校验）
-	Editable bool // 是否可编辑（前端控制）
+	Required  bool // 是否必填（前端校验）
+	Editable  bool // 是否可编辑（前端控制）
+	MaxLength int  // 字数限制（0 表示无限制，来自 settings.char_size_limit_settings.lteq）
 
 	// 选项列表（仅选项类型字段有值）
 	// 说明：适用于 RadioButton、Checkbox、SelectField、MultipleSelectField

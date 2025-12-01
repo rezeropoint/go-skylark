@@ -545,13 +545,24 @@ type VertexDetailResponse struct {
 // 职责：处理节点详情 API 中的 fields 数组元素
 // 说明：包含字段的基础信息、权限信息和选项列表
 type VertexFieldResponse struct {
-	ID          int64                       `json:"id"`                    // 字段ID
-	IdentityKey string                      `json:"identity_key"`          // 字段唯一标识键
-	Title       string                      `json:"title"`                 // 字段标题
-	Type        string                      `json:"type"`                  // 字段类型（如 Field::RadioButton）
-	Required    bool                        `json:"required"`              // 是否必填
-	Editable    bool                        `json:"editable"`              // 是否可编辑
-	Options     []VertexFieldOptionResponse `json:"options,omitempty"`     // 字段选项列表（仅选项字段有值）
+	ID          int64                       `json:"id"`                // 字段ID
+	IdentityKey string                      `json:"identity_key"`      // 字段唯一标识键
+	Title       string                      `json:"title"`             // 字段标题
+	Type        string                      `json:"type"`              // 字段类型（如 Field::RadioButton）
+	Validations []string                    `json:"validations"`       // 验证规则（包含 "presence" 表示必填）
+	Visibility  string                      `json:"visibility"`        // 可见性（public_visibility/protected_visibility/private_visibility）
+	Settings    VertexFieldSettings         `json:"settings"`          // 字段设置（包含字数限制等）
+	Options     []VertexFieldOptionResponse `json:"options,omitempty"` // 字段选项列表（仅选项字段有值）
+}
+
+// VertexFieldSettings 节点字段设置结构体
+type VertexFieldSettings struct {
+	CharSizeLimitSettings CharSizeLimitSettings `json:"char_size_limit_settings"` // 字数限制设置
+}
+
+// CharSizeLimitSettings 字数限制设置
+type CharSizeLimitSettings struct {
+	Lteq int `json:"lteq"` // 最大字数限制（小于等于）
 }
 
 // VertexFieldOptionResponse 节点字段选项响应结构体
@@ -587,13 +598,29 @@ func (vf *VertexFieldResponse) ToDomain() *core.VertexField {
 		}
 	}
 
+	// 从 validations 推断是否必填（包含 "presence" 表示必填）
+	required := false
+	for _, v := range vf.Validations {
+		if v == "presence" {
+			required = true
+			break
+		}
+	}
+
+	// 从 visibility 推断是否可编辑
+	// public_visibility: 所有人能填 → true
+	// protected_visibility: 普通用户只能查看不能填写 → false
+	// private_visibility: 仅管理员可查看 → false
+	editable := vf.Visibility == "public_visibility"
+
 	return &core.VertexField{
 		ID:          vf.ID,
 		IdentityKey: vf.IdentityKey,
 		Title:       vf.Title,
 		Type:        vf.Type,
-		Required:    vf.Required,
-		Editable:    vf.Editable,
+		Required:    required,
+		Editable:    editable,
+		MaxLength:   vf.Settings.CharSizeLimitSettings.Lteq,
 		Options:     options,
 	}
 }
