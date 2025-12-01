@@ -186,7 +186,6 @@ type Moment struct {
 	Comment      *string // 处理意见（可为空）
 	CreatedAt    string  // 创建时间（ISO 8601格式）
 	UpdatedAt    string  // 更新时间（ISO 8601格式）
-	Duration     *int    // 处理时长（秒，可为空）
 }
 
 // ProcessingUser 当前处理人信息（领域模型）

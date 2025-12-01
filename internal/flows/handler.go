@@ -843,9 +843,6 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 			moment.VertexName = &vertex.Name
 		}
 
-		// 计算处理时长（秒）
-		moment.Duration = calculateMomentDuration(moment.CreatedAt, moment.UpdatedAt)
-
 		filteredHistory = append(filteredHistory, moment)
 	}
 
