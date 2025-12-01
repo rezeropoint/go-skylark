@@ -271,7 +271,7 @@ func (m *eventManager) GetWithFields(ctx context.Context, id, tenantID string) (
 				logx.Field("event_id", id),
 				logx.Field("tenant_id", tenantID),
 				logx.Field("cache_hit", true),
-			).Info("事件配置缓存命中")
+			).Debug("事件配置缓存命中")
 			return cached, nil
 		}
 	}
@@ -314,7 +314,7 @@ func (m *eventManager) ListWithFields(ctx context.Context, tenantID string, enab
 				logx.Field("operation", "list_with_fields"),
 				logx.Field("tenant_id", tenantID),
 				logx.Field("cache_hit", true),
-			).Info("事件配置列表缓存命中")
+			).Debug("事件配置列表缓存命中")
 			return cached, nil
 		}
 	}
@@ -440,7 +440,7 @@ func (m *eventManager) GetFieldConfigsByFlowID(ctx context.Context, flowID int, 
 				logx.Field("flow_id", flowID),
 				logx.Field("tenant_id", tenantID),
 				logx.Field("cache_hit", true),
-			).Info("字段配置缓存命中")
+			).Debug("字段配置缓存命中")
 			return cached, nil
 		}
 	}

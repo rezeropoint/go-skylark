@@ -123,7 +123,7 @@ func (m *platformManager) Get(ctx context.Context, tenantID string) (*core.Platf
 				logx.Field("operation", "get"),
 				logx.Field("tenant_id", tenantID),
 				logx.Field("cache_hit", true),
-			).Info("平台配置缓存命中")
+			).Debug("平台配置缓存命中")
 			return cached, nil
 		}
 	}

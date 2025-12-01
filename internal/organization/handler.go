@@ -620,7 +620,7 @@ func (m *organizationManager) UpdateOrganization(ctx context.Context, req *core.
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("current_member_count", len(currentMembers)),
-	).Info("更新组织前校验通过")
+	).Debug("更新组织前校验通过")
 
 	// 5. 更新管理员（如果指定）
 	if req.ManagerID != "" {

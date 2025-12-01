@@ -152,7 +152,7 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 		logx.Field("operation", "query_local_user_ids"),
 		logx.Field("tenant_id", tenantID),
 		logx.Field("remote_user_ids", remoteUserIDs),
-	).Info("开始查询本地用户ID映射")
+	).Debug("开始查询本地用户ID映射")
 
 	// 临时映射：remote_user_id -> local_user_id
 	tempMap := make(map[int]string)
@@ -167,7 +167,7 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 			logx.WithContext(ctx).WithFields(
 				logx.Field("remote_user_id", remoteUserID),
 				logx.Field("local_user_id", localUserID),
-			).Info("反向缓存命中")
+			).Debug("反向缓存命中")
 		} else {
 			// 缓存未命中或值为空，需要查询数据库
 			missedRemoteUserIDs = append(missedRemoteUserIDs, remoteUserID)
@@ -175,11 +175,11 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 				logx.WithContext(ctx).WithFields(
 					logx.Field("remote_user_id", remoteUserID),
 					logx.Field("error", err.Error()),
-				).Info("反向缓存未命中")
+				).Debug("反向缓存未命中")
 			} else {
 				logx.WithContext(ctx).WithFields(
 					logx.Field("remote_user_id", remoteUserID),
-				).Info("反向缓存值为空,需查询数据库")
+				).Debug("反向缓存值为空,需查询数据库")
 			}
 		}
 	}
@@ -188,7 +188,7 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 	if len(missedRemoteUserIDs) > 0 {
 		logx.WithContext(ctx).WithFields(
 			logx.Field("missed_remote_user_ids", missedRemoteUserIDs),
-		).Info("开始批量查询数据库")
+		).Debug("开始批量查询数据库")
 
 		dbMappings, err := m.batchGetLocalUserIDsFromDB(ctx, tenantID, missedRemoteUserIDs)
 		if err != nil {
@@ -198,7 +198,7 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 
 		logx.WithContext(ctx).WithFields(
 			logx.Field("db_mappings", dbMappings),
-		).Info("数据库查询结果")
+		).Debug("数据库查询结果")
 
 		// 3. 填充结果并异步回写缓存
 		for remoteUserID, localUserID := range dbMappings {
@@ -215,7 +215,7 @@ func (m *userManager) queryLocalUserIDsWithCache(ctx context.Context, tenantID s
 
 	logx.WithContext(ctx).WithFields(
 		logx.Field("final_mapping", tempMap),
-	).Info("用户ID映射查询完成")
+	).Debug("用户ID映射查询完成")
 
 	return tempMap, nil
 }
