@@ -445,24 +445,24 @@ func (f *skylarkFlowRegistry) getJourneyDetail(
 		return nil, err
 	}
 
-	// 6. 获取字段映射（用于将字段ID转换为字段名）
-	fieldMappings, err := f.getFlowFieldMappings(ctx, skylarkAddress, flowID)
-	if err != nil {
-		return nil, fmt.Errorf("获取字段映射失败: %w", err)
-	}
-
-	// 7. 提取远程用户ID（发起人）
+	// 6. 提取远程用户ID（发起人）
 	userIDMapping := map[int]string{
 		int(journeyDetailResp.User.ID): "",
 	}
 
-	// 8. 批量转换（远程ID → 本地ID），填充映射
+	// 7. 批量转换（远程ID → 本地ID），填充映射
 	if err := f.fillLocalUserIDMap(ctx, tenantID, &userIDMapping); err != nil {
 		return nil, fmt.Errorf("批量转换用户ID失败: %w", err)
 	}
 
-	// 9. 使用映射转换为领域模型（传入字段映射）
-	journeyDetail := journeyDetailResp.ToDomainWithFieldNames(userIDMapping, fieldMappings)
+	// 8. 获取事件配置的字段名（DisplayName）
+	fieldConfigs, err := f.getFieldConfigsByFlowID(ctx, int(flowID), tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("获取事件字段配置失败: %w", err)
+	}
+
+	// 9. 使用事件配置的 DisplayName 作为键
+	journeyDetail := journeyDetailResp.ToDomainWithFieldConfigs(userIDMapping, fieldConfigs)
 
 	return journeyDetail, nil
 }

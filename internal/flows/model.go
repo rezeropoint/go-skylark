@@ -296,6 +296,100 @@ func (j *JourneyDetailResponse) ToDomainWithFieldNames(userIDMapping map[int]str
 	}
 }
 
+// ToDomainWithFieldConfigs 将 API 响应转换为领域模型（使用事件配置的 DisplayName 作为键）
+// 参数：
+//   - userIDMapping: 远程用户ID到本地用户ID的映射（int → string）
+//   - fieldConfigs: 事件配置的字段列表，用于将字段ID转换为 DisplayName
+//
+// 说明：
+//   - 如果 fieldConfigs 为空或 nil，则使用字段ID作为键（回退行为）
+//   - 字段ID在 CachedValues 中是字符串类型的数字（如 "12345"）
+//   - FieldConfig.FieldName 对应远程表的列名（如 "field_12345"），需要提取数字部分匹配
+func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]string, fieldConfigs []*core.FieldConfig) *core.JourneyDetail {
+	// 构建字段ID到DisplayName的映射
+	// CachedValues 的 key 是字段ID（如 "12345"），FieldConfig.FieldName 可能是 "field_12345" 或直接是字段名
+	fieldIDToDisplayName := make(map[string]string)
+	if len(fieldConfigs) > 0 {
+		for _, fc := range fieldConfigs {
+			// FieldConfig.FieldName 可能是列名（如 "field_12345"）或自定义名称
+			// 需要根据实际情况处理映射关系
+			// 这里假设 FieldName 就是 CachedValues 中的 key
+			fieldIDToDisplayName[fc.FieldName] = fc.DisplayName
+		}
+	}
+
+	// 构建业务数据（优先级：ExportedValue > TextValue > Value）
+	businessData := make(map[string]interface{})
+	for fieldID, fieldValue := range j.Response.CachedValues {
+		// 确定使用的键（优先使用 DisplayName，如果没有映射则使用字段ID）
+		key := fieldID
+		if displayName, ok := fieldIDToDisplayName[fieldID]; ok && displayName != "" {
+			key = displayName
+		}
+
+		// 提取值
+		if len(fieldValue.ExportedValue) > 0 {
+			if len(fieldValue.ExportedValue) == 1 {
+				businessData[key] = fieldValue.ExportedValue[0]
+			} else {
+				businessData[key] = fieldValue.ExportedValue
+			}
+		} else if len(fieldValue.TextValue) > 0 {
+			if len(fieldValue.TextValue) == 1 {
+				businessData[key] = fieldValue.TextValue[0]
+			} else {
+				businessData[key] = fieldValue.TextValue
+			}
+		} else if len(fieldValue.Value) > 0 {
+			if len(fieldValue.Value) == 1 {
+				businessData[key] = fieldValue.Value[0]
+			} else {
+				businessData[key] = fieldValue.Value
+			}
+		}
+	}
+
+	// 提取附件列表
+	var attachments []*core.Attachment
+	for _, entry := range j.Response.Entries {
+		if entry.Attachment != nil {
+			attachments = append(attachments, &core.Attachment{
+				ID:          entry.Attachment.ID,
+				Name:        entry.Attachment.Name,
+				Size:        entry.Attachment.Size,
+				MimeType:    entry.Attachment.MimeType,
+				Extension:   entry.Attachment.Extension,
+				DownloadURL: entry.Attachment.DownloadURL,
+			})
+		}
+	}
+
+	return &core.JourneyDetail{
+		// 基础信息
+		ID:              j.ID,
+		SN:              j.SN,
+		Status:          j.Status,
+		CurrentVertexID: j.CurrentVertexID,
+		FlowID:          j.FlowID,
+		CreatedAt:       j.CreatedAt,
+		UpdatedAt:       j.UpdatedAt,
+		JourneyURL:      j.JourneyURL,
+
+		// 审核相关
+		ReviewerVertexIDs:        j.ReviewerVertexIDs,
+		CurrentDurationThreshold: j.CurrentDurationThreshold,
+
+		// 发起人信息（直接使用本地用户ID）
+		Initiator: j.User.ToDomain(userIDMapping),
+
+		// 业务数据
+		BusinessData: businessData,
+
+		// 附件信息
+		Attachments: attachments,
+	}
+}
+
 // FlowDetailResponse Skylark API 返回的流程详情结构体
 // 职责：处理 GetFlowDetail API 响应的 JSON 反序列化
 type FlowDetailResponse struct {

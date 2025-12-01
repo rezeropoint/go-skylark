@@ -53,6 +53,11 @@ type Manager interface {
 	//   - enabled: nil=全部，true=已启用，false=已禁用
 	// 返回：flow_id 列表（去重）
 	ListConfiguredFlowIDs(ctx context.Context, tenantID string, enabled *bool) ([]int, error)
+
+	// GetFieldConfigsByFlowID 通过 flowID 获取字段配置列表
+	// 用途：供 flows 模块通过 flowID + tenantID 查询字段配置，用于 BusinessData 字段名转换
+	// 返回：字段配置列表（按 display_order 排序），如果没找到返回空切片
+	GetFieldConfigsByFlowID(ctx context.Context, flowID int, tenantID string) ([]*core.FieldConfig, error)
 }
 
 // NewManager 创建事件+字段配置管理器

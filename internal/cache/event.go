@@ -159,3 +159,37 @@ func (f *SkylarkCache) DeleteConfiguredFlowIDsList(ctx context.Context, tenantID
 	_, err := f.redisClient.DelCtx(ctx, key)
 	return err
 }
+
+// GetFieldConfigsByFlowID 从缓存获取通过 flowID 查询的字段配置列表
+func (f *SkylarkCache) GetFieldConfigsByFlowID(ctx context.Context, tenantID string, flowID int) ([]*core.FieldConfig, error) {
+	key := fmt.Sprintf("%s%s:%d", core.CacheFieldConfigsByFlowIDKeyPrefix, tenantID, flowID)
+	val, err := f.redisClient.GetCtx(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	var fields []*core.FieldConfig
+	if err := json.Unmarshal([]byte(val), &fields); err != nil {
+		return nil, fmt.Errorf("反序列化字段配置列表缓存失败: %w", err)
+	}
+
+	return fields, nil
+}
+
+// SetFieldConfigsByFlowID 缓存通过 flowID 查询的字段配置列表
+func (f *SkylarkCache) SetFieldConfigsByFlowID(ctx context.Context, tenantID string, flowID int, fields []*core.FieldConfig, ttl int) error {
+	key := fmt.Sprintf("%s%s:%d", core.CacheFieldConfigsByFlowIDKeyPrefix, tenantID, flowID)
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("序列化字段配置列表失败: %w", err)
+	}
+
+	return setJSONWithJitter(ctx, f.redisClient, key, data, ttl)
+}
+
+// DeleteFieldConfigsByFlowID 删除通过 flowID 查询的字段配置列表缓存
+func (f *SkylarkCache) DeleteFieldConfigsByFlowID(ctx context.Context, tenantID string, flowID int) error {
+	key := fmt.Sprintf("%s%s:%d", core.CacheFieldConfigsByFlowIDKeyPrefix, tenantID, flowID)
+	_, err := f.redisClient.DelCtx(ctx, key)
+	return err
+}

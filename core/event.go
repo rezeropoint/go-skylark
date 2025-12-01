@@ -38,6 +38,11 @@ const (
 	// key格式: skylark:configured_flows:{tenant_id}:enabled={true|false|all}
 	// TTL: 5分钟（与事件配置列表缓存一致）
 	CacheConfiguredFlowIDsListKeyPrefix = "skylark:configured_flows:"
+
+	// CacheFieldConfigsByFlowIDKeyPrefix 通过 flowID 查询的字段配置缓存键前缀
+	// key格式: skylark:field_configs:{tenant_id}:{flow_id}
+	// TTL: 10分钟（与事件配置缓存一致）
+	CacheFieldConfigsByFlowIDKeyPrefix = "skylark:field_configs:"
 )
 
 // EventConfig 事件配置领域模型（纯领域模型）

@@ -134,6 +134,9 @@ func (m *eventManager) CreateWithFields(ctx context.Context, creation *core.Even
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, creation.EventConfig.TenantID, &trueVal)  // enabled=true
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, creation.EventConfig.TenantID, &falseVal) // enabled=false
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, creation.EventConfig.TenantID, nil)       // enabled=all
+
+		// 清除字段配置缓存（通过 flowID 查询）
+		_ = m.cache.DeleteFieldConfigsByFlowID(ctx, creation.EventConfig.TenantID, creation.EventConfig.FlowID)
 	}
 
 	// 6. 返回创建的事件配置ID
@@ -240,6 +243,9 @@ func (m *eventManager) UpdateWithFields(ctx context.Context, update *core.EventU
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, update.EventConfig.TenantID, &trueVal)  // enabled=true
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, update.EventConfig.TenantID, &falseVal) // enabled=false
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, update.EventConfig.TenantID, nil)       // enabled=all
+
+		// 清除字段配置缓存（通过 flowID 查询）
+		_ = m.cache.DeleteFieldConfigsByFlowID(ctx, update.EventConfig.TenantID, update.EventConfig.FlowID)
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -359,7 +365,18 @@ func (m *eventManager) ListWithFields(ctx context.Context, tenantID string, enab
 
 // Delete 删除事件配置（硬删除）
 func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
-	// 硬删除事件配置
+	// 1. 先查询 flow_id（用于清除字段配置缓存）
+	var flowID int
+	queryFlowID := "SELECT flow_id FROM event_configs WHERE id = $1 AND tenant_id = $2"
+	err := m.dbConn.QueryRowCtx(ctx, &flowID, queryFlowID, id, tenantID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return core.ErrEventConfigNotFound
+		}
+		return fmt.Errorf("查询事件配置 flow_id 失败: %w", err)
+	}
+
+	// 2. 硬删除事件配置
 	deleteQuery := `
 		DELETE FROM event_configs
 		WHERE id = $1 AND tenant_id = $2
@@ -380,7 +397,7 @@ func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
 
 	// 注意：字段配置会通过数据库外键级联删除（ON DELETE CASCADE）
 
-	// 清除缓存
+	// 3. 清除缓存
 	if m.cache != nil {
 		// 清除单个事件配置缓存
 		_ = m.cache.DeleteEventConfig(ctx, tenantID, id)
@@ -396,6 +413,9 @@ func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, tenantID, &trueVal)  // enabled=true
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, tenantID, &falseVal) // enabled=false
 		_ = m.cache.DeleteConfiguredFlowIDsList(ctx, tenantID, nil)       // enabled=all
+
+		// 清除字段配置缓存（通过 flowID 查询）
+		_ = m.cache.DeleteFieldConfigsByFlowID(ctx, tenantID, flowID)
 	}
 
 	logx.WithContext(ctx).WithFields(
@@ -406,6 +426,54 @@ func (m *eventManager) Delete(ctx context.Context, id, tenantID string) error {
 	).Info("删除事件配置成功")
 
 	return nil
+}
+
+// GetFieldConfigsByFlowID 通过 flowID 获取字段配置列表
+func (m *eventManager) GetFieldConfigsByFlowID(ctx context.Context, flowID int, tenantID string) ([]*core.FieldConfig, error) {
+	// 1. 尝试从缓存获取
+	if m.cache != nil {
+		cached, err := m.cache.GetFieldConfigsByFlowID(ctx, tenantID, flowID)
+		if err == nil {
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "event_manager"),
+				logx.Field("operation", "get_field_configs_by_flow_id"),
+				logx.Field("flow_id", flowID),
+				logx.Field("tenant_id", tenantID),
+				logx.Field("cache_hit", true),
+			).Info("字段配置缓存命中")
+			return cached, nil
+		}
+	}
+
+	// 2. 缓存未命中，使用 JOIN 查询，通过 flow_id 关联 event_configs 表获取字段配置
+	query := `
+		SELECT f.id, f.event_config_id, f.field_name, f.display_name, f.field_type,
+		       f.is_visible, f.display_order, f.is_searchable, f.created_at, f.updated_at
+		FROM event_field_configs f
+		INNER JOIN event_configs e ON f.event_config_id = e.id
+		WHERE e.flow_id = $1 AND e.tenant_id = $2
+		ORDER BY f.display_order ASC, f.created_at ASC
+	`
+
+	var models []*FieldConfigModel
+	err := m.dbConn.QueryRowsCtx(ctx, &models, query, flowID, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("通过 flowID 查询字段配置失败: %w", err)
+	}
+
+	// 转换为领域模型
+	fields := make([]*core.FieldConfig, 0, len(models))
+	for _, model := range models {
+		fields = append(fields, model.ToDomain())
+	}
+
+	// 3. 写入缓存（TTL 与事件配置缓存一致）
+	if m.cache != nil {
+		ttl := int(m.config.EventConfigCacheTTL.Seconds())
+		_ = m.cache.SetFieldConfigsByFlowID(ctx, tenantID, flowID, fields, ttl)
+	}
+
+	return fields, nil
 }
 
 // ListConfiguredFlowIDs 获取已配置的 flow_id 列表
