@@ -269,12 +269,9 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 // 说明：
 //   - 筛选条件：category='processed' AND status='processing'
 //   - 自动补充节点名称（通过 vertices 映射）
-//   - 自动补充处理人姓名（通过用户映射）
+//   - 返回本地用户ID，调用方可自行查询用户信息
 //
 // 参数:
-//   - ctx: 上下文
-//   - tenantID: 租户ID
-//   - flowID: 流程ID
 //   - assignments: 任务列表
 //   - vertices: 节点信息映射（用于补充节点名称）
 //
@@ -282,9 +279,6 @@ func (f *skylarkFlowRegistry) buildOperationRequest(
 //   - []*core.PendingNode: 待处理节点列表
 //   - error: 错误信息
 func (f *skylarkFlowRegistry) extractPendingNodes(
-	ctx context.Context,
-	tenantID string,
-	flowID int64,
 	assignments []*core.Assignment,
 	vertices map[int64]*core.FlowVertex,
 ) ([]*core.PendingNode, error) {
@@ -309,63 +303,13 @@ func (f *skylarkFlowRegistry) extractPendingNodes(
 		vertexAssignmentsMap[a.VertexID] = append(vertexAssignmentsMap[a.VertexID], a)
 	}
 
-	// 4. 批量查询用户名
-	// 4.1 收集所有唯一的用户ID
-	uniqueUserIDs := collection.NewSet[string]()
-	for _, nodeAssignments := range vertexAssignmentsMap {
-		for _, a := range nodeAssignments {
-			uniqueUserIDs.Add(a.AssigneeID)
-		}
-	}
-
-	// 4.2 转换为数组
-	userIDList := uniqueUserIDs.Keys()
-
-	// 4.3 批量查询用户名（优先从缓存获取，未命中时查询远程数据库）
-	remoteDB, err := f.getRemoteDB(ctx, tenantID)
-	if err != nil {
-		// 远程数据库连接失败不影响主流程，只记录日志
-		logx.WithContext(ctx).WithFields(
-			logx.Field("module", "flows_pending_nodes"),
-			logx.Field("tenant_id", tenantID),
-			logx.Field("error", err.Error()),
-		).Error("获取远程数据库连接失败，无法查询用户名")
-	}
-
-	var userNameMap map[string]string
-	if remoteDB != nil {
-		userNameMap, err = f.cache.BatchGetUserNames(ctx, remoteDB, tenantID, userIDList, 86400) // TTL: 24小时
-		if err != nil {
-			// 查询用户名失败不影响主流程，只记录日志
-			logx.WithContext(ctx).WithFields(
-				logx.Field("module", "flows_pending_nodes"),
-				logx.Field("tenant_id", tenantID),
-				logx.Field("user_count", len(userIDList)),
-				logx.Field("error", err.Error()),
-			).Error("批量查询用户名失败")
-			userNameMap = make(map[string]string) // 使用空映射
-		}
-	} else {
-		userNameMap = make(map[string]string) // 使用空映射
-	}
-
-	// 5. 构建待处理节点列表
+	// 4. 构建待处理节点列表
 	pendingNodes := make([]*core.PendingNode, 0, len(vertexAssignmentsMap))
 	for vertexID, nodeAssignments := range vertexAssignmentsMap {
 		// 提取处理人ID列表
 		assigneeIDs := make([]string, len(nodeAssignments))
 		for i, a := range nodeAssignments {
 			assigneeIDs[i] = a.AssigneeID
-		}
-
-		// 构建处理人姓名列表
-		assigneeNames := make([]string, len(nodeAssignments))
-		for i, a := range nodeAssignments {
-			if name, ok := userNameMap[a.AssigneeID]; ok {
-				assigneeNames[i] = name // 使用真实姓名
-			} else {
-				assigneeNames[i] = a.AssigneeID // 降级：使用用户ID
-			}
 		}
 
 		// 获取节点名称（从传入的 vertices 映射）
@@ -376,11 +320,10 @@ func (f *skylarkFlowRegistry) extractPendingNodes(
 
 		// 构建待处理节点
 		pendingNode := &core.PendingNode{
-			VertexID:      vertexID,
-			VertexName:    vertexName,
-			AssigneeIDs:   assigneeIDs,
-			AssigneeNames: assigneeNames, // 使用批量查询的用户名
-			CreatedAt:     nodeAssignments[0].CreatedAt,
+			VertexID:    vertexID,
+			VertexName:  vertexName,
+			AssigneeIDs: assigneeIDs,
+			CreatedAt:   nodeAssignments[0].CreatedAt,
 		}
 
 		pendingNodes = append(pendingNodes, pendingNode)

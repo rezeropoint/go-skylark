@@ -56,8 +56,8 @@ type PendingNode struct {
 
 	// 处理人信息
 	// 说明：支持多人审批场景（如会签、或签）
-	AssigneeIDs   []string // 待处理人ID列表（本地用户ID）
-	AssigneeNames []string // 待处理人姓名列表（自动补充，顺序与 AssigneeIDs 对应）
+	// 用途：调用方可根据本地用户ID自行查询用户信息
+	AssigneeIDs []string // 待处理人ID列表（本地用户ID）
 
 	// 时间信息
 	CreatedAt string // 任务创建时间（ISO 8601格式）

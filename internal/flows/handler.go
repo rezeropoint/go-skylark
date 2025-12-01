@@ -713,7 +713,7 @@ func (f *skylarkFlowRegistry) AbortJourney(
 // 功能：
 //   - 聚合基础信息、业务数据、审批历史、待处理节点、节点信息
 //   - 减少前端调用次数（4次 → 1次）
-//   - 自动补充节点名称、处理人姓名
+//   - 自动补充节点名称
 //   - 使用并发查询优化性能（耗时从 ~310ms 降至 ~100-120ms）
 //
 // 参数:
@@ -840,7 +840,7 @@ func (f *skylarkFlowRegistry) GetJourneyFullDetail(
 	}
 
 	// 6. 提取待处理节点
-	pendingNodes, err := f.extractPendingNodes(ctx, tenantID, flowID, assignments, vertices)
+	pendingNodes, err := f.extractPendingNodes(assignments, vertices)
 	if err != nil {
 		// 待处理节点提取失败不影响整体流程，只记录日志
 		logx.WithContext(ctx).WithFields(
