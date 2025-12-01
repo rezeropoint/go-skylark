@@ -98,7 +98,7 @@ func newSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) 
 	if config.Flows.VertexFieldCacheTTL == 0 {
 		config.Flows.VertexFieldCacheTTL = 3600 // 默认 1 小时
 	}
-	flows, err := flows.NewSkylarkFlowRegistry(config.Flows, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs)
+	flows, err := flows.NewSkylarkFlowRegistry(config.Flows, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs, eventMgr.GetFieldConfigsByFlowID)
 	if err != nil {
 		return nil, err
 	}

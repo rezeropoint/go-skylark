@@ -16,17 +16,18 @@ import (
 
 // skylarkFlowRegistry 流程注册表结构
 type skylarkFlowRegistry struct {
-	config                Config                         // 配置
-	cache                 core.CacheInterface            // 缓存接口
-	getPlatformConfig     core.GetPlatformConfigFunc     // 获取平台配置的函数（依赖注入）
-	getRemoteUserIDs      core.GetRemoteUserIDsFunc      // 获取远程用户ID的函数（依赖注入，用于入参转换）
-	fillLocalUserIDMap    core.FillLocalUserIDMapFunc    // 批量反向转换函数（依赖注入，用于出参转换）
-	getRemoteDB           core.GetRemoteDBFunc           // 获取远程数据库连接的函数（依赖注入，用于性能优化）
-	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc // 获取已配置事件的flow_id列表的函数（依赖注入，用于筛选流程实例）
+	config                  Config                           // 配置
+	cache                   core.CacheInterface              // 缓存接口
+	getPlatformConfig       core.GetPlatformConfigFunc       // 获取平台配置的函数（依赖注入）
+	getRemoteUserIDs        core.GetRemoteUserIDsFunc        // 获取远程用户ID的函数（依赖注入，用于入参转换）
+	fillLocalUserIDMap      core.FillLocalUserIDMapFunc      // 批量反向转换函数（依赖注入，用于出参转换）
+	getRemoteDB             core.GetRemoteDBFunc             // 获取远程数据库连接的函数（依赖注入，用于性能优化）
+	listConfiguredFlowIDs   core.ListConfiguredFlowIDsFunc   // 获取已配置事件的flow_id列表的函数（依赖注入，用于筛选流程实例）
+	getFieldConfigsByFlowID core.GetFieldConfigsByFlowIDFunc // 获取字段配置的函数（依赖注入，用于 GetJourneyFullDetail 字段名转换）
 }
 
 // newSkylarkFlowRegistry 创建新的流程注册表
-func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc) (*skylarkFlowRegistry, error) {
+func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc, getFieldConfigsByFlowID core.GetFieldConfigsByFlowIDFunc) (*skylarkFlowRegistry, error) {
 	if getPlatformConfig == nil {
 		return nil, fmt.Errorf("getPlatformConfig 不能为 nil")
 	}
@@ -47,6 +48,10 @@ func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatfor
 		return nil, fmt.Errorf("listConfiguredFlowIDs 不能为 nil")
 	}
 
+	if getFieldConfigsByFlowID == nil {
+		return nil, fmt.Errorf("getFieldConfigsByFlowID 不能为 nil")
+	}
+
 	// 设置缓存配置的默认值
 	if config.FlowInfoCacheTTL <= 0 {
 		config.FlowInfoCacheTTL = 3600 // 默认1小时
@@ -59,13 +64,14 @@ func newSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatfor
 	}
 
 	return &skylarkFlowRegistry{
-		config:                config,
-		cache:                 cache,
-		getPlatformConfig:     getPlatformConfig,
-		getRemoteUserIDs:      getRemoteUserIDs,
-		fillLocalUserIDMap:    fillLocalUserIDMap,
-		getRemoteDB:           getRemoteDB,
-		listConfiguredFlowIDs: listConfiguredFlowIDs,
+		config:                  config,
+		cache:                   cache,
+		getPlatformConfig:       getPlatformConfig,
+		getRemoteUserIDs:        getRemoteUserIDs,
+		fillLocalUserIDMap:      fillLocalUserIDMap,
+		getRemoteDB:             getRemoteDB,
+		listConfiguredFlowIDs:   listConfiguredFlowIDs,
+		getFieldConfigsByFlowID: getFieldConfigsByFlowID,
 	}, nil
 }
 

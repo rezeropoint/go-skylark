@@ -71,6 +71,13 @@ const (
 // GetEventConfigWithFieldsFunc 获取事件配置（含字段）的函数类型
 type GetEventConfigWithFieldsFunc func(ctx context.Context, id, tenantID string) (*EventAggregate, error)
 
+// GetFieldConfigsByFlowIDFunc 通过 flowID 获取字段配置列表的函数类型
+// 用途：供 flows 模块通过 flowID + tenantID 查询字段配置，用于 BusinessData 字段名转换（FieldName → DisplayName）
+// 返回：
+//   - []*FieldConfig: 字段配置列表，如果没找到返回空切片
+//   - error: 查询错误
+type GetFieldConfigsByFlowIDFunc func(ctx context.Context, flowID int, tenantID string) ([]*FieldConfig, error)
+
 // ListOrgMappingsFunc 获取组织映射列表的函数类型
 type ListOrgMappingsFunc func(ctx context.Context, tenantID string) ([]*OrgMapping, error)
 

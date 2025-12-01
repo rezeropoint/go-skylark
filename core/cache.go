@@ -112,6 +112,11 @@ type CacheInterface interface {
 	SetConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool, flowIDs []int, ttl int) error
 	DeleteConfiguredFlowIDsList(ctx context.Context, tenantID string, enabled *bool) error
 
+	// 字段配置缓存（event 模块 - 通过 flowID 查询字段配置）
+	GetFieldConfigsByFlowID(ctx context.Context, tenantID string, flowID int) ([]*FieldConfig, error)
+	SetFieldConfigsByFlowID(ctx context.Context, tenantID string, flowID int, fields []*FieldConfig, ttl int) error
+	DeleteFieldConfigsByFlowID(ctx context.Context, tenantID string, flowID int) error
+
 	// 节点字段缓存（flows 模块 - 节点详情字段信息）
 	GetVertexFieldsFromCache(ctx context.Context, cacheKey string) ([]*VertexField, bool, error)
 	SaveVertexFieldsToCache(ctx context.Context, cacheKey string, fields []*VertexField, ttl int) error
