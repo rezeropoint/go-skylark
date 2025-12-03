@@ -139,17 +139,20 @@ func (m *statsManager) getSingleDurationStats(ctx context.Context, req *core.Sta
 		return nil, fmt.Errorf("获取远程数据库连接失败: %w", err)
 	}
 
-	// 7. 执行查询
-	var stats core.DurationStats
-	err = remoteDB.QueryRowCtx(ctx, &stats, query, args...)
+	// 7. 执行查询（使用 Model 类型处理 NULL 值）
+	var model DurationStatsModel
+	err = remoteDB.QueryRowCtx(ctx, &model, query, args...)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("查询处理时长统计失败: %w", err)
 	}
 
-	// 8. 写入缓存
-	_ = m.setCachedDurationStats(ctx, req, &stats)
+	// 8. 转换为领域模型
+	stats := model.ToDomain()
 
-	return &stats, nil
+	// 9. 写入缓存
+	_ = m.setCachedDurationStats(ctx, req, stats)
+
+	return stats, nil
 }
 
 // getSingleStatusStats 查询单个事件配置的状态统计（内部方法）
