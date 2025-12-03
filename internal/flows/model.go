@@ -2,6 +2,7 @@ package flows
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/rezeropoint/go-skylark/v2/core"
 )
@@ -326,7 +327,16 @@ func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]s
 		}
 	}
 
-	// 3. 构建业务数据（优先级：ExportedValue > TextValue > Value）
+	// 3. 构建 字段ID → displayName 的直接映射（用于附件字段替换）
+	fieldIDToDisplayName := make(map[int64]string)
+	for fieldIDStr, identityKey := range fieldIDToIdentityKey {
+		if displayName, ok := identityKeyToDisplayName[identityKey]; ok && displayName != "" {
+			fieldID, _ := strconv.ParseInt(fieldIDStr, 10, 64)
+			fieldIDToDisplayName[fieldID] = displayName
+		}
+	}
+
+	// 4. 构建业务数据（优先级：ExportedValue > TextValue > Value）
 	businessData := make(map[string]interface{})
 	for fieldID, fieldValue := range j.Response.CachedValues {
 		// 确定使用的键（转换链：字段ID → identity_key → display_name）
@@ -363,7 +373,7 @@ func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]s
 		}
 	}
 
-	// 提取附件列表
+	// 5. 提取附件列表，并用 DownloadURL 替换 businessData 中对应字段的值
 	var attachments []*core.Attachment
 	for _, entry := range j.Response.Entries {
 		if entry.Attachment != nil {
@@ -375,6 +385,11 @@ func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]s
 				Extension:   entry.Attachment.Extension,
 				DownloadURL: entry.Attachment.DownloadURL,
 			})
+
+			// 用 DownloadURL 替换 businessData 中对应字段的值
+			if displayName, ok := fieldIDToDisplayName[entry.FieldID]; ok {
+				businessData[displayName] = entry.Attachment.DownloadURL
+			}
 		}
 	}
 
