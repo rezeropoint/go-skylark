@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rezeropoint/go-skylark/v2/core"
+	"github.com/rezeropoint/go-skylark/v2/internal/attachment"
 	"github.com/rezeropoint/go-skylark/v2/internal/cache"
 	"github.com/rezeropoint/go-skylark/v2/internal/event"
 	"github.com/rezeropoint/go-skylark/v2/internal/flows"
@@ -48,6 +49,12 @@ func newSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) 
 		config.Platform.PlatformConfigCacheTTL = 30 * time.Minute
 	}
 	platformMgr, err := platform.NewManager(config.Platform, db, cache)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1.5. 初始化附件管理器（依赖 Platform）
+	attachmentMgr, err := attachment.NewManager(platformMgr.GetAPIConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +105,7 @@ func newSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) 
 	if config.Flows.VertexFieldCacheTTL == 0 {
 		config.Flows.VertexFieldCacheTTL = 3600 // 默认 1 小时
 	}
-	flows, err := flows.NewSkylarkFlowRegistry(config.Flows, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs, eventMgr.GetFieldConfigsByFlowID)
+	flows, err := flows.NewSkylarkFlowRegistry(config.Flows, cache, platformMgr.GetAPIConfig, userMgr.GetRemoteUserIDs, userMgr.FillLocalUserIDMap, platformMgr.GetRemoteDB, eventMgr.ListConfiguredFlowIDs, eventMgr.GetFieldConfigsByFlowID, attachmentMgr.ConvertBusinessData)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +125,7 @@ func newSkylarkEngine(config Config, db sqlx.SqlConn, redisClient *redis.Redis) 
 		userMgr.FillLocalUserIDMap,
 		eventMgr.ListConfiguredFlowIDs,
 		cache,
+		attachmentMgr.ConvertBusinessData,
 	)
 	if err != nil {
 		return nil, err

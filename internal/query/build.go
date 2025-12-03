@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"encoding/json"
 	"sort"
 	"strconv"
@@ -12,7 +13,10 @@ import (
 )
 
 // buildDetailResponse 组装 DetailResponse
-func (m *queryManager) buildDetailResponse(assignments []*assignmentRow, userNames map[string]string, visibleFields []*core.FieldConfig) *core.DetailResponse {
+// 参数：
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于附件转换时获取平台配置）
+func (m *queryManager) buildDetailResponse(ctx context.Context, tenantID string, assignments []*assignmentRow, userNames map[string]string, visibleFields []*core.FieldConfig) *core.DetailResponse {
 	if len(assignments) == 0 {
 		return nil
 	}
@@ -137,6 +141,16 @@ func (m *queryManager) buildDetailResponse(assignments []*assignmentRow, userNam
 	sort.Slice(flowHistory, func(i, j int) bool {
 		return flowHistory[i].CreatedAt.Before(flowHistory[j].CreatedAt)
 	})
+
+	// 4. 转换附件字段为 Base64
+	if err := m.convertBusinessDataAttachments(ctx, tenantID, latestBusinessData); err != nil {
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "query_manager"),
+			logx.Field("journey_id", firstAssignment.JourneyID),
+			logx.Field("error", err.Error()),
+		).Error("转换附件失败")
+		// 不返回错误，单个字段失败已在 ConvertBusinessData 中处理为 null
+	}
 
 	return &core.DetailResponse{
 		JourneyID:          firstAssignment.JourneyID,

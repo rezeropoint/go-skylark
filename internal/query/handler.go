@@ -13,14 +13,15 @@ import (
 
 // queryManager 远程查询管理器实现
 type queryManager struct {
-	config                Config                            // 配置参数
-	dbConn                sqlx.SqlConn                      // 本地数据库连接（查询事件配置、字段配置、组织映射）
-	getRemoteDB           core.GetRemoteDBFunc              // 获取远程数据库连接的函数（由 Platform Manager 提供）
-	getEventConfig        core.GetEventConfigWithFieldsFunc // 获取事件配置（含字段）的函数（由 Event Manager 提供）
-	listOrgMappings       core.ListOrgMappingsFunc          // 获取组织映射列表的函数（由 Mapping Manager 提供）
-	fillLocalUserIDMap    core.FillLocalUserIDMapFunc       // 批量反向转换远程用户ID为本地用户ID的函数（由 User Manager 提供）
-	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc    // 获取已配置事件的flow_id列表的函数（由 Event Manager 提供）
-	cache                 core.CacheInterface               // 缓存接口（统一缓存管理）
+	config                         Config                                  // 配置参数
+	dbConn                         sqlx.SqlConn                            // 本地数据库连接（查询事件配置、字段配置、组织映射）
+	getRemoteDB                    core.GetRemoteDBFunc                    // 获取远程数据库连接的函数（由 Platform Manager 提供）
+	getEventConfig                 core.GetEventConfigWithFieldsFunc       // 获取事件配置（含字段）的函数（由 Event Manager 提供）
+	listOrgMappings                core.ListOrgMappingsFunc                // 获取组织映射列表的函数（由 Mapping Manager 提供）
+	fillLocalUserIDMap             core.FillLocalUserIDMapFunc             // 批量反向转换远程用户ID为本地用户ID的函数（由 User Manager 提供）
+	listConfiguredFlowIDs          core.ListConfiguredFlowIDsFunc          // 获取已配置事件的flow_id列表的函数（由 Event Manager 提供）
+	cache                          core.CacheInterface                     // 缓存接口（统一缓存管理）
+	convertBusinessDataAttachments core.ConvertBusinessDataAttachmentsFunc // 转换业务数据中附件为Base64的函数（由 Attachment Manager 提供）
 }
 
 // newQueryManager 创建远程查询管理器
@@ -33,6 +34,7 @@ func newQueryManager(
 	fillLocalUserIDMap core.FillLocalUserIDMapFunc,
 	listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc,
 	cache core.CacheInterface,
+	convertBusinessDataAttachments core.ConvertBusinessDataAttachmentsFunc,
 ) (*queryManager, error) {
 	// 验证必填参数
 	if getRemoteDB == nil {
@@ -49,6 +51,9 @@ func newQueryManager(
 	}
 	if listConfiguredFlowIDs == nil {
 		return nil, fmt.Errorf("listConfiguredFlowIDs 函数不能为空")
+	}
+	if convertBusinessDataAttachments == nil {
+		return nil, fmt.Errorf("convertBusinessDataAttachments 函数不能为空")
 	}
 
 	// 缓存接口必须提供
@@ -78,14 +83,15 @@ func newQueryManager(
 	}
 
 	manager := &queryManager{
-		config:                config,
-		dbConn:                db,
-		getRemoteDB:           getRemoteDB,
-		getEventConfig:        getEventConfig,
-		listOrgMappings:       listOrgMappings,
-		fillLocalUserIDMap:    fillLocalUserIDMap,
-		listConfiguredFlowIDs: listConfiguredFlowIDs,
-		cache:                 cache,
+		config:                         config,
+		dbConn:                         db,
+		getRemoteDB:                    getRemoteDB,
+		getEventConfig:                 getEventConfig,
+		listOrgMappings:                listOrgMappings,
+		fillLocalUserIDMap:             fillLocalUserIDMap,
+		listConfiguredFlowIDs:          listConfiguredFlowIDs,
+		cache:                          cache,
+		convertBusinessDataAttachments: convertBusinessDataAttachments,
 	}
 
 	return manager, nil
@@ -350,7 +356,7 @@ func (m *queryManager) QueryEventData(ctx context.Context, req *core.QueryReques
 	}
 
 	// 9. 执行查询并聚合业务数据（合并每个 journey 的所有 assignment）
-	records, err := m.executeQueryAndAggregate(ctx, remoteDB, querySQL, queryArgs, visibleFields)
+	records, err := m.executeQueryAndAggregate(ctx, req.TenantID, remoteDB, querySQL, queryArgs, visibleFields)
 	if err != nil {
 		return nil, fmt.Errorf("查询远程事件数据失败: %w", err)
 	}
@@ -424,7 +430,7 @@ func (m *queryManager) GetEventDetail(ctx context.Context, req *core.DetailReque
 	}
 
 	// 7. 组装 DetailResponse（传入可见字段列表，用于过滤业务数据）
-	response := m.buildDetailResponse(assignments, userNames, eventConfigWithFields.Fields)
+	response := m.buildDetailResponse(ctx, req.TenantID, assignments, userNames, eventConfigWithFields.Fields)
 
 	// 8. 批量转换用户ID（远程ID → 本地ID）
 	if err := convertDetailResponseUserIDs(ctx, response, m.fillLocalUserIDMap, req.TenantID); err != nil {

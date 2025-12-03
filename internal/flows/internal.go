@@ -485,6 +485,19 @@ func (f *skylarkFlowRegistry) getJourneyDetail(
 	// 转换链：CachedValues[字段ID] → fieldMappings[identity_key].ID → fieldConfigs[field_name] → display_name
 	journeyDetail := journeyDetailResp.ToDomainWithFieldConfigs(userIDMapping, fieldConfigs, fieldMappings)
 
+	// 11. 转换附件字段为 Base64
+	if journeyDetail.BusinessData != nil && len(journeyDetail.BusinessData) > 0 {
+		if err := f.convertBusinessDataAttachments(ctx, tenantID, journeyDetail.BusinessData); err != nil {
+			logx.WithContext(ctx).WithFields(
+				logx.Field("module", "flows_journey_detail"),
+				logx.Field("flow_id", flowID),
+				logx.Field("journey_id", journeyID),
+				logx.Field("error", err.Error()),
+			).Error("转换附件失败")
+			// 不返回错误，继续返回数据（单个字段失败已在 ConvertBusinessData 中处理为 null）
+		}
+	}
+
 	return journeyDetail, nil
 }
 

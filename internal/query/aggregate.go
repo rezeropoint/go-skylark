@@ -24,7 +24,9 @@ type assignmentRowForQuery struct {
 
 // executeQueryAndAggregate 执行查询并聚合业务数据
 // 逻辑：查询所有 assignment → 按 journey_id 分组 → 合并业务数据（后面的非空值覆盖前面的）
-func (m *queryManager) executeQueryAndAggregate(ctx context.Context, remoteDB sqlx.SqlConn, querySQL string, queryArgs []interface{}, visibleFields []*core.FieldConfig) ([]map[string]interface{}, error) {
+// 参数：
+//   - tenantID: 租户ID（用于附件转换时获取平台配置）
+func (m *queryManager) executeQueryAndAggregate(ctx context.Context, tenantID string, remoteDB sqlx.SqlConn, querySQL string, queryArgs []interface{}, visibleFields []*core.FieldConfig) ([]map[string]interface{}, error) {
 	// 1. 执行查询获取所有 assignment
 	var rows []*assignmentRowForQuery
 	err := remoteDB.QueryRowsCtx(ctx, &rows, querySQL, queryArgs...)
@@ -50,7 +52,7 @@ func (m *queryManager) executeQueryAndAggregate(ctx context.Context, remoteDB sq
 	records := make([]map[string]interface{}, 0, len(journeyOrder))
 	for _, journeyID := range journeyOrder {
 		assignments := journeyMap[journeyID]
-		aggregated := m.aggregateJourneyData(assignments, visibleFields)
+		aggregated := m.aggregateJourneyData(ctx, tenantID, assignments, visibleFields)
 		if aggregated != nil {
 			records = append(records, aggregated)
 		}
@@ -63,7 +65,10 @@ func (m *queryManager) executeQueryAndAggregate(ctx context.Context, remoteDB sq
 
 // aggregateJourneyData 聚合单个 journey 的所有 assignment 数据
 // 逻辑：遍历所有 assignment（按时间顺序），合并业务数据，后面的非空值覆盖前面的
-func (m *queryManager) aggregateJourneyData(assignments []*assignmentRowForQuery, visibleFields []*core.FieldConfig) map[string]interface{} {
+// 参数：
+//   - ctx: 上下文
+//   - tenantID: 租户ID（用于附件转换时获取平台配置）
+func (m *queryManager) aggregateJourneyData(ctx context.Context, tenantID string, assignments []*assignmentRowForQuery, visibleFields []*core.FieldConfig) map[string]interface{} {
 	if len(assignments) == 0 {
 		return nil
 	}
@@ -107,6 +112,16 @@ func (m *queryManager) aggregateJourneyData(assignments []*assignmentRowForQuery
 				record[field.FieldName] = nil // 字段不存在时返回 null
 			}
 		}
+	}
+
+	// 转换附件字段为 Base64
+	if err := m.convertBusinessDataAttachments(ctx, tenantID, record); err != nil {
+		logx.WithContext(ctx).WithFields(
+			logx.Field("module", "query_manager"),
+			logx.Field("journey_id", latest.JourneyID),
+			logx.Field("error", err.Error()),
+		).Error("转换附件失败")
+		// 不返回错误，单个字段失败已在 ConvertBusinessData 中处理为 null
 	}
 
 	return record

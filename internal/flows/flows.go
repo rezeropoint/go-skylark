@@ -106,6 +106,7 @@ type SkylarkFlowRegistry interface {
 //   - getRemoteDB: 获取远程数据库连接的函数（通过依赖注入，用于性能优化）
 //   - listConfiguredFlowIDs: 获取已配置事件的flow_id列表的函数（通过依赖注入，用于筛选流程实例）
 //   - getFieldConfigsByFlowID: 获取字段配置的函数（通过依赖注入，用于 GetJourneyFullDetail 字段名转换）
-func NewSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc, getFieldConfigsByFlowID core.GetFieldConfigsByFlowIDFunc) (SkylarkFlowRegistry, error) {
-	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs, fillLocalUserIDMap, getRemoteDB, listConfiguredFlowIDs, getFieldConfigsByFlowID)
+//   - convertBusinessDataAttachments: 转换业务数据中附件为Base64的函数（通过依赖注入，用于 GetJourneyFullDetail 图片转换）
+func NewSkylarkFlowRegistry(config Config, cache core.CacheInterface, getPlatformConfig core.GetPlatformConfigFunc, getRemoteUserIDs core.GetRemoteUserIDsFunc, fillLocalUserIDMap core.FillLocalUserIDMapFunc, getRemoteDB core.GetRemoteDBFunc, listConfiguredFlowIDs core.ListConfiguredFlowIDsFunc, getFieldConfigsByFlowID core.GetFieldConfigsByFlowIDFunc, convertBusinessDataAttachments core.ConvertBusinessDataAttachmentsFunc) (SkylarkFlowRegistry, error) {
+	return newSkylarkFlowRegistry(config, cache, getPlatformConfig, getRemoteUserIDs, fillLocalUserIDMap, getRemoteDB, listConfiguredFlowIDs, getFieldConfigsByFlowID, convertBusinessDataAttachments)
 }
