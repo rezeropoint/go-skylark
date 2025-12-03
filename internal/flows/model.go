@@ -256,21 +256,6 @@ func (j *JourneyDetailResponse) ToDomainWithFieldNames(userIDMapping map[int]str
 		}
 	}
 
-	// 提取附件列表
-	var attachments []*core.Attachment
-	for _, entry := range j.Response.Entries {
-		if entry.Attachment != nil {
-			attachments = append(attachments, &core.Attachment{
-				ID:          entry.Attachment.ID,
-				Name:        entry.Attachment.Name,
-				Size:        entry.Attachment.Size,
-				MimeType:    entry.Attachment.MimeType,
-				Extension:   entry.Attachment.Extension,
-				DownloadURL: entry.Attachment.DownloadURL,
-			})
-		}
-	}
-
 	return &core.JourneyDetail{
 		// 基础信息
 		ID:              j.ID,
@@ -291,9 +276,6 @@ func (j *JourneyDetailResponse) ToDomainWithFieldNames(userIDMapping map[int]str
 
 		// 业务数据
 		BusinessData: businessData,
-
-		// 附件信息
-		Attachments: attachments,
 	}
 }
 
@@ -373,20 +355,9 @@ func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]s
 		}
 	}
 
-	// 5. 提取附件列表，并用 DownloadURL 替换 businessData 中对应字段的值
-	var attachments []*core.Attachment
+	// 5. 用附件的 DownloadURL 替换 businessData 中对应字段的值
 	for _, entry := range j.Response.Entries {
 		if entry.Attachment != nil {
-			attachments = append(attachments, &core.Attachment{
-				ID:          entry.Attachment.ID,
-				Name:        entry.Attachment.Name,
-				Size:        entry.Attachment.Size,
-				MimeType:    entry.Attachment.MimeType,
-				Extension:   entry.Attachment.Extension,
-				DownloadURL: entry.Attachment.DownloadURL,
-			})
-
-			// 用 DownloadURL 替换 businessData 中对应字段的值
 			if displayName, ok := fieldIDToDisplayName[entry.FieldID]; ok {
 				businessData[displayName] = entry.Attachment.DownloadURL
 			}
@@ -413,9 +384,6 @@ func (j *JourneyDetailResponse) ToDomainWithFieldConfigs(userIDMapping map[int]s
 
 		// 业务数据
 		BusinessData: businessData,
-
-		// 附件信息
-		Attachments: attachments,
 	}
 }
 

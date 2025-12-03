@@ -50,20 +50,6 @@ type JourneyDetail struct {
 
 	// 业务数据
 	BusinessData map[string]interface{} // 业务字段数据（field_id -> value）
-
-	// 附件信息
-	Attachments []*Attachment // 附件列表
-}
-
-// Attachment 附件信息（领域模型）
-// 说明：表示流程中的附件文件信息
-type Attachment struct {
-	ID          int64  // 附件ID
-	Name        string // 文件名
-	Size        string // 文件大小（如 "1.2 MB"）
-	MimeType    string // MIME 类型（如 "image/png"）
-	Extension   string // 文件扩展名（如 "png"）
-	DownloadURL string // 下载地址
 }
 
 // 流程状态常量
