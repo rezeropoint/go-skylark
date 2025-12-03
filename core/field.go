@@ -85,11 +85,12 @@ type FieldConfig struct {
 // FieldConfig.FieldType 字段类型常量（用于数据库查询配置）
 // 说明：定义字段的数据类型，用于查询时的类型转换和校验
 const (
-	FieldTypeString   = "string"   // 字符串类型
-	FieldTypeNumber   = "number"   // 数字类型
-	FieldTypeDate     = "date"     // 日期类型
-	FieldTypeDatetime = "datetime" // 日期时间类型
-	FieldTypeBoolean  = "boolean"  // 布尔类型
+	FieldTypeString      = "string"      // 字符串类型
+	FieldTypeNumber      = "number"      // 数字类型
+	FieldTypeDate        = "date"        // 日期类型
+	FieldTypeDatetime    = "datetime"    // 日期时间类型
+	FieldTypeBoolean     = "boolean"     // 布尔类型
+	FieldTypeImageBase64 = "imageBase64" // 图片类型（返回 Base64 编码）
 )
 
 // IsValidFieldType 验证字段类型是否有效（用于创建/更新字段配置时校验）
@@ -100,7 +101,7 @@ const (
 //   - bool: 是否为有效的字段类型
 func IsValidFieldType(fieldType string) bool {
 	switch fieldType {
-	case FieldTypeString, FieldTypeNumber, FieldTypeDate, FieldTypeDatetime, FieldTypeBoolean:
+	case FieldTypeString, FieldTypeNumber, FieldTypeDate, FieldTypeDatetime, FieldTypeBoolean, FieldTypeImageBase64:
 		return true
 	default:
 		return false
